@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="1" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2025-09-19" time="16:40:46">
+  <environment clr-version="4.0.30319.42000" user-domain="DESKTOP-JRJ3BBB" cwd="C:\honoua_api\tests\pester" platform="Microsoft Windows 10 Professionnel|C:\Windows|\Device\Harddisk0\Partition3" machine-name="DESKTOP-JRJ3BBB" nunit-version="2.5.8.0" os-version="10.0.19045" user="smoli" />
+  <culture-info current-culture="fr-FR" current-uiculture="fr-FR" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="1.9108" asserts="0" description="Pester">
+    <results>
+      <test-suite type="TestFixture" name="C:\honoua_api\tests\pester\Sanity.Tests.ps1" executed="True" result="Success" success="True" time="1.6735" asserts="0" description="C:\honoua_api\tests\pester\Sanity.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Sanity" executed="True" result="Success" success="True" time="0.6392" asserts="0" description="Sanity">
+            <results>
+              <test-case description="1+1=2" name="Sanity.1+1=2" time="0.5173" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

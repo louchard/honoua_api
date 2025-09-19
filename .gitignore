@@ -1,0 +1,7 @@
+﻿.venv/
+__pycache__/
+*.pyc
+reports/
+tests/**/reports/
+api.log
+.env
