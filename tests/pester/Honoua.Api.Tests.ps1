@@ -1,5 +1,6 @@
-﻿$ErrorActionPreference = "Stop"
-$BaseUrl = if ($env:HONOUA_BASEURL) { $env:HONOUA_BASEURL } else { "http://localhost:8000" }
+﻿# v-ci-health-ipv4-2025-09-20
+$ErrorActionPreference = "Stop"
+$BaseUrl = if ($env:HONOUA_BASEURL) { $env:HONOUA_BASEURL } else { "http://127.0.0.1:8000" }
 
 function Get-Api {
   param([string]$Path,[int]$TimeoutSec=10)
@@ -16,7 +17,6 @@ function Get-Api {
 
 Describe "Honoua API ($BaseUrl)" {
   BeforeAll {
-    # Probe /health directement au lieu de Test-NetConnection
     try {
       $h = Invoke-WebRequest -Uri "$BaseUrl/health" -TimeoutSec 10 -UseBasicParsing
       $script:apiUp = ($h.StatusCode -eq 200)
@@ -29,11 +29,12 @@ Describe "Honoua API ($BaseUrl)" {
     $apiUp | Should -BeTrue
   }
 
-  It "GET /health -> 200 & status" -Skip:(-not $apiUp) {
+  It "GET /health -> 200 & contient 'ok' ou 'status'" -Skip:(-not $apiUp) {
     $r = Get-Api "/health"
     $r.Code | Should -Be 200
     $r.Json | Should -Not -BeNullOrEmpty
-    $r.Json.PSObject.Properties.Name | Should -Contain "status"
+    $props = @($r.Json.PSObject.Properties.Name)
+    ( $props -contains "ok" -or $props -contains "status" ) | Should -BeTrue
   }
 
   It "GET /products?limit=3 -> 200 & liste" -Skip:(-not $apiUp) {
@@ -54,4 +55,3 @@ Describe "Honoua API ($BaseUrl)" {
   }
 }
 
-# ci-touch

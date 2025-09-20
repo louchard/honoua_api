@@ -18,7 +18,7 @@ jobs:
         env:
           POSTGRES_DB: honoua
           POSTGRES_USER: honou
-          POSTGRES_PASSWORD: honou
+          POSTGRES_PASSWORD: Honou2035Lg!
         ports: ['5432:5432']
         # Santé Postgres
         options: >-
@@ -49,15 +49,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Wait for Postgres
-        run: |
-          for i in {1..60}; do
-            pg_isready -h localhost -p 5432 -U honou -d honoua && exit 0
-            echo "Waiting Postgres..."
-            sleep 2
-          done
-          echo "Postgres not ready" && exit 1
-        env:
-          PGPASSWORD: honou
+        - name: Wait for /health
+  run: |
+    for i in {1..60}; do
+      if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+        echo "API is up"; exit 0
+      fi
+      echo "Waiting API..."
+      sleep 2
+    done
+    echo "API did not start" && (tail -n 200 api.log || true) && exit 1
+
 
       - name: Bootstrap DB (schema minimal pour tests)
         run: |
@@ -109,19 +111,20 @@ jobs:
           pwsh -NoLogo -NoProfile -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module Pester -Force -Scope CurrentUser"
 
       - name: Run Pester (JUnit export)
-        run: |
-          pwsh -NoLogo -NoProfile -Command "
-            \$env:HONOUA_BASEURL = 'http://localhost:8000';
-            \$cfg = New-PesterConfiguration;
-            \$cfg.Run.Path = 'tests/pester';
-            \$cfg.Run.Exit = \$true;
-            \$cfg.Output.Verbosity = 'Detailed';
-            \$cfg.TestResult.Enabled = \$true;
-            New-Item -ItemType Directory -Force -Path 'reports' | Out-Null;
-            \$cfg.TestResult.OutputPath = 'reports/pester-results.xml';
-            \$cfg.TestResult.OutputFormat = 'NUnitXml';
-            Invoke-Pester -Configuration \$cfg
-          "
+  run: |
+    pwsh -NoLogo -NoProfile -Command "
+      $env:HONOUA_BASEURL = 'http://127.0.0.1:8000';
+      $cfg = New-PesterConfiguration;
+      $cfg.Run.Path = 'tests/pester';
+      $cfg.Run.Exit = $true;
+      $cfg.Output.Verbosity = 'Detailed';
+      $cfg.TestResult.Enabled = $true;
+      New-Item -ItemType Directory -Force -Path 'reports' | Out-Null;
+      $cfg.TestResult.OutputPath = 'reports/pester-results.xml';
+      $cfg.TestResult.OutputFormat = 'NUnitXml';
+      Invoke-Pester -Configuration $cfg
+    "
+
 
       - name: Upload Pester report
         uses: actions/upload-artifact@v4
