@@ -24,10 +24,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # On force ces paquets au cas où ils ne sont pas listés
+          pip install --upgrade uvicorn fastapi
 
       - name: Start API (background)
         run: |
-          nohup python -u app/main.py > api.log 2>&1 &
+          # 1) Essai via uvicorn sur app.main:app (FastAPI)
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 3000 > api.log 2>&1 & echo $! > api.pid || true
+          sleep 2
+          # 2) Si pas de /health, on essaie python app/main.py (fallback)
+          if ! curl -sSf $BASE_URL/health > /dev/null; then
+            echo "Uvicorn non concluant, on tente: python app/main.py ..."
+            nohup python -u app/main.py >> api.log 2>&1 & echo $! > api.pid || true
+          fi
+          # 3) Attente du /health (30s max)
           for i in {1..30}; do
             if curl -sSf $BASE_URL/health > /dev/null; then
               echo "API healthy"
@@ -41,6 +51,5 @@ jobs:
       - name: Show API logs on failure
         if: failure()
         run: |
-          echo "== api.log =="
+          echo "== api.log (tail) =="
           tail -n 200 api.log || true
-
