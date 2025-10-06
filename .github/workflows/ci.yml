@@ -2,14 +2,45 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 jobs:
-  syntax-check:
+  api-health:
     runs-on: ubuntu-latest
+    env:
+      BASE_URL: http://127.0.0.1:3000
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Echo
-        run: echo "YAML OK"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Start API (background)
+        run: |
+          nohup python -u app/main.py > api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sSf $BASE_URL/health > /dev/null; then
+              echo "API healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API not healthy"
+          exit 1
+
+      - name: Show API logs on failure
+        if: failure()
+        run: |
+          echo "== api.log =="
+          tail -n 200 api.log || true
+
