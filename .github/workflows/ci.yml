@@ -45,4 +45,13 @@ jobs:
           echo "== api.log (tail) =="
           tail -n 200 api.log || true
   
+      - name: Install Pester
+        shell: pwsh
+        run: Install-Module Pester -Scope CurrentUser -Force
+
+      - name: Run Pester - Preflight (4 tests)
+        shell: pwsh
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+        run: Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
 
