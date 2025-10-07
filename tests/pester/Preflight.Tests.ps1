@@ -19,18 +19,26 @@ Describe 'Honoua - Préflight CI' {
     $script:BASE_URL | Should -Match '^http'
   }
 
-  It 'GET /health -> 200 & status ok (texte ou JSON)' {
-    $r = Get-Http '/health'
-    # Sur PowerShell 7, Invoke-WebRequest renvoie un objet contenant StatusCode
-    $r.StatusCode | Should -Be 200
+It 'GET /health -> 200 & status ok (texte ou JSON)' {
+  $uri = ($script:BASE_URL.TrimEnd('/')) + '/health'
 
-    $body = ($r.Content | Out-String).Trim()
-    $json = $null; try { $json = $body | ConvertFrom-Json } catch {}
+  # 1) Si la requête 2xx échoue, Invoke-RestMethod lèvera une exception => test rouge.
+  $resp = Invoke-RestMethod -Uri $uri -Method GET -TimeoutSec 15 -ErrorAction Stop
 
-    $okText = $body -match '^(ok|ok\|status)$'
-    $okJson = ($json -ne $null -and $json.status -eq 'ok')
-    ($okText -or $okJson) | Should -BeTrue -Because "Body='$body'"
+  # 2) Accepte JSON { "status": "ok" } OU texte "ok" / "ok|status"
+  $ok = $false
+  if ($null -ne $resp) {
+    if ($resp -is [string]) {
+      $txt = $resp.Trim()
+      $ok = ($txt -match '^(ok|ok\|status)$')
+    } else {
+      try { $ok = ($resp.status -eq 'ok') } catch { $ok = $false }
+    }
   }
+
+  $ok | Should -BeTrue -Because ("Body='{0}'" -f ($resp | Out-String).Trim())
+}
+ 
 
   It 'Fichiers clés présents (app/ci_main.py & workflow)' {
     (Test-Path './app/ci_main.py') | Should -BeTrue
