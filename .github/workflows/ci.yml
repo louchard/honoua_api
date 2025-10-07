@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   honoua-ci:
@@ -24,8 +25,7 @@ jobs:
       - name: Install deps (uvicorn/fastapi)
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install --upgrade uvicorn fastapi
+          pip install uvicorn fastapi
 
       - name: Start mini API (ci_main)
         run: |
@@ -45,15 +45,17 @@ jobs:
         shell: pwsh
         run: Install-Module Pester -Scope CurrentUser -Force
 
-   - name: Run Pester - Preflight (4 tests)
-  shell: pwsh
-  env:
-    BASE_URL: ${{ env.BASE_URL }}
-  run: |
-    Write-Host ">> Preflight step — BASE_URL in step: $env:BASE_URL"
-    $resp = curl -s -o /dev/null -w "%{http_code}" "$env:BASE_URL/health"
-    Write-Host ">> curl check before Pester: HTTP $resp"
-    Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
+      - name: Run Pester - Preflight (4 tests)
+        shell: pwsh
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+        run: |
+          Write-Host ">> Preflight step — BASE_URL in step: $env:BASE_URL"
+          $resp = curl -s -o /dev/null -w "%{http_code}" "$env:BASE_URL/health"
+          Write-Host ">> curl check before Pester: HTTP $resp"
+          Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
 
-
-    
+      - name: Show API logs on failure
+        if: failure()
+        run: |
+          echo "== api.log (tail) ==" && tail -n 200 api.log || true
