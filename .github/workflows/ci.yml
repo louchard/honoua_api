@@ -45,19 +45,15 @@ jobs:
         shell: pwsh
         run: Install-Module Pester -Scope CurrentUser -Force
 
-     - name: Run Pester - Preflight (4 tests)
+   - name: Run Pester - Preflight (4 tests)
   shell: pwsh
   env:
     BASE_URL: ${{ env.BASE_URL }}
   run: |
     Write-Host ">> Preflight step — BASE_URL in step: $env:BASE_URL"
-    # Petit check avant Pester pour voir si /health répond
     $resp = curl -s -o /dev/null -w "%{http_code}" "$env:BASE_URL/health"
     Write-Host ">> curl check before Pester: HTTP $resp"
     Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
 
 
-      - name: Show API logs on failure
-        if: failure()
-        run: |
-          echo "== api.log (tail) ==" && tail -n 200 api.log || true
+    
