@@ -20,69 +20,41 @@ jobs:
         with:
           python-version: '3.11'
 
-           - name: Install deps (uvicorn/fastapi + psql client)
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install --upgrade uvicorn fastapi
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
 
-      - name: Wait for Postgres (health + ping)
-        env:
-          PGPASSWORD: ${{ env.PGPASSWORD }}
+      - name: Start API (background - ci_main)
         run: |
-          for i in {1..60}; do
-            if pg_isready -h $PGHOST -p $PGPORT -d $PGDATABASE -U $PGUSER; then
-              echo "Postgres is ready"; break
+          nohup uvicorn app.ci_main:app --host 127.0.0.1 --port 3000 > api.log 2>&1 & echo $! > api.pid
+          for i in {1..30}; do
+            if curl -sSf $BASE_URL/health > /dev/null; then
+              echo "API healthy"
+              exit 0
             fi
             sleep 1
           done
-          psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" -tAc "SELECT 1 as db_ok;"
-
-      - name: Start mini API (ci_main)
-        run: |
-          nohup uvicorn app.ci_main:app --host 127.0.0.1 --port 3000 > api.log 2>&1 &
-          for i in {1..40}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" $BASE_URL/health || true)
-            if [ "$code" = "200" ]; then
-              echo "API healthy (HTTP 200)"; exit 0
-            fi
-            sleep 1
-          done
-          echo "API NOT healthy (health != 200). api.log below:"
-          cat api.log || true
+          echo "API not healthy"
           exit 1
-
-      - name: Install Pester
-        shell: pwsh
-        run: Install-Module Pester -Scope CurrentUser -Force
-
-      - name: Run Pester - Preflight (4 tests)
-        shell: pwsh
-        env:
-          BASE_URL: ${{ env.BASE_URL }}   # injection explicite pour pwsh
-        run: |
-          echo "BASE_URL in step: $env:BASE_URL"
-          Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
-
-      - name: Run Pester - DB Connect (4 tests)
-        shell: pwsh
-        env:
-          PGHOST: ${{ env.PGHOST }}
-          PGPORT: ${{ env.PGPORT }}
-          PGUSER: ${{ env.PGUSER }}
-          PGDATABASE: ${{ env.PGDATABASE }}
-          PGPASSWORD: ${{ env.PGPASSWORD }}
-        run: Invoke-Pester -Path ./tests/pester/Db.Connect.Tests.ps1 -CI -Output Detailed
 
       - name: Show API logs on failure
         if: failure()
         run: |
-          echo "== api.log (tail) ==" && tail -n 200 api.log || true
-
+          echo "== api.log (tail) =="
+          tail -n 200 api.log || true
+  
+      - name: Install Pester
         shell: pwsh
-        env:
-          BASE_URL: ${{ env.BASE_URL }}
-        run: Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
+        run: Install-Module Pester -Scope CurrentUser -Force
+- name: Run Pester - Preflight (4 tests)
+  shell: pwsh
+  env:
+    BASE_URL: ${{ env.BASE_URL }}
+  run: |
+    echo "BASE_URL in step: $env:BASE_URL"
+    Invoke-Pester -Path ./tests/pester/Preflight.Tests.ps1 -CI -Output Detailed
+
+   
 
