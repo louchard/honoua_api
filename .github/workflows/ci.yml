@@ -9,6 +9,19 @@ on:
 jobs:
   honoua-ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: honoua
+          POSTGRES_PASSWORD: HonouaDev_2025
+          POSTGRES_DB: honoua
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U honoua -d honoua"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+
 
     env:
       BASE_URL: http://127.0.0.1:3000
