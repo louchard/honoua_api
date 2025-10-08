@@ -14,7 +14,7 @@ Describe 'Postgres - Connexion & I/O (persistant)' {
     $pwd               = if ($env:PGPASSWORD) { $env:PGPASSWORD } else { 'HonouaDev_2025' }
     $pwdEnc            = [System.Uri]::EscapeDataString($pwd)
 
-    # DSN (attention à l'interpolation PowerShell -> ${...})
+    # DSN (utiliser ${...} pour l’interpolation PowerShell)
     $script:DSN = "postgresql://${PGUSER}:${pwdEnc}@${PGHOST}:${PGPORT}/${PGDATABASE}"
 
     # binaire psql (sur runner Ubuntu: paquet postgresql-client)
