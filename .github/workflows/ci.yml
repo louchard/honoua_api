@@ -63,6 +63,18 @@ jobs:
           echo "API NOT healthy (health != 200). api.log below:"
           tail -n 200 api.log || true
           exit 1
+          - name: Wait for Postgres (health + ping)
+     env:
+       PGPASSWORD: ${{ env.PGPASSWORD }}
+     run: |
+       for i in {1..60}; do
+         if pg_isready -h $PGHOST -p $PGPORT -d $PGDATABASE -U $PGUSER; then
+           echo "Postgres is ready"; break
+         fi
+         sleep 1
+       done
+       psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" -tAc "SELECT 1;"
+
 
       - name: Install Pester
         shell: pwsh
