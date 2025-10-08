@@ -25,6 +25,13 @@ jobs:
 
     env:
       BASE_URL: http://127.0.0.1:3000
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: honoua
+      PGDATABASE: honoua
+      PGPASSWORD: HonouaDev_2025
+
+
 
     steps:
       - name: Checkout
