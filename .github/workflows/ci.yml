@@ -74,6 +74,51 @@ jobs:
          sleep 1
        done
        psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" -tAc "SELECT 1;"
+      - name: Run Pester DB tests (Db.Connect.Tests.ps1)
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          # Pester 5 (évite tout prompt interactif)
+          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -Confirm:$false
+          Import-Module Pester
+
+          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
+
+          # Exécute le pack de tests DB et produit un rapport NUnit XML
+          $result = Invoke-Pester `
+            -Path 'tests/pester/Db.Connect.Tests.ps1' `
+            -OutputFormat NUnitXml `
+            -OutputFile 'TestResults/Db.Connect.TestResults.xml' `
+            -PassThru
+
+          # Petit résumé + Step Summary GitHub
+          "Passed: $($result.PassedCount) | Failed: $($result.FailedCount) | Skipped: $($result.SkippedCount)" |
+            Tee-Object -FilePath TestResults/summary.txt | Out-Null
+
+          if ($env:GITHUB_STEP_SUMMARY) {
+            @"
+### Db.Connect.Tests.ps1 — Pester summary
+- Passed: $($result.PassedCount)
+- Failed: $($result.FailedCount)
+- Skipped: $($result.SkippedCount)
+"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
+
+          if ($result.FailedCount -gt 0) {
+            Write-Error "One or more DB tests failed."
+          }
+
+      - name: Upload Pester results (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-db-tests
+          path: |
+            TestResults/Db.Connect.TestResults.xml
+            TestResults/summary.txt
 
 
       - name: Install Pester
