@@ -9,6 +9,7 @@ on:
 jobs:
   honoua-ci:
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:16
@@ -22,7 +23,6 @@ jobs:
           --health-cmd="pg_isready -U honoua -d honoua"
           --health-interval=10s --health-timeout=5s --health-retries=10
 
-
     env:
       BASE_URL: http://127.0.0.1:3000
       PGHOST: 127.0.0.1
@@ -30,8 +30,6 @@ jobs:
       PGUSER: honoua
       PGDATABASE: honoua
       PGPASSWORD: HonouaDev_2025
-
-
 
     steps:
       - name: Checkout
@@ -43,18 +41,17 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps (uvicorn/fastapi + psql client)
-     run: |
-       python -m pip install --upgrade pip
-       pip install uvicorn fastapi
-       sudo apt-get update
-       sudo apt-get install -y postgresql-client
-
+        run: |
+          python -m pip install --upgrade pip
+          pip install uvicorn fastapi
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
       - name: Start mini API (ci_main)
         run: |
           nohup uvicorn app.ci_main:app --host 127.0.0.1 --port 3000 > api.log 2>&1 &
           for i in {1..40}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" $BASE_URL/health || true)
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/health" || true)
             if [ "$code" = "200" ]; then
               echo "API healthy (HTTP 200)"; exit 0
             fi
@@ -63,38 +60,79 @@ jobs:
           echo "API NOT healthy (health != 200). api.log below:"
           tail -n 200 api.log || true
           exit 1
-          - name: Wait for Postgres (health + ping)
-     env:
-       PGPASSWORD: ${{ env.PGPASSWORD }}
-     run: |
-       for i in {1..60}; do
-         if pg_isready -h $PGHOST -p $PGPORT -d $PGDATABASE -U $PGUSER; then
-           echo "Postgres is ready"; break
-         fi
-         sleep 1
-       done
-       psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" -tAc "SELECT 1;"
+
+      - name: Wait for Postgres (health + ping)
+        env:
+          PGPASSWORD: ${{ env.PGPASSWORD }}
+        run: |
+          for i in {1..60}; do
+            if pg_isready -h "$PGHOST" -p "$PGPORT" -d "$PGDATABASE" -U "$PGUSER"; then
+              echo "Postgres is ready"; break
+            fi
+            sleep 1
+          done
+          psql "postgresql://$PGUSER:$PGPASSWORD@$PGHOST:$PGPORT/$PGDATABASE" -tAc "SELECT 1;"
+
+      # --- Debug avant les tests DB ---
+      - name: Debug preflight for DB tests
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          Write-Host "=== Vérif fichier de test ==="
+          if (Test-Path 'tests/pester/Db.Connect.Tests.ps1') {
+            Get-Item 'tests/pester/Db.Connect.Tests.ps1' | Format-List FullName, Length, LastWriteTime
+          } else {
+            Write-Error "Fichier de test introuvable: tests/pester/Db.Connect.Tests.ps1"
+          }
+
+          Write-Host "`n=== Variables PG* (sans mot de passe) ==="
+          "PGHOST=$env:PGHOST"
+          "PGPORT=$env:PGPORT"
+          "PGUSER=$env:PGUSER"
+          "PGDATABASE=$env:PGDATABASE"
+          "PGPASSWORD=(masqué)"
+
+          Write-Host "`n=== Outils Postgres ==="
+          psql --version
+          pg_isready --version
+
+          Write-Host "`n=== Santé Postgres (pg_isready) ==="
+          pg_isready -h "$env:PGHOST" -p "$env:PGPORT" -d "$env:PGDATABASE" -U "$env:PGUSER"
+
+          Write-Host "`n=== Ping SQL (SELECT 1) ==="
+          psql "host=$env:PGHOST port=$env:PGPORT dbname=$env:PGDATABASE user=$env:PGUSER password=$env:PGPASSWORD sslmode=disable" -c "SELECT 1;"
+
+          Write-Host "`n=== Pester version ==="
+          try {
+            Import-Module Pester -ErrorAction Stop
+          } catch {
+            Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+            Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -Confirm:$false
+            Import-Module Pester
+          }
+          (Get-Module Pester).Version
+
       - name: Run Pester DB tests (Db.Connect.Tests.ps1)
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
-          # Pester 5 (évite tout prompt interactif)
+          # Pester 5
           Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
           Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -Confirm:$false
           Import-Module Pester
 
           New-Item -ItemType Directory -Force -Path TestResults | Out-Null
 
-          # Exécute le pack de tests DB et produit un rapport NUnit XML
           $result = Invoke-Pester `
             -Path 'tests/pester/Db.Connect.Tests.ps1' `
             -OutputFormat NUnitXml `
             -OutputFile 'TestResults/Db.Connect.TestResults.xml' `
             -PassThru
 
-          # Petit résumé + Step Summary GitHub
           "Passed: $($result.PassedCount) | Failed: $($result.FailedCount) | Skipped: $($result.SkippedCount)" |
             Tee-Object -FilePath TestResults/summary.txt | Out-Null
 
@@ -120,11 +158,7 @@ jobs:
             TestResults/Db.Connect.TestResults.xml
             TestResults/summary.txt
 
-
-      - name: Install Pester
-        shell: pwsh
-        run: Install-Module Pester -Scope CurrentUser -Force
-
+      # (Optionnel) Pester preflight existant
       - name: Run Pester - Preflight (4 tests)
         shell: pwsh
         env:
