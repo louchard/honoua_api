@@ -138,25 +138,44 @@ jobs:
 
           if ($env:GITHUB_STEP_SUMMARY) {
             @"
-### Db.Connect.Tests.ps1 — Pester summary
-- Passed: $($result.PassedCount)
-- Failed: $($result.FailedCount)
-- Skipped: $($result.SkippedCount)
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      - name: Run Pester DB tests (Db.Connect.Tests.ps1)
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+
+          # Pester 5
+          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -Confirm:$false
+          Import-Module Pester
+
+          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
+
+          $result = Invoke-Pester `
+            -Path 'tests/pester/Db.Connect.Tests.ps1' `
+            -OutputFormat NUnitXml `
+            -OutputFile 'TestResults/Db.Connect.TestResults.xml' `
+            -PassThru
+
+          # Résumé minimal + fichier texte
+          "Passed: $($result.PassedCount) | Failed: $($result.FailedCount) | Skipped: $($result.SkippedCount)" |
+            Tee-Object -FilePath TestResults/summary.txt | Out-Null
+
+          # Step Summary GitHub (sans here-string)
+          if ($env:GITHUB_STEP_SUMMARY) {
+            $lines = @(
+              '### Db.Connect.Tests.ps1 — Pester summary'
+              "- Passed: $($result.PassedCount)"
+              "- Failed: $($result.FailedCount)"
+              "- Skipped: $($result.SkippedCount)"
+            ) -join [Environment]::NewLine
+            $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
 
           if ($result.FailedCount -gt 0) {
             Write-Error "One or more DB tests failed."
           }
 
-      - name: Upload Pester results (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pester-db-tests
-          path: |
-            TestResults/Db.Connect.TestResults.xml
-            TestResults/summary.txt
 
       # (Optionnel) Pester preflight existant
       - name: Run Pester - Preflight (4 tests)
