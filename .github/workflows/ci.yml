@@ -84,15 +84,15 @@ jobs:
           if (Test-Path 'tests/pester/Db.Connect.Tests.ps1') {
             Get-Item 'tests/pester/Db.Connect.Tests.ps1' | Format-List FullName, Length, LastWriteTime
           } else {
-            Write-Error "Fichier de test introuvable: tests/pester/Db.Connect.Tests.ps1"
+            throw "Fichier de test introuvable: tests/pester/Db.Connect.Tests.ps1"
           }
 
           Write-Host "`n=== Variables PG* (sans mot de passe) ==="
-          "PGHOST=$env:PGHOST"
-          "PGPORT=$env:PGPORT"
-          "PGUSER=$env:PGUSER"
-          "PGDATABASE=$env:PGDATABASE"
-          "PGPASSWORD=(masqué)"
+          Write-Output ("PGHOST={0}" -f $env:PGHOST)
+          Write-Output ("PGPORT={0}" -f $env:PGPORT)
+          Write-Output ("PGUSER={0}" -f $env:PGUSER)
+          Write-Output ("PGDATABASE={0}" -f $env:PGDATABASE)
+          Write-Output "PGPASSWORD=(masqué)"
 
           Write-Host "`n=== Outils Postgres ==="
           psql --version
@@ -133,49 +133,33 @@ jobs:
             -OutputFile 'TestResults/Db.Connect.TestResults.xml' `
             -PassThru
 
-          "Passed: $($result.PassedCount) | Failed: $($result.FailedCount) | Skipped: $($result.SkippedCount)" |
-            Tee-Object -FilePath TestResults/summary.txt | Out-Null
-
-          if ($env:GITHUB_STEP_SUMMARY) {
-            @"
-      - name: Run Pester DB tests (Db.Connect.Tests.ps1)
-        shell: pwsh
-        run: |
-          Set-StrictMode -Version Latest
-          $ErrorActionPreference = 'Stop'
-
-          # Pester 5
-          Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
-          Install-Module Pester -Scope CurrentUser -Force -SkipPublisherCheck -Confirm:$false
-          Import-Module Pester
-
-          New-Item -ItemType Directory -Force -Path TestResults | Out-Null
-
-          $result = Invoke-Pester `
-            -Path 'tests/pester/Db.Connect.Tests.ps1' `
-            -OutputFormat NUnitXml `
-            -OutputFile 'TestResults/Db.Connect.TestResults.xml' `
-            -PassThru
-
           # Résumé minimal + fichier texte
-          "Passed: $($result.PassedCount) | Failed: $($result.FailedCount) | Skipped: $($result.SkippedCount)" |
-            Tee-Object -FilePath TestResults/summary.txt | Out-Null
+          $summary = "Passed: {0} | Failed: {1} | Skipped: {2}" -f $result.PassedCount, $result.FailedCount, $result.SkippedCount
+          $summary | Tee-Object -FilePath TestResults/summary.txt | Out-Null
 
-          # Step Summary GitHub (sans here-string)
+          # Step Summary GitHub (sans here-strings)
           if ($env:GITHUB_STEP_SUMMARY) {
             $lines = @(
-              '### Db.Connect.Tests.ps1 — Pester summary'
-              "- Passed: $($result.PassedCount)"
-              "- Failed: $($result.FailedCount)"
-              "- Skipped: $($result.SkippedCount)"
+              "### Db.Connect.Tests.ps1 — Pester summary"
+              ("- Passed: {0}" -f $result.PassedCount)
+              ("- Failed: {0}" -f $result.FailedCount)
+              ("- Skipped: {0}" -f $result.SkippedCount)
             ) -join [Environment]::NewLine
             $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
 
           if ($result.FailedCount -gt 0) {
-            Write-Error "One or more DB tests failed."
+            throw "One or more DB tests failed."
           }
 
+      - name: Upload Pester results (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-db-tests
+          path: |
+            TestResults/Db.Connect.TestResults.xml
+            TestResults/summary.txt
 
       # (Optionnel) Pester preflight existant
       - name: Run Pester - Preflight (4 tests)
@@ -192,3 +176,4 @@ jobs:
         if: failure()
         run: |
           echo "== api.log (tail) ==" && tail -n 200 api.log || true
+
