@@ -6,6 +6,13 @@ API minimaliste pour les tests CI/CD et la démonstration de l’infrastructure 
 
 ---
 
+## 🌍 À propos du projet
+**Honoua API** fait partie du projet Honoua, un assistant personnel dédié à la **décarbonation de l’alimentation**.  
+Cette API sert de socle technique pour tester et démontrer l’intégration entre l’application (analyse, comparaison, suivi carbone) et les services backend.  
+Elle inclut une **pipeline CI/CD** (tests automatisés, vérification base de données, artefacts de logs) pour assurer la stabilité du projet.
+
+---
+
 ## 🚀 Démarrer en local
 ```bash
 pip install uvicorn fastapi
