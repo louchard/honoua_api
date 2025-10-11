@@ -18,3 +18,4 @@ Elle inclut une **pipeline CI/CD** (tests automatisés, vérification base de do
 pip install uvicorn fastapi
 uvicorn app.ci_main:app --host 127.0.0.1 --port 3000
 # Ouvrir : http://127.0.0.1:3000/health
+
