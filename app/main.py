@@ -1,166 +1,146 @@
-﻿from fastapi import FastAPI, HTTPException, Query
-from typing import Optional, Any, List
-import os
-from dotenv import load_dotenv
-import psycopg
-from psycopg.rows import dict_row
+﻿from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
+from typing import List, Optional
 
-# Pool de connexions (psycopg3)
-try:
-    from psycopg_pool import ConnectionPool  # pip install psycopg_pool
-except ImportError:
-    ConnectionPool = None  # Fallback si non installé
+# ====== FastAPI app ======
+app = FastAPI(title="Honoua API")
 
-load_dotenv()
+# ====== Modèles Pydantic (API) ======
+class Product(BaseModel):
+    ean: str
+    name: Optional[str] = None
+    category: Optional[str] = None
 
-# DSN : priorise DATABASE_URL, puis HONOUA_DB_URL, puis variables PG*
-DB_DSN = (
-    os.getenv("DATABASE_URL")
-    or os.getenv("HONOUA_DB_URL")
-    or (
-        f"host={os.getenv('PGHOST','localhost')} "
-        f"port={os.getenv('PGPORT','5432')} "
-        f"dbname={os.getenv('PGDATABASE','honoua')} "
-        f"user={os.getenv('PGUSER','honou')} "
-        f"password={os.getenv('PGPASSWORD','')}"
-    )
-)
+class ProductSearchQuery(BaseModel):
+    q: str
 
-app = FastAPI(title="Honoua API", version="0.1.0")
+# ====== Données statiques (fallback mémoire) ======
+_FAKE_PRODUCTS: List[Product] = [
+    Product(ean="3017620422003", name="Pâte à tartiner noisettes", category="Épicerie sucrée"),
+    Product(ean="3560071234567", name="Lait demi-écrémé 1L", category="Boissons"),
+    Product(ean="3274080005003", name="Yaourt nature 4x125g", category="Produits laitiers"),
+]
 
-# Soit un pool, soit une connexion unique (compat ancienne version)
-pool: Optional["ConnectionPool"] = None
-conn: Optional["psycopg.Connection"] = None
-
-@app.on_event("startup")
-def startup():
-    """
-    Initialise un pool de connexions si disponible,
-    sinon une connexion unique en autocommit.
-    """
-    global pool, conn
-    if ConnectionPool is not None:
-        pool = ConnectionPool(
-            conninfo=DB_DSN,
-            kwargs={"row_factory": dict_row},
-            min_size=1,
-            max_size=10,
-            timeout=10,   # s à l'acquisition
-        )
-    else:
-        conn = psycopg.connect(DB_DSN, row_factory=dict_row)
-        conn.autocommit = True
-
-@app.on_event("shutdown")
-def shutdown():
-    global pool, conn
-    if pool:
-        pool.close()
-        pool = None
-    if conn:
-        conn.close()
-        conn = None
-
-def get_cursor():
-    """
-    Retourne un tuple (cn, cur) prêt à l'emploi.
-    - Si pool actif: emprunte une connexion, renvoie son curseur
-    - Sinon: renvoie la connexion globale et son curseur
-    """
-    if pool is not None:
-        cn = pool.getconn()
-        cn.autocommit = True
-        return cn, cn.cursor()
-    if conn is None:
-        # Cas limite: si aucun n'est initialisé
-        raise RuntimeError("Aucune connexion disponible (pool/conn non initialisé).")
-    return conn, conn.cursor()
-
-def put_conn(cn):
-    """Remet la connexion dans le pool si applicable."""
-    if pool is not None and cn is not None:
-        pool.putconn(cn)
-
-# ---------------------- Endpoints ----------------------
-
+# ====== Health ======
 @app.get("/health")
 def health():
-    cn, cur = get_cursor()
+    return {"status": "ok"}
+
+# ==========================
+#      SQLAlchemy (DB)
+# ==========================
+import os
+from sqlalchemy import String
+from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
+from sqlalchemy import create_engine
+
+# URL DB via variable d’environnement, sinon SQLite local
+DB_URL = os.getenv("HONOUA_DB_URL", "sqlite:///./honoua.db")
+
+# Pour SQLite, besoin de ce connect_args
+connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
+engine = create_engine(DB_URL, echo=False, future=True, connect_args=connect_args)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+Base = declarative_base()
+
+class ProductDB(Base):
+    __tablename__ = "products"
+    ean: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+# Création des tables si besoin (no-op si déjà existantes)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    # Pas bloquant si la DB n’est pas prête — on garde le fallback mémoire
+    pass
+
+def get_db() -> Session:
+    db = SessionLocal()
     try:
-        cur.execute("SELECT 1 AS ok;")
-        return cur.fetchone()  # {'ok': 1}
+        yield db
     finally:
-        cur.close()
-        put_conn(cn)
+        db.close()
 
-@app.get("/products/{ean}")
-def get_product_by_ean(ean: str):
-    sql = "SELECT * FROM honou.products WHERE ean13_clean = %s LIMIT 1;"
-    cn, cur = get_cursor()
-    try:
-        cur.execute(sql, (ean,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="EAN not found")
-        return row
-    finally:
-        cur.close()
-        put_conn(cn)
+# ==========================
+#        Products
+# ==========================
+@app.get("/products", response_model=List[Product])
+def list_products():
+    """Retourne la liste statique (smoke test)."""
+    return _FAKE_PRODUCTS
 
-@app.get("/products")
-def list_products(
-    brand: Optional[str] = None,
-    category: Optional[str] = None,
-    q: Optional[str] = Query(None, description="Recherche texte sur product_name"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    clauses: List[str] = []
-    params: List[Any] = []
-    if brand:
-        clauses.append("brand = %s")
-        params.append(brand)
-    if category:
-        clauses.append("category = %s")
-        params.append(category)
-    if q:
-        clauses.append("product_name ILIKE %s")
-        params.append(f"%{q}%")
-
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-    sql = f"""
-        SELECT id, ean13_clean, product_name, brand, category,
-               carbon_product_kgco2e, carbon_pack_kgco2e, net_weight_kg,
-               origin_country, origin_lat, origin_lon, zone_geo, coef_trans,
-               origin_confidence, created_at
-        FROM honou.products
-        {where}
-        ORDER BY id
-        LIMIT %s OFFSET %s;
+@app.get("/products/{ean}", response_model=Product)
+def get_product(ean: str, db: Session = Depends(get_db)):
     """
-    params.extend([limit, offset])
-
-    cn, cur = get_cursor()
-    try:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        return {"count": len(rows), "items": rows}
-    finally:
-        cur.close()
-        put_conn(cn)
-
-@app.get("/metrics/categories")
-def metrics_categories(limit: int = Query(20, ge=1, le=200)):
-    sql = """
-        SELECT category, n, avg_prod, avg_pack, avg_total
-        FROM honou.mv_metrics_category
-        ORDER BY avg_total DESC NULLS LAST
-        LIMIT %s;
+    Lecture en BDD (si présente), sinon fallback mémoire.
     """
-    cn, cur = get_cursor()
+    # 1) Essayer la BDD
     try:
-        cur.execute(sql, (limit,))
-        return cur.fetchall()
-    finally:
-        cur.close()
-        put_conn(cn)
+        db_obj = db.get(ProductDB, ean)
+        if db_obj:
+            return Product(ean=db_obj.ean, name=db_obj.name, category=db_obj.category)
+    except Exception:
+        # Si la BDD n'est pas dispo ou autre erreur, on ignore et on tente le fallback
+        pass
+
+    # 2) Fallback mémoire
+    for p in _FAKE_PRODUCTS:
+        if p.ean == ean:
+            return p
+    raise HTTPException(status_code=404, detail="Product not found")
+
+@app.post("/products/search", response_model=List[Product])
+def search_products(query: ProductSearchQuery, db: Session = Depends(get_db)):
+    """
+    Recherche très simple par nom. On tente la BDD d'abord (contains LIKE),
+    sinon on revient au fallback mémoire.
+    """
+    q = (query.q or "").strip().lower()
+    if not q:
+        return []
+
+    results: List[Product] = []
+    # 1) Essayer la BDD (si table existe)
+    try:
+        # SQLAlchemy 2.0: requête simple avec contains (insensible casse via lower côté Python)
+        stmt_results = db.query(ProductDB).all()  # simple (pas d'index texte ici)
+        for row in stmt_results:
+            if row.name and q in row.name.lower():
+                results.append(Product(ean=row.ean, name=row.name, category=row.category))
+        # Si on trouve en BDD, on retourne (même si liste vide, on continue fallback pour enrichir)
+    except Exception:
+        # Si erreur DB, on ignore
+        pass
+
+    # 2) Fallback mémoire (compléter les résultats)
+    mem_matches = [p for p in _FAKE_PRODUCTS if p.name and q in p.name.lower()]
+    # Éviter doublons si même EAN
+    seen = {r.ean for r in results}
+    for p in mem_matches:
+        if p.ean not in seen:
+            results.append(p)
+
+    return results
+
+# ==========================
+#        Compare
+# ==========================
+class CompareRequest(BaseModel):
+    eans: list[str]
+
+class CompareItemResult(BaseModel):
+    ean: str
+    carbon_kgCO2e: float | None = None
+
+class CompareResponse(BaseModel):
+    results: list[CompareItemResult]
+
+@app.post("/compare", response_model=CompareResponse)
+def compare_products(payload: CompareRequest):
+    """
+    Endpoint de comparaison carbone minimal (valeurs null pour préparer le front).
+    """
+    results = [CompareItemResult(ean=ean, carbon_kgCO2e=None) for ean in payload.eans]
+    return CompareResponse(results=results)
