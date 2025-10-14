@@ -54,3 +54,27 @@ def search_products(query: ProductSearchQuery):
         return []
     return [p for p in _FAKE_PRODUCTS if p.name and q in p.name.lower()]
 
+from pydantic import BaseModel
+
+# ====== Compare ======
+class CompareRequest(BaseModel):
+    eans: list[str]
+
+class CompareItemResult(BaseModel):
+    ean: str
+    carbon_kgCO2e: float | None = None
+
+class CompareResponse(BaseModel):
+    results: list[CompareItemResult]
+
+
+@app.post("/compare", response_model=CompareResponse)
+def compare_products(payload: CompareRequest):
+    """
+    Endpoint de comparaison carbone minimal.
+    Pour chaque EAN reçu, renvoie un résultat vide (carbon_kgCO2e = null)
+    afin de tester le flux front–API.
+    """
+    results = [CompareItemResult(ean=ean, carbon_kgCO2e=None) for ean in payload.eans]
+    return CompareResponse(results=results)
+
