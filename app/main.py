@@ -1,10 +1,11 @@
-﻿from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 
+# ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
-# ====== Modèles (simples) ======
+# ====== Modèles Pydantic (API) ======
 class Product(BaseModel):
     ean: str
     name: Optional[str] = None
@@ -13,7 +14,7 @@ class Product(BaseModel):
 class ProductSearchQuery(BaseModel):
     q: str
 
-# ====== Données statiques (placeholder) ======
+# ====== Données statiques (fallback mémoire) ======
 _FAKE_PRODUCTS: List[Product] = [
     Product(ean="3017620422003", name="Pâte à tartiner noisettes", category="Épicerie sucrée"),
     Product(ean="3560071234567", name="Lait demi-écrémé 1L", category="Boissons"),
@@ -25,38 +26,107 @@ _FAKE_PRODUCTS: List[Product] = [
 def health():
     return {"status": "ok"}
 
-# ====== Products ======
+# ==========================
+#      SQLAlchemy (DB)
+# ==========================
+import os
+from sqlalchemy import String
+from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
+from sqlalchemy import create_engine
+
+# URL DB via variable d’environnement, sinon SQLite local
+DB_URL = os.getenv("HONOUA_DB_URL", "sqlite:///./honoua.db")
+
+# Pour SQLite, besoin de ce connect_args
+connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
+engine = create_engine(DB_URL, echo=False, future=True, connect_args=connect_args)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+Base = declarative_base()
+
+class ProductDB(Base):
+    __tablename__ = "products"
+    ean: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+# Création des tables si besoin (no-op si déjà existantes)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    # Pas bloquant si la DB n’est pas prête — on garde le fallback mémoire
+    pass
+
+def get_db() -> Session:
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ==========================
+#        Products
+# ==========================
 @app.get("/products", response_model=List[Product])
 def list_products():
-    """
-    Retourne la liste statique des produits (smoke test).
-    """
+    """Retourne la liste statique (smoke test)."""
     return _FAKE_PRODUCTS
 
 @app.get("/products/{ean}", response_model=Product)
-def get_product(ean: str):
+def get_product(ean: str, db: Session = Depends(get_db)):
     """
-    Retourne un produit par EAN. 404 si non trouvé.
+    Lecture en BDD (si présente), sinon fallback mémoire.
     """
+    # 1) Essayer la BDD
+    try:
+        db_obj = db.get(ProductDB, ean)
+        if db_obj:
+            return Product(ean=db_obj.ean, name=db_obj.name, category=db_obj.category)
+    except Exception:
+        # Si la BDD n'est pas dispo ou autre erreur, on ignore et on tente le fallback
+        pass
+
+    # 2) Fallback mémoire
     for p in _FAKE_PRODUCTS:
         if p.ean == ean:
             return p
     raise HTTPException(status_code=404, detail="Product not found")
 
 @app.post("/products/search", response_model=List[Product])
-def search_products(query: ProductSearchQuery):
+def search_products(query: ProductSearchQuery, db: Session = Depends(get_db)):
     """
-    Recherche très simple par nom (contains, case-insensitive).
-    À remplacer plus tard par une recherche BDD.
+    Recherche très simple par nom. On tente la BDD d'abord (contains LIKE),
+    sinon on revient au fallback mémoire.
     """
     q = (query.q or "").strip().lower()
     if not q:
         return []
-    return [p for p in _FAKE_PRODUCTS if p.name and q in p.name.lower()]
 
-from pydantic import BaseModel
+    results: List[Product] = []
+    # 1) Essayer la BDD (si table existe)
+    try:
+        # SQLAlchemy 2.0: requête simple avec contains (insensible casse via lower côté Python)
+        stmt_results = db.query(ProductDB).all()  # simple (pas d'index texte ici)
+        for row in stmt_results:
+            if row.name and q in row.name.lower():
+                results.append(Product(ean=row.ean, name=row.name, category=row.category))
+        # Si on trouve en BDD, on retourne (même si liste vide, on continue fallback pour enrichir)
+    except Exception:
+        # Si erreur DB, on ignore
+        pass
 
-# ====== Compare ======
+    # 2) Fallback mémoire (compléter les résultats)
+    mem_matches = [p for p in _FAKE_PRODUCTS if p.name and q in p.name.lower()]
+    # Éviter doublons si même EAN
+    seen = {r.ean for r in results}
+    for p in mem_matches:
+        if p.ean not in seen:
+            results.append(p)
+
+    return results
+
+# ==========================
+#        Compare
+# ==========================
 class CompareRequest(BaseModel):
     eans: list[str]
 
@@ -67,14 +137,10 @@ class CompareItemResult(BaseModel):
 class CompareResponse(BaseModel):
     results: list[CompareItemResult]
 
-
 @app.post("/compare", response_model=CompareResponse)
 def compare_products(payload: CompareRequest):
     """
-    Endpoint de comparaison carbone minimal.
-    Pour chaque EAN reçu, renvoie un résultat vide (carbon_kgCO2e = null)
-    afin de tester le flux front–API.
+    Endpoint de comparaison carbone minimal (valeurs null pour préparer le front).
     """
     results = [CompareItemResult(ean=ean, carbon_kgCO2e=None) for ean in payload.eans]
     return CompareResponse(results=results)
-
