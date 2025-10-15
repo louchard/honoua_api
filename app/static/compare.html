@@ -1,6 +1,3 @@
-cd C:\honoua_api
-New-Item -ItemType Directory -Path app\static -Force | Out-Null
-@"
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -9,7 +6,7 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
   <title>Honoua — Comparateur</title>
   <style>
     :root{
-      --green:#062909; --orange:#F5C147; --blue:#001D85;
+      --green:#2e7d32; --orange:#F5C147; --blue:#001D85;
       --bg:#f7f7f8; --ink:#111; --muted:#70757a; --card:#fff; --line:#e6e6e9;
     }
     *{box-sizing:border-box}
@@ -18,7 +15,7 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
       position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
       display:flex;align-items:center;gap:12px;padding:10px 14px;height:60px;
     }
-    .logo{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--green),var(--blue));}
+    .logo{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#062909,var(--blue));}
     .titles{flex:1;text-align:center}
     .titles h1{margin:0;font-size:18px;line-height:1;font-weight:700;letter-spacing:.2px}
     .titles p{margin:2px 0 0;font-size:12px;color:var(--muted)}
@@ -28,12 +25,9 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
       border:1px solid var(--line);border-radius:14px;
     }
     input[type="text"]{
-      flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;
-      outline:none;background:#fff;
+      flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;background:#fff;
     }
-    button{
-      border:0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;
-    }
+    button{border:0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
     .btn-primary{background:var(--blue);color:#fff}
     .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
     .btn-danger{background:#111;color:#fff;border:1px solid #000}
@@ -52,19 +46,27 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
       width:100%;height:120px;border-radius:12px;background:#f2f3f5;border:1px dashed var(--line);
       display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);
     }
+    .row{display:flex;gap:8px;margin-top:10px}
+    .row button{flex:1}
+    .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px}
+
+    /* Badge + jauge A3 */
     .badge{
       display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 8px;border-radius:999px;
       border:1px solid var(--line);background:#fafafa;margin-top:8px;
     }
     .badge .dot{width:10px;height:10px;border-radius:50%;background:var(--orange)}
-    .row{display:flex;gap:8px;margin-top:10px}
-    .row button{flex:1}
-    .empty{
-      padding:16px;text-align:center;color:var(--muted);font-size:13px
+    .gauge{
+      width:85%; height:10px; border-radius:999px; background:#eee; margin-top:8px; position:relative; overflow:hidden;
+      border:1px solid var(--line);
     }
-    .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;
-      padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s}
-    .toast.show{opacity:1}
+    .gauge > i{
+      content:""; position:absolute; left:0; top:0; height:100%; width:0%;
+      border-radius:999px;
+      background: linear-gradient(90deg, var(--green), var(--orange));
+      transition: width .35s ease;
+    }
+    .gauge-label{font-size:12px;color:var(--muted);margin-top:4px}
   </style>
 </head>
 <body>
@@ -72,7 +74,7 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
     <div class="logo" aria-hidden="true"></div>
     <div class="titles">
       <h1>Comparateur carbone</h1>
-      <p>UI de base — sans calcul</p>
+      <p>Calculs de base — A3</p>
     </div>
     <div style="width:48px"></div>
   </header>
@@ -105,26 +107,19 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
     const clearBtn = $("#clearBtn");
     const importUrlBtn = $("#importUrlBtn");
     const resetBtn = $("#resetBtn");
-    const toast = $("#toast");
 
     const STORAGE_KEY = "honoua:compare:eanList";
     let eans = loadEans();
-    render();
+    render(); // crée les cartes
+    refreshCompare(); // tente un premier calcul s’il y a des EAN
 
     addBtn.addEventListener("click", ()=> {
       const val = (input.value||"").replace(/\s+/g,"");
       if(!val){return notify("Entrez un EAN.");}
-      addEAN(val);
-      input.value="";
-      input.focus();
+      if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); }
     });
-    input.addEventListener("keydown", (e)=>{
-      if(e.key==="Enter"){ addBtn.click(); }
-    });
-    clearBtn.addEventListener("click", ()=>{
-      input.value="";
-      notify("Champ vidé.");
-    });
+    input.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
+    clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); });
     importUrlBtn.addEventListener("click", ()=>{
       const params = new URLSearchParams(location.search);
       const csv = (params.get("eans")||"").trim();
@@ -132,22 +127,20 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
       const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
       let added=0;
       list.forEach(v=> { if(addEAN(v,true)) added++; });
-      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
+      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); refreshCompare(); }
       else notify("Aucun EAN nouveau.");
     });
     resetBtn.addEventListener("click", ()=>{
       if(confirm("Tout effacer de la comparaison ?")){
-        eans = [];
-        saveEans();
-        render();
-        notify("Comparateur réinitialisé.");
+        eans = []; saveEans(); render(); notify("Comparateur réinitialisé.");
       }
     });
 
     function notify(msg){
-      toast.textContent = msg;
-      toast.classList.add("show");
-      setTimeout(()=>toast.classList.remove("show"), 1400);
+      let t = document.getElementById("toast");
+      if(!t){t=document.createElement("div");t.id="toast";document.body.appendChild(t)}
+      t.className="toast show"; t.textContent = msg;
+      setTimeout(()=>t.classList.remove("show"), 1400);
     }
     function loadEans(){
       try{
@@ -161,18 +154,13 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
         return arr;
       }catch{ return []; }
     }
-    function saveEans(){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(eans));
-    }
+    function saveEans(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eans)); }
     function addEAN(val, silent=false){
       if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); return false; }
       if(eans.includes(val)){ if(!silent) notify("Déjà présent."); return false; }
-      eans.push(val);
-      saveEans();
-      render();
-      if(!silent) notify("Produit ajouté.");
-      return true;
+      eans.push(val); saveEans(); render(); if(!silent) notify("Produit ajouté."); return true;
     }
+
     async function render(){
       track.innerHTML = "";
       if(eans.length===0){
@@ -188,28 +176,35 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
         hydrateCard(card, code);
       }
     }
+
     function makeCardSkeleton(code){
       const el = document.createElement("article");
       el.className="card";
+      el.dataset.ean = code;
       el.innerHTML = `
         <div class="meta">EAN : <strong>${code}</strong></div>
         <div class="thumb" data-role="thumb">Chargement…</div>
         <h3 data-role="title">—</h3>
         <div class="meta" data-role="brand">—</div>
-        <span class="badge" title="Placeholder empreinte (A2)">
-          <span class="dot"></span>
-          <span>Empreinte : —</span>
+
+        <span class="badge">
+          <span class="dot" data-role="dot"></span>
+          <span data-role="fp-label">Empreinte : —</span>
         </span>
+        <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
+        <div class="gauge-label" data-role="glabel">—</div>
+
         <div class="row" style="margin-top:12px">
           <button class="btn-ghost" data-action="remove">Retirer</button>
         </div>
       `;
       el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
         eans = eans.filter(v=>v!==code);
-        saveEans(); render(); notify("Produit retiré.");
+        saveEans(); render(); notify("Produit retiré."); refreshCompare();
       });
       return el;
     }
+
     async function hydrateCard(card, code){
       const $t = (sel)=>card.querySelector(sel);
       $t('[data-role="thumb"]').textContent = "Chargement…";
@@ -241,19 +236,105 @@ New-Item -ItemType Directory -Path app\static -Force | Out-Null
       const th = $t('[data-role="thumb"]');
       if(image){
         const img = new Image();
-        img.alt = title;
-        img.loading = "lazy";
-        img.style.width="100%";
-        img.style.height="120px";
-        img.style.objectFit="contain";
-        img.style.borderRadius="10px";
-        img.src = image;
-        th.replaceWith(img);
+        img.alt = title; img.loading = "lazy";
+        img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
+        img.src = image; th.replaceWith(img);
       }else{
         th.textContent = "Pas d’image";
       }
     }
+
+    // ===== A3 — calculs de base via /compare?eans=... =====
+    async function refreshCompare(){
+      if(!eans.length) return;
+      // Appel GET /compare?eans=CSV — tolérant aux schémas de champs
+      let table=null;
+      try{
+        const url = `/compare?eans=${encodeURIComponent(eans.join(','))}`;
+        const r = await fetch(url);
+        if(r.ok){ table = await r.json(); }
+      }catch(e){ table=null; }
+
+      // Indexer par EAN pour maj rapide des cartes
+      const byEan = {};
+      if(Array.isArray(table)){
+        for(const row of table){
+          const ean = (row.ean || row.code || row.id || "").toString();
+          const fp = pickFootprint(row); // valeur numérique (gCO2e, kgCO2e, score)
+          if(ean && fp != null && !isNaN(fp)){ byEan[ean] = Number(fp); }
+        }
+      }
+
+      // Normalisation min-max sur les EAN présents uniquement
+      const vals = Object.values(byEan);
+      const min = vals.length ? Math.min(...vals) : 0;
+      const max = vals.length ? Math.max(...vals) : 1;
+      const span = Math.max(1e-9, max - min);
+
+      // Mise à jour UI
+      document.querySelectorAll('.card').forEach(card=>{
+        const ean = card.dataset.ean;
+        const bar = card.querySelector('[data-role="bar"]');
+        const dot = card.querySelector('[data-role="dot"]');
+        const lab = card.querySelector('[data-role="fp-label"]');
+        const glb = card.querySelector('[data-role="glabel"]');
+
+        if(byEan[ean] == null){
+          bar.style.width = '0%';
+          dot.style.background = '#bbb';
+          lab.textContent = 'Empreinte : —';
+          glb.textContent = '—';
+          return;
+        }
+        const raw = byEan[ean];
+        const norm = (raw - min) / span; // 0 (meilleur) → 1 (pire)
+        const pct = Math.round(norm * 100);
+
+        bar.style.width = Math.max(6, pct) + '%'; // petite largeur mini lisible
+        dot.style.background = mixColor('#2e7d32','#F5C147', norm);
+        lab.textContent = `Empreinte : ${fmt(raw)}`;
+        glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
+      });
+    }
+
+    function pickFootprint(row){
+      // Cherche un champ standard : footprint / co2e / carbon / score
+      const keys = Object.keys(row).map(k=>k.toLowerCase());
+      const map = {};
+      for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
+      const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
+      for(const c of candidates){
+        if(map[c]){ return toNumber(row[map[c]]); }
+      }
+      return null;
+    }
+
+    function toNumber(v){
+      if(v==null) return null;
+      if(typeof v === 'number') return v;
+      const s = String(v).replace(',', '.').replace(/[^\d.\-eE]/g,'');
+      const n = parseFloat(s);
+      return isNaN(n) ? null : n;
+    }
+
+    function fmt(v){
+      if(v>=1000) return (v/1000).toFixed(2)+'k';
+      if(v>=100) return v.toFixed(0);
+      if(v>=10) return v.toFixed(1);
+      return v.toFixed(2);
+    }
+
+    // mélange simple de deux couleurs hex (pour le point)
+    function mixColor(hexA, hexB, t){
+      const a = hexToRgb(hexA), b = hexToRgb(hexB);
+      const m = {r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t)};
+      return `rgb(${m.r},${m.g},${m.b})`;
+    }
+    function hexToRgb(h){
+      const x = h.replace('#','');
+      const n = parseInt(x.length===3 ? x.split('').map(c=>c+c).join('') : x, 16);
+      return {r:(n>>16)&255, g:(n>>8)&255, b:n&255};
+    }
   </script>
 </body>
 </html>
-"@ | Out-File -FilePath app\static\compare.html -Encoding utf8
