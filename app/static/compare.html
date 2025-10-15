@@ -1,0 +1,274 @@
+<!-- app/static/compare.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Honoua — Comparateur</title>
+  <style>
+    :root{
+      --green:#062909; --orange:#F5C147; --blue:#001D85;
+      --bg:#f7f7f8; --ink:#111; --muted:#70757a; --card:#fff; --line:#e6e6e9;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{
+      position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
+      display:flex;align-items:center;gap:12px;padding:10px 14px;height:60px;
+    }
+    .logo{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--green),var(--blue));}
+    .titles{flex:1;text-align:center}
+    .titles h1{margin:0;font-size:18px;line-height:1;font-weight:700;letter-spacing:.2px}
+    .titles p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+    main{padding:12px}
+    .bar{
+      display:flex;gap:8px;align-items:center;padding:10px;background:var(--card);
+      border:1px solid var(--line);border-radius:14px;
+    }
+    input[type="text"]{
+      flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;
+      outline:none;background:#fff;
+    }
+    button{
+      border:0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;
+    }
+    .btn-primary{background:var(--blue);color:#fff}
+    .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+    .btn-danger{background:#111;color:#fff;border:1px solid #000}
+    .help{font-size:12px;color:var(--muted);margin:8px 2px}
+    .tracks{
+      margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;
+      display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;
+    }
+    .card{
+      min-width:220px;max-width:240px;background:#fff;border:1px solid var(--line);border-radius:16px;
+      padding:12px;scroll-snap-align:start;box-shadow:0 1px 0 rgba(0,0,0,.04);
+    }
+    .card h3{margin:6px 0 4px;font-size:14px}
+    .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+    .thumb{
+      width:100%;height:120px;border-radius:12px;background:#f2f3f5;border:1px dashed var(--line);
+      display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);
+    }
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 8px;border-radius:999px;
+      border:1px solid var(--line);background:#fafafa;margin-top:8px;
+    }
+    .badge .dot{width:10px;height:10px;border-radius:50%;background:var(--orange)}
+    .row{display:flex;gap:8px;margin-top:10px}
+    .row button{flex:1}
+    .empty{
+      padding:16px;text-align:center;color:var(--muted);font-size:13px
+    }
+    .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;
+      padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div class="titles">
+      <h1>Comparateur carbone</h1>
+      <p>UI de base — sans calcul</p>
+    </div>
+    <div style="width:48px"></div>
+  </header>
+
+  <main>
+    <div class="bar">
+      <input id="eanInput" type="text" inputmode="numeric" placeholder="Ajouter un EAN (ex : 3017620422003)" />
+      <button id="addBtn" class="btn-primary">Ajouter</button>
+      <button id="clearBtn" class="btn-ghost" title="Réinitialiser">↺</button>
+    </div>
+    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>.</p>
+
+    <section id="track" class="tracks" aria-live="polite">
+      <div class="empty">Aucun produit pour l’instant. Ajoutez un EAN pour commencer.</div>
+    </section>
+
+    <div class="row">
+      <button id="importUrlBtn" class="btn-ghost">Importer depuis l’URL</button>
+      <button id="resetBtn" class="btn-danger">Tout effacer</button>
+    </div>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // ====== A2 UI de base (sans calcul) ======
+    const $ = (s)=>document.querySelector(s);
+    const track = $("#track");
+    const input = $("#eanInput");
+    const addBtn = $("#addBtn");
+    const clearBtn = $("#clearBtn");
+    const importUrlBtn = $("#importUrlBtn");
+    const resetBtn = $("#resetBtn");
+    const toast = $("#toast");
+
+    const STORAGE_KEY = "honoua:compare:eanList";
+
+    let eans = loadEans();
+
+    render();
+
+    addBtn.addEventListener("click", ()=> {
+      const val = (input.value||"").replace(/\s+/g,"");
+      if(!val){return notify("Entrez un EAN.");}
+      addEAN(val);
+      input.value="";
+      input.focus();
+    });
+
+    input.addEventListener("keydown", (e)=>{
+      if(e.key==="Enter"){ addBtn.click(); }
+    });
+
+    clearBtn.addEventListener("click", ()=>{
+      input.value="";
+      notify("Champ vidé.");
+    });
+
+    importUrlBtn.addEventListener("click", ()=>{
+      const params = new URLSearchParams(location.search);
+      const csv = (params.get("eans")||"").trim();
+      if(!csv){ return notify("Aucun paramètre ?eans trouvé."); }
+      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
+      let added=0;
+      list.forEach(v=> { if(addEAN(v,true)) added++; });
+      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
+      else notify("Aucun EAN nouveau.");
+    });
+
+    resetBtn.addEventListener("click", ()=>{
+      if(confirm("Tout effacer de la comparaison ?")){
+        eans = [];
+        saveEans();
+        render();
+        notify("Comparateur réinitialisé.");
+      }
+    });
+
+    function notify(msg){
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(()=>toast.classList.remove("show"), 1400);
+    }
+
+    function loadEans(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        // Auto-import URL at first load
+        if(!arr.length){
+          const params = new URLSearchParams(location.search);
+          const csv = (params.get("eans")||"").trim();
+          if(csv){ return csv.split(",").map(s=>s.trim()).filter(Boolean); }
+        }
+        return arr;
+      }catch{ return []; }
+    }
+
+    function saveEans(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(eans));
+    }
+
+    function addEAN(val, silent=false){
+      if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); return false; }
+      if(eans.includes(val)){ if(!silent) notify("Déjà présent."); return false; }
+      eans.push(val);
+      saveEans();
+      render();
+      if(!silent) notify("Produit ajouté.");
+      return true;
+    }
+
+    async function render(){
+      track.innerHTML = "";
+      if(eans.length===0){
+        const d = document.createElement("div");
+        d.className="empty";
+        d.textContent="Aucun produit pour l’instant. Ajoutez un EAN pour commencer.";
+        track.appendChild(d);
+        return;
+      }
+      for(const code of eans){
+        const card = makeCardSkeleton(code);
+        track.appendChild(card);
+        hydrateCard(card, code);
+      }
+    }
+
+    function makeCardSkeleton(code){
+      const el = document.createElement("article");
+      el.className="card";
+      el.innerHTML = `
+        <div class="meta">EAN : <strong>${code}</strong></div>
+        <div class="thumb" data-role="thumb">Chargement…</div>
+        <h3 data-role="title">—</h3>
+        <div class="meta" data-role="brand">—</div>
+        <span class="badge" title="Placeholder empreinte (A2)">
+          <span class="dot"></span>
+          <span>Empreinte : —</span>
+        </span>
+        <div class="row" style="margin-top:12px">
+          <button class="btn-ghost" data-action="remove">Retirer</button>
+        </div>
+      `;
+      el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
+        eans = eans.filter(v=>v!==code);
+        saveEans(); render(); notify("Produit retiré.");
+      });
+      return el;
+    }
+
+    async function hydrateCard(card, code){
+      const $t = (sel)=>card.querySelector(sel);
+      $t('[data-role="thumb"]').textContent = "Chargement…";
+
+      // Essaye /products/:id puis fallback /products?ean=
+      let data=null;
+      try{
+        let r = await fetch(`/products/${encodeURIComponent(code)}`);
+        if(r.ok){ data = await r.json(); }
+        if(!data || (data && data.error)){
+          const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
+          if(q.ok){ 
+            const list = await q.json();
+            data = Array.isArray(list) ? list[0] : list; 
+          }
+        }
+      }catch(e){ /* réseau */ }
+
+      if(!data){
+        $t('[data-role="thumb"]').textContent = "Introuvable";
+        $t('[data-role="title"]').textContent = "Produit non trouvé";
+        $t('[data-role="brand"]').textContent = "—";
+        return;
+      }
+
+      const title = data.name || data.product_name || data.title || "Produit";
+      const brand = data.brand || data.brands || "—";
+      const image = data.image_url || data.image || data.thumbnail || null;
+
+      $t('[data-role="title"]').textContent = title;
+      $t('[data-role="brand"]').textContent = brand;
+
+      const th = $t('[data-role="thumb"]');
+      if(image){
+        const img = new Image();
+        img.alt = title;
+        img.loading = "lazy";
+        img.style.width="100%";
+        img.style.height="120px";
+        img.style.objectFit="contain";
+        img.style.borderRadius="10px";
+        img.src = image;
+        th.replaceWith(img);
+      }else{
+        th.textContent = "Pas d’image";
+      }
+    }
+  </script>
+</body>
+</html>
