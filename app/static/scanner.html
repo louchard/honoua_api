@@ -1,0 +1,206 @@
+# 1) S'assurer d'être sur main à jour
+git switch main
+git pull
+
+# 2) Créer le dossier statique si absent
+New-Item -ItemType Directory -Force -Path .\app\static | Out-Null
+
+# 3) Écrire le scanner A1.2 (responsive + vibration + état + lampe)
+@'
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Honoua — Scanner</title>
+  <style>
+    :root{ --green:#062909; --orange:#F5C147; --blue:#001D85; --bg:#f7f7f7; --red:#C62828; }
+    html,body{ margin:0;padding:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial }
+    .wrap{ max-width:640px;margin:0 auto;padding:16px }
+    .card{ background:#fff;border-radius:16px;padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08);border:1px solid #eee }
+    .header{ display:flex;align-items:center;gap:12px;margin-bottom:12px }
+    .logo{ width:40px;height:40px;border-radius:8px;background:var(--green) }
+    h1{ font-size:20px;margin:0;color:var(--green) }
+    .sub{ font-size:13px;color:#333;background:linear-gradient(90deg,#00000008,#00000000);padding:6px 8px;border-radius:8px }
+
+    .video-wrap{ position:relative }
+    video{ width:100%;aspect-ratio:3/4;background:#000;border-radius:16px;object-fit:cover;border:2px solid var(--green) }
+
+    /* Cadre de visée responsive */
+    .reticle{ pointer-events:none; position:absolute; inset:0; display:flex; align-items:center; justify-content:center }
+    .reticle .box{
+      width:70%; max-width:400px; height:35%; max-height:220px;
+      border:3px solid var(--green); border-radius:12px;
+      box-shadow:0 0 0 200vmax rgba(0,0,0,.25) inset;
+      transition:transform .25s ease, border-color .25s ease;
+    }
+    .reticle.active .box{ border-color:var(--orange); transform:scale(1.02) }
+
+    .row{ display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap }
+    select,button{ padding:10px 12px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:14px }
+    button.primary{ background:var(--green);color:#fff;border:1px solid var(--green) }
+    button.ghost{ background:#fff;color:var(--green);border:1px solid var(--green) }
+    button.warn{ background:#fff;color:#111;border:1px solid #ccc;opacity:.6 }
+    button.torch-on{ background:var(--orange);color:#111;border:1px solid var(--orange) }
+    .status{ font-size:13px;color:#222;display:flex;align-items:center;gap:8px }
+    .badge{ font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px }
+    .badge.ok{ background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9 }
+    .badge.off{ background:#FFF3F3;color:#7A1A1A;border:1px solid #FFD6D6 }
+    .pill{ display:inline-block;padding:4px 8px;border-radius:999px;background:var(--orange);color:#111;font-weight:600 }
+    .hint{ font-size:12px;color:#555 }
+    .footer{ margin-top:10px;font-size:12px;color:#666;display:flex;justify-content:space-between }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>Scanner un produit</h1>
+          <div class="sub">Autorisez la caméra. Sur mobile, l’app sélectionnera l’objectif arrière.</div>
+        </div>
+      </div>
+
+      <div class="video-wrap">
+        <video id="preview" playsinline autoplay muted></video>
+        <div class="reticle" aria-hidden="true"><div class="box"></div></div>
+      </div>
+
+      <div class="row">
+        <label for="cameras" class="status">Caméra :</label>
+        <select id="cameras" aria-label="Sélectionner la caméra"></select>
+        <button id="btnStart" class="primary">Autoriser caméra</button>
+        <button id="btnReset" class="ghost">Reset</button>
+        <button id="btnTorch" class="warn" disabled>Lampe</button>
+      </div>
+
+      <div class="row status">
+        <span id="stateBadge" class="badge off">Arrêté</span>
+        <span id="state">En attente d’autorisation…</span>
+        <span id="secure" class="pill" title="getUserMedia fonctionne sur localhost ou HTTPS">HTTPS/localhost</span>
+      </div>
+
+      <div class="footer">
+        <span class="hint">Conseil : placez le code-barres au centre du cadre.</span>
+        <span style="color:#001D85">Honoua • prototype</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async () => {
+  const $video = document.getElementById('preview');
+  const $cams  = document.getElementById('cameras');
+  const $start = document.getElementById('btnStart');
+  const $reset = document.getElementById('btnReset');
+  const $torch = document.getElementById('btnTorch');
+  const $state = document.getElementById('state');
+  const $badge = document.getElementById('stateBadge');
+  const $reticle = document.querySelector('.reticle');
+
+  let currentStream = null;
+  let currentTrack = null;
+  let torchSupported = false;
+  let torchOn = false;
+
+  function vibrate(ms=60){ if(navigator.vibrate) navigator.vibrate(ms); }
+
+  function setStatus(text,on=false){
+    $state.textContent = text;
+    $badge.textContent = on ? 'Actif' : 'Arrêté';
+    $badge.className = 'badge ' + (on ? 'ok' : 'off');
+    $reticle.classList.toggle('active', on);
+    if(on) vibrate(50);
+  }
+
+  async function stopStream(){
+    if(currentStream){
+      currentStream.getTracks().forEach(t=>t.stop());
+      currentStream=null; currentTrack=null;
+    }
+    $video.srcObject=null;
+    $torch.disabled = true; $torch.classList.remove('torch-on'); $torch.textContent='Lampe';
+    setStatus('Flux arrêté',false);
+  }
+
+  async function listCameras(){
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videos = devices.filter(d=>d.kind==='videoinput');
+    $cams.innerHTML='';
+    videos.forEach(d=>{
+      const opt=document.createElement('option');
+      opt.value=d.deviceId; opt.textContent=d.label||'Caméra';
+      $cams.appendChild(opt);
+    });
+    if (videos.length===0) setStatus('Aucune caméra détectée', false);
+    return videos;
+  }
+
+  function pickBackCamera(devices){
+    return devices.find(d=>/back|arrière|rear|environment/i.test(d.label))||devices[0]||null;
+  }
+
+  async function detectTorchSupport(track){
+    try{
+      const caps = track.getCapabilities?.();
+      torchSupported = !!(caps && 'torch' in caps); // présence de la clé
+      if (!torchSupported){
+        await track.applyConstraints({advanced:[{torch:false}]}).then(
+          ()=>{ torchSupported=true; }, ()=>{ torchSupported=false; }
+        );
+      }
+    }catch(_){ torchSupported=false; }
+    $torch.disabled = !torchSupported;
+    $torch.title = torchSupported ? 'Activer/Désactiver la lampe' : 'Lampe non supportée';
+  }
+
+  async function toggleTorch(){
+    if(!currentTrack || !torchSupported) return;
+    try{
+      torchOn = !torchOn;
+      await currentTrack.applyConstraints({advanced:[{torch: torchOn}]});
+      $torch.classList.toggle('torch-on', torchOn);
+      $torch.textContent = torchOn ? 'Lampe ON' : 'Lampe';
+    }catch(e){ $torch.disabled=true; }
+  }
+
+  async function startWith(deviceId){
+    try{
+      await stopStream();
+      const constraints = deviceId ? {video:{deviceId:{exact:deviceId}}}
+                                   : {video:{facingMode:{ideal:'environment'}}};
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      currentStream = stream;
+      $video.srcObject = stream;
+      currentTrack = stream.getVideoTracks()[0] || null;
+      setStatus('Caméra active', true);
+      if(currentTrack) await detectTorchSupport(currentTrack);
+    }catch(e){
+      setStatus('Erreur ou refus caméra', false);
+    }
+  }
+
+  $start.onclick = async()=>{
+    try{
+      const tmp = await navigator.mediaDevices.getUserMedia({video:true});
+      tmp.getTracks().forEach(t=>t.stop());
+    }catch(_){}
+    const vids=await listCameras();
+    const back=pickBackCamera(vids);
+    await startWith(back?.deviceId);
+  };
+
+  $cams.onchange = e => startWith(e.target.value);
+  $reset.onclick = ()=> stopStream();
+  $torch.onclick = ()=> toggleTorch();
+
+  if(!('mediaDevices' in navigator)){ setStatus('API média non supportée', false); }
+})();
+</script>
+</body>
+</html>
+'@ | Set-Content -Encoding UTF8 .\app\static\scanner.html
+
+# 4) Vérifier que le fichier existe bien
+Get-Item .\app\static\scanner.html | Format-List FullName,Length,LastWriteTime
