@@ -1,12 +1,11 @@
-# .github/workflows/ci.yml
-name: honoua-ci
+name: CI
 
 on:
   push:
   pull_request:
 
 jobs:
-  test:
+  honoua-ci:
     runs-on: ubuntu-latest
 
     services:
@@ -28,7 +27,6 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONDONTWRITEBYTECODE: 1
       PYTHONPATH: ${{ github.workspace }}
-      # URL utilisée par app/db.py → Postgres réel en CI
       HONOUA_DB_URL: postgresql+psycopg://honoua:honoua@localhost:5432/honoua
 
     steps:
@@ -40,7 +38,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install PostgreSQL client (pg_isready)
+      - name: Install PostgreSQL client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
@@ -48,7 +46,6 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          # On tente requirements.txt s'il existe (sans échouer si absent)
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install "SQLAlchemy>=2" "psycopg[binary]>=3" "pytest>=7"
 
@@ -63,4 +60,3 @@ jobs:
 
       - name: Run tests
         run: pytest -q
-
