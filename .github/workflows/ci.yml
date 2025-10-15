@@ -27,6 +27,7 @@ jobs:
     env:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONDONTWRITEBYTECODE: 1
+      PYTHONPATH: ${{ github.workspace }}
       # URL utilisée par app/db.py → Postgres réel en CI
       HONOUA_DB_URL: postgresql+psycopg://honoua:honoua@localhost:5432/honoua
 
