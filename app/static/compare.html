@@ -56,7 +56,7 @@
     .row{display:flex;gap:8px;margin-top:10px}
     .row button{flex:1}
     .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px}
-    /* Badge + jauge A3 */
+    /* Badge + jauge */
     .badge{
       display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 8px;border-radius:999px;
       border:1px solid var(--line);background:#fafafa;margin-top:8px;
@@ -105,6 +105,11 @@
       </label>
       <button id="importUrlBtn" class="btn-ghost" aria-label="Importer depuis l’URL">Importer URL</button>
       <button id="resetBtn" class="btn-danger" aria-label="Tout effacer">Tout effacer</button>
+
+      <!-- 🟢 DÉBUT A5 : Bouton de partage du lien de comparaison -->
+      <button id="shareBtn" class="btn-primary" aria-label="Copier le lien de comparaison">🔗 Copier le lien</button>
+      <!-- 🔴 FIN A5 -->
+
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
     </div>
 
@@ -130,6 +135,10 @@
     const toggleRank = $("#toggleRank");
     const refreshBtn = $("#refreshBtn");
     const toast = $("#toast");
+
+    // 🟢 DÉBUT A5 : Déclaration du bouton de partage (manquante dans ta version)
+    const shareBtn = document.getElementById("shareBtn");
+    // 🔴 FIN A5
 
     const STORAGE_KEY = "honoua:compare:eanList";
     const PREF_KEY = "honoua:compare:prefs";
@@ -168,6 +177,19 @@
       prefs.showRank = toggleRank.checked; savePrefs(); paintRanks();
     });
     refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
+
+    // 🟢 DÉBUT A5 : Événement du bouton de partage
+    shareBtn?.addEventListener("click", async ()=>{
+      const url = buildShareUrl();
+      try{
+        await copyToClipboard(url);
+        notify("Lien copié dans le presse-papiers !");
+      }catch{
+        notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+        prompt("Copiez cette URL :", url);
+      }
+    });
+    // 🔴 FIN A5
 
     // ---- Prefs / EANs
     function loadPrefs(){
@@ -251,7 +273,7 @@
         if(!data || data.error){
           const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
           if(q.ok){
-            const list = await q.json();
+            const list = await r.json ? await q.json() : [];
             data = Array.isArray(list) ? list[0] : list;
           }
         }
@@ -279,10 +301,10 @@
       }
     }
 
-    // ===== A3 (repris) + A4 (tri/rang) =====
+    // ===== Calculs + tri/rang =====
     async function refreshCompare(force=false){
       if(!eans.length) return;
-      if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){ // déjà en cache
+      if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){
         sortCards(); paintRanks(); return;
       }
       let table=null;
@@ -315,7 +337,6 @@
         }
       }
 
-      // Mise à jour cartes
       document.querySelectorAll('.card').forEach(card=>{
         const ean = card.dataset.ean;
         const bar = card.querySelector('[data-role="bar"]');
@@ -340,8 +361,6 @@
     function sortCards(){
       const cards = Array.from(document.querySelectorAll('.card'));
       const sort = prefs.sort || 'best';
-
-      // Collecte des méta pour tri
       const items = cards.map(c=>{
         const ean = c.dataset.ean;
         const title = (c.querySelector('[data-role="title"]')?.textContent||'').trim();
@@ -350,9 +369,7 @@
         const norm = compareCache[ean]?.norm;
         return {el:c, ean, title, brand, fp, norm};
       });
-
       const collator = new Intl.Collator('fr',{sensitivity:'base',numeric:true});
-
       items.sort((a,b)=>{
         if(sort==='best')  return (a.norm??Infinity) - (b.norm??Infinity);
         if(sort==='worst') return (b.norm??-Infinity) - (a.norm??-Infinity);
@@ -361,20 +378,16 @@
         if(sort==='ean')   return collator.compare(a.ean, b.ean);
         return 0;
       });
-
-      // Réinjection dans le DOM selon l’ordre
       items.forEach(i=>track.appendChild(i.el));
     }
 
     function paintRanks(){
       const show = !!prefs.showRank;
       const cards = Array.from(document.querySelectorAll('.card'));
-      // Rang = position visuelle courante (après tri)
       cards.forEach((c,idx)=>{
         const rk = c.querySelector('[data-role="rank"]');
         rk.textContent = `#${idx+1}`;
         rk.classList.toggle('show', show);
-        // badge rang vert plus marqué pour #1
         rk.style.background = idx===0 ? '#2e7d32' : '#111';
       });
     }
@@ -390,9 +403,7 @@
       if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); refreshCompare(); }
       else notify("Aucun EAN nouveau.");
     }
-
     function pickFootprint(row){
-      const keys = Object.keys(row).map(k=>k.toLowerCase());
       const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
       const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
       for(const c of candidates){ if(map[c]) return toNumber(row[map[c]]); }
@@ -424,6 +435,26 @@
       toast.textContent = msg; toast.style.opacity=1;
       setTimeout(()=>toast.style.opacity=0, 1400);
     }
+
+    // 🟢 DÉBUT A5 : Fonctions utilitaires pour le partage
+    function buildShareUrl(){
+      const base = location.origin + location.pathname;
+      const params = new URLSearchParams();
+      if(eans.length) params.set("eans", eans.join(","));
+      if(prefs?.sort) params.set("sort", prefs.sort);
+      if(prefs?.showRank) params.set("rank", prefs.showRank ? "1" : "0");
+      return `${base}?${params.toString()}`;
+    }
+    async function copyToClipboard(text){
+      if(navigator.clipboard?.writeText){
+        return navigator.clipboard.writeText(text);
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    // 🔴 FIN A5
   </script>
 </body>
 </html>
+
