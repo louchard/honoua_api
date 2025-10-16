@@ -15,22 +15,29 @@
       position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
       display:flex;align-items:center;gap:12px;padding:10px 14px;height:60px;
     }
-    .logo{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#062909,var(--blue));}
-    .titles{flex:1;text-align:center}
-    .titles h1{margin:0;font-size:18px;line-height:1;font-weight:700;letter-spacing:.2px}
+    .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#062909,var(--blue));}
+    .titles{flex:1;min-width:0}
+    .titles h1{margin:0;font-size:18px;line-height:1.1;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .titles p{margin:2px 0 0;font-size:12px;color:var(--muted)}
     main{padding:12px}
-    .bar{
+    .bar, .toolbar{
       display:flex;gap:8px;align-items:center;padding:10px;background:var(--card);
       border:1px solid var(--line);border-radius:14px;
     }
+    .toolbar{margin-top:10px;flex-wrap:wrap}
     input[type="text"]{
       flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;background:#fff;
     }
+    select{
+      border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:#fff;min-width:180px;
+    }
+    label.switch{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+    label.switch input{accent-color:var(--blue)}
     button{border:0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
     .btn-primary{background:var(--blue);color:#fff}
     .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
     .btn-danger{background:#111;color:#fff;border:1px solid #000}
+    .btn-muted{background:#e9eaee;color:#555;border:1px solid var(--line)}
     .help{font-size:12px;color:var(--muted);margin:8px 2px}
     .tracks{
       margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;
@@ -38,7 +45,7 @@
     }
     .card{
       min-width:220px;max-width:240px;background:#fff;border:1px solid var(--line);border-radius:16px;
-      padding:12px;scroll-snap-align:start;box-shadow:0 1px 0 rgba(0,0,0,.04);
+      padding:12px;scroll-snap-align:start;box-shadow:0 1px 0 rgba(0,0,0,.04);position:relative;
     }
     .card h3{margin:6px 0 4px;font-size:14px}
     .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
@@ -49,24 +56,23 @@
     .row{display:flex;gap:8px;margin-top:10px}
     .row button{flex:1}
     .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px}
-
     /* Badge + jauge A3 */
     .badge{
       display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 8px;border-radius:999px;
       border:1px solid var(--line);background:#fafafa;margin-top:8px;
     }
     .badge .dot{width:10px;height:10px;border-radius:50%;background:var(--orange)}
-    .gauge{
-      width:85%; height:10px; border-radius:999px; background:#eee; margin-top:8px; position:relative; overflow:hidden;
-      border:1px solid var(--line);
+    .rank{
+      position:absolute;top:10px;left:10px;background:#111;color:#fff;border-radius:999px;
+      font-size:12px;padding:4px 8px;line-height:1;display:none;
     }
-    .gauge > i{
-      content:""; position:absolute; left:0; top:0; height:100%; width:0%;
-      border-radius:999px;
-      background: linear-gradient(90deg, var(--green), var(--orange));
-      transition: width .35s ease;
-    }
+    .rank.show{display:inline-block}
+    .gauge{width:85%; height:10px; border-radius:999px; background:#eee; margin-top:8px; position:relative; overflow:hidden;border:1px solid var(--line)}
+    .gauge > i{content:""; position:absolute; left:0; top:0; height:100%; width:0%; border-radius:999px;background: linear-gradient(90deg, var(--green), var(--orange)); transition: width .35s ease}
     .gauge-label{font-size:12px;color:var(--muted);margin-top:4px}
+    /* Skeleton simple */
+    .shimmer{background:linear-gradient(110deg,#eee 8%,#f5f5f7 18%,#eee 33%);background-size:200% 100%;animation:sh 1.2s linear infinite}
+    @keyframes sh{to{background-position-x:-200%}}
   </style>
 </head>
 <body>
@@ -74,32 +80,45 @@
     <div class="logo" aria-hidden="true"></div>
     <div class="titles">
       <h1>Comparateur carbone</h1>
-      <p>Calculs de base — A3</p>
+      <p>A4 — Tri, rang, états vides, accessibilité</p>
     </div>
-    <div style="width:48px"></div>
+    <div style="width:40px"></div>
   </header>
 
   <main>
-    <div class="bar">
-      <input id="eanInput" type="text" inputmode="numeric" placeholder="Ajouter un EAN (ex : 3017620422003)" />
-      <button id="addBtn" class="btn-primary">Ajouter</button>
-      <button id="clearBtn" class="btn-ghost" title="Réinitialiser">↺</button>
+    <div class="bar" role="region" aria-label="Ajout de produits">
+      <input id="eanInput" type="text" inputmode="numeric" placeholder="Ajouter un EAN (ex : 3017620422003)" aria-label="EAN à ajouter" />
+      <button id="addBtn" class="btn-primary" aria-label="Ajouter le produit">Ajouter</button>
+      <button id="clearBtn" class="btn-ghost" title="Réinitialiser le champ">↺</button>
     </div>
-    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>.</p>
+
+    <div class="toolbar" role="region" aria-label="Outils de comparaison">
+      <select id="sortSelect" aria-label="Trier par">
+        <option value="best">Trier : Meilleure empreinte d’abord</option>
+        <option value="worst">Trier : Pire empreinte d’abord</option>
+        <option value="brand">Trier : Marque (A→Z)</option>
+        <option value="name">Trier : Nom (A→Z)</option>
+        <option value="ean">Trier : EAN</option>
+      </select>
+      <label class="switch" title="Afficher le rang sur chaque carte">
+        <input id="toggleRank" type="checkbox" /> Afficher le rang
+      </label>
+      <button id="importUrlBtn" class="btn-ghost" aria-label="Importer depuis l’URL">Importer URL</button>
+      <button id="resetBtn" class="btn-danger" aria-label="Tout effacer">Tout effacer</button>
+      <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
+    </div>
+
+    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>. Le tri et l’option rang sont sauvegardés localement.</p>
 
     <section id="track" class="tracks" aria-live="polite">
       <div class="empty">Aucun produit pour l’instant. Ajoutez un EAN pour commencer.</div>
     </section>
-
-    <div class="row">
-      <button id="importUrlBtn" class="btn-ghost">Importer depuis l’URL</button>
-      <button id="resetBtn" class="btn-danger">Tout effacer</button>
-    </div>
   </main>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
   <script>
+    // ===== Utilitaires UI =====
     const $ = (s)=>document.querySelector(s);
     const track = $("#track");
     const input = $("#eanInput");
@@ -107,41 +126,54 @@
     const clearBtn = $("#clearBtn");
     const importUrlBtn = $("#importUrlBtn");
     const resetBtn = $("#resetBtn");
+    const sortSelect = $("#sortSelect");
+    const toggleRank = $("#toggleRank");
+    const refreshBtn = $("#refreshBtn");
+    const toast = $("#toast");
 
     const STORAGE_KEY = "honoua:compare:eanList";
-    let eans = loadEans();
-    render(); // crée les cartes
-    refreshCompare(); // tente un premier calcul s’il y a des EAN
+    const PREF_KEY = "honoua:compare:prefs";
 
+    // État
+    let eans = loadEans();
+    let prefs = loadPrefs(); // { sort: 'best'|'worst'|'brand'|'name'|'ean', showRank: boolean }
+    let compareCache = {};   // { ean: {raw:number, norm:number} }
+
+    // Init prefs UI
+    sortSelect.value = prefs.sort || "best";
+    toggleRank.checked = !!prefs.showRank;
+
+    // Rendu initial
+    render();
+    refreshCompare();
+
+    // ---- Events
     addBtn.addEventListener("click", ()=> {
       const val = (input.value||"").replace(/\s+/g,"");
       if(!val){return notify("Entrez un EAN.");}
       if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); }
     });
-    input.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
-    clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); });
-    importUrlBtn.addEventListener("click", ()=>{
-      const params = new URLSearchParams(location.search);
-      const csv = (params.get("eans")||"").trim();
-      if(!csv){ return notify("Aucun paramètre ?eans trouvé."); }
-      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
-      let added=0;
-      list.forEach(v=> { if(addEAN(v,true)) added++; });
-      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); refreshCompare(); }
-      else notify("Aucun EAN nouveau.");
-    });
+    input.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
+    clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); input.focus(); });
+    importUrlBtn.addEventListener("click", importFromUrl);
     resetBtn.addEventListener("click", ()=>{
       if(confirm("Tout effacer de la comparaison ?")){
-        eans = []; saveEans(); render(); notify("Comparateur réinitialisé.");
+        eans = []; saveEans(); compareCache={}; render(); notify("Comparateur réinitialisé.");
       }
     });
+    sortSelect.addEventListener("change", ()=>{
+      prefs.sort = sortSelect.value; savePrefs(); sortCards(); paintRanks();
+    });
+    toggleRank.addEventListener("change", ()=>{
+      prefs.showRank = toggleRank.checked; savePrefs(); paintRanks();
+    });
+    refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
 
-    function notify(msg){
-      let t = document.getElementById("toast");
-      if(!t){t=document.createElement("div");t.id="toast";document.body.appendChild(t)}
-      t.className="toast show"; t.textContent = msg;
-      setTimeout(()=>t.classList.remove("show"), 1400);
+    // ---- Prefs / EANs
+    function loadPrefs(){
+      try{ return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); }catch{ return {}; }
     }
+    function savePrefs(){ localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
     function loadEans(){
       try{
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -161,15 +193,18 @@
       eans.push(val); saveEans(); render(); if(!silent) notify("Produit ajouté."); return true;
     }
 
-    async function render(){
+    // ---- UI
+    function render(){
       track.innerHTML = "";
       if(eans.length===0){
         const d = document.createElement("div");
         d.className="empty";
-        d.textContent="Aucun produit pour l’instant. Ajoutez un EAN pour commencer.";
+        d.innerHTML = `Aucun produit. <br/>Saisissez un EAN ou utilisez <code>?eans=</code>.`;
         track.appendChild(d);
+        refreshBtn.disabled = true;
         return;
       }
+      refreshBtn.disabled = false;
       for(const code of eans){
         const card = makeCardSkeleton(code);
         track.appendChild(card);
@@ -182,12 +217,13 @@
       el.className="card";
       el.dataset.ean = code;
       el.innerHTML = `
+        <span class="rank" aria-hidden="true" data-role="rank">#—</span>
         <div class="meta">EAN : <strong>${code}</strong></div>
-        <div class="thumb" data-role="thumb">Chargement…</div>
+        <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
         <h3 data-role="title">—</h3>
         <div class="meta" data-role="brand">—</div>
 
-        <span class="badge">
+        <span class="badge" title="Empreinte normalisée sur la sélection">
           <span class="dot" data-role="dot"></span>
           <span data-role="fp-label">Empreinte : —</span>
         </span>
@@ -195,33 +231,35 @@
         <div class="gauge-label" data-role="glabel">—</div>
 
         <div class="row" style="margin-top:12px">
-          <button class="btn-ghost" data-action="remove">Retirer</button>
+          <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
         </div>
       `;
       el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
         eans = eans.filter(v=>v!==code);
-        saveEans(); render(); notify("Produit retiré."); refreshCompare();
+        saveEans(); delete compareCache[code]; render(); refreshCompare();
+        notify("Produit retiré.");
       });
       return el;
     }
 
     async function hydrateCard(card, code){
       const $t = (sel)=>card.querySelector(sel);
-      $t('[data-role="thumb"]').textContent = "Chargement…";
       let data=null;
       try{
         let r = await fetch(`/products/${encodeURIComponent(code)}`);
         if(r.ok){ data = await r.json(); }
-        if(!data || (data && data.error)){
+        if(!data || data.error){
           const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
-          if(q.ok){ 
+          if(q.ok){
             const list = await q.json();
-            data = Array.isArray(list) ? list[0] : list; 
+            data = Array.isArray(list) ? list[0] : list;
           }
         }
       }catch(e){}
+      const th = $t('[data-role="thumb"]');
+      th.classList.remove("shimmer"); th.removeAttribute("aria-busy");
       if(!data){
-        $t('[data-role="thumb"]').textContent = "Introuvable";
+        th.textContent = "Introuvable";
         $t('[data-role="title"]').textContent = "Produit non trouvé";
         $t('[data-role="brand"]').textContent = "—";
         return;
@@ -229,11 +267,8 @@
       const title = data.name || data.product_name || data.title || "Produit";
       const brand = data.brand || data.brands || "—";
       const image = data.image_url || data.image || data.thumbnail || null;
-
       $t('[data-role="title"]').textContent = title;
       $t('[data-role="brand"]').textContent = brand;
-
-      const th = $t('[data-role="thumb"]');
       if(image){
         const img = new Image();
         img.alt = title; img.loading = "lazy";
@@ -244,10 +279,12 @@
       }
     }
 
-    // ===== A3 — calculs de base via /compare?eans=... =====
-    async function refreshCompare(){
+    // ===== A3 (repris) + A4 (tri/rang) =====
+    async function refreshCompare(force=false){
       if(!eans.length) return;
-      // Appel GET /compare?eans=CSV — tolérant aux schémas de champs
+      if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){ // déjà en cache
+        sortCards(); paintRanks(); return;
+      }
       let table=null;
       try{
         const url = `/compare?eans=${encodeURIComponent(eans.join(','))}`;
@@ -255,76 +292,124 @@
         if(r.ok){ table = await r.json(); }
       }catch(e){ table=null; }
 
-      // Indexer par EAN pour maj rapide des cartes
       const byEan = {};
       if(Array.isArray(table)){
         for(const row of table){
           const ean = (row.ean || row.code || row.id || "").toString();
-          const fp = pickFootprint(row); // valeur numérique (gCO2e, kgCO2e, score)
-          if(ean && fp != null && !isNaN(fp)){ byEan[ean] = Number(fp); }
+          const fp = pickFootprint(row);
+          if(ean && fp!=null && !isNaN(fp)){ byEan[ean] = Number(fp); }
         }
       }
 
-      // Normalisation min-max sur les EAN présents uniquement
       const vals = Object.values(byEan);
       const min = vals.length ? Math.min(...vals) : 0;
       const max = vals.length ? Math.max(...vals) : 1;
       const span = Math.max(1e-9, max - min);
 
-      // Mise à jour UI
+      compareCache = {};
+      for(const e of eans){
+        if(byEan[e]!=null){
+          const raw = byEan[e];
+          const norm = (raw - min)/span; // 0 meilleur → 1 pire
+          compareCache[e] = { raw, norm };
+        }
+      }
+
+      // Mise à jour cartes
       document.querySelectorAll('.card').forEach(card=>{
         const ean = card.dataset.ean;
         const bar = card.querySelector('[data-role="bar"]');
         const dot = card.querySelector('[data-role="dot"]');
         const lab = card.querySelector('[data-role="fp-label"]');
         const glb = card.querySelector('[data-role="glabel"]');
-
-        if(byEan[ean] == null){
-          bar.style.width = '0%';
-          dot.style.background = '#bbb';
-          lab.textContent = 'Empreinte : —';
-          glb.textContent = '—';
+        if(!compareCache[ean]){
+          bar.style.width='0%'; dot.style.background='#bbb'; lab.textContent='Empreinte : —'; glb.textContent='—';
           return;
         }
-        const raw = byEan[ean];
-        const norm = (raw - min) / span; // 0 (meilleur) → 1 (pire)
-        const pct = Math.round(norm * 100);
-
-        bar.style.width = Math.max(6, pct) + '%'; // petite largeur mini lisible
+        const {raw, norm} = compareCache[ean];
+        const pct = Math.round(norm*100);
+        bar.style.width = Math.max(6,pct)+'%';
         dot.style.background = mixColor('#2e7d32','#F5C147', norm);
         lab.textContent = `Empreinte : ${fmt(raw)}`;
         glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
       });
+
+      sortCards(); paintRanks();
+    }
+
+    function sortCards(){
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const sort = prefs.sort || 'best';
+
+      // Collecte des méta pour tri
+      const items = cards.map(c=>{
+        const ean = c.dataset.ean;
+        const title = (c.querySelector('[data-role="title"]')?.textContent||'').trim();
+        const brand = (c.querySelector('[data-role="brand"]')?.textContent||'').trim();
+        const fp = compareCache[ean]?.raw;
+        const norm = compareCache[ean]?.norm;
+        return {el:c, ean, title, brand, fp, norm};
+      });
+
+      const collator = new Intl.Collator('fr',{sensitivity:'base',numeric:true});
+
+      items.sort((a,b)=>{
+        if(sort==='best')  return (a.norm??Infinity) - (b.norm??Infinity);
+        if(sort==='worst') return (b.norm??-Infinity) - (a.norm??-Infinity);
+        if(sort==='brand') return collator.compare(a.brand||'', b.brand||'') || collator.compare(a.title||'', b.title||'');
+        if(sort==='name')  return collator.compare(a.title||'', b.title||'');
+        if(sort==='ean')   return collator.compare(a.ean, b.ean);
+        return 0;
+      });
+
+      // Réinjection dans le DOM selon l’ordre
+      items.forEach(i=>track.appendChild(i.el));
+    }
+
+    function paintRanks(){
+      const show = !!prefs.showRank;
+      const cards = Array.from(document.querySelectorAll('.card'));
+      // Rang = position visuelle courante (après tri)
+      cards.forEach((c,idx)=>{
+        const rk = c.querySelector('[data-role="rank"]');
+        rk.textContent = `#${idx+1}`;
+        rk.classList.toggle('show', show);
+        // badge rang vert plus marqué pour #1
+        rk.style.background = idx===0 ? '#2e7d32' : '#111';
+      });
+    }
+
+    // ---- Helpers
+    function importFromUrl(){
+      const params = new URLSearchParams(location.search);
+      const csv = (params.get("eans")||"").trim();
+      if(!csv){ return notify("Aucun paramètre ?eans trouvé."); }
+      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
+      let added=0;
+      list.forEach(v=> { if(addEAN(v,true)) added++; });
+      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); refreshCompare(); }
+      else notify("Aucun EAN nouveau.");
     }
 
     function pickFootprint(row){
-      // Cherche un champ standard : footprint / co2e / carbon / score
       const keys = Object.keys(row).map(k=>k.toLowerCase());
-      const map = {};
-      for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
+      const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
       const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
-      for(const c of candidates){
-        if(map[c]){ return toNumber(row[map[c]]); }
-      }
+      for(const c of candidates){ if(map[c]) return toNumber(row[map[c]]); }
       return null;
     }
-
     function toNumber(v){
       if(v==null) return null;
       if(typeof v === 'number') return v;
       const s = String(v).replace(',', '.').replace(/[^\d.\-eE]/g,'');
-      const n = parseFloat(s);
-      return isNaN(n) ? null : n;
+      const n = parseFloat(s); return isNaN(n) ? null : n;
     }
-
     function fmt(v){
       if(v>=1000) return (v/1000).toFixed(2)+'k';
       if(v>=100) return v.toFixed(0);
       if(v>=10) return v.toFixed(1);
       return v.toFixed(2);
     }
-
-    // mélange simple de deux couleurs hex (pour le point)
     function mixColor(hexA, hexB, t){
       const a = hexToRgb(hexA), b = hexToRgb(hexB);
       const m = {r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t)};
@@ -333,7 +418,11 @@
     function hexToRgb(h){
       const x = h.replace('#','');
       const n = parseInt(x.length===3 ? x.split('').map(c=>c+c).join('') : x, 16);
-      return {r:(n>>16)&255, g:(n>>8)&255, b:n&255};
+      return {r:(n>>16)&255, g:(n>>8)&255, b:(n)&255};
+    }
+    function notify(msg){
+      toast.textContent = msg; toast.style.opacity=1;
+      setTimeout(()=>toast.style.opacity=0, 1400);
     }
   </script>
 </body>
