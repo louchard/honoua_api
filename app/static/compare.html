@@ -237,6 +237,32 @@
   }
 }
 
+
+/* A14 — Statistiques */
+#compare-stats {
+  margin-top: 1rem;
+  padding: .75rem;
+  border-top: 1px solid rgba(0,0,0,.1);
+}
+#compare-stats h2 {
+  margin-bottom: .5rem;
+  font-size: 1.1rem;
+}
+#compare-stats .stats-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: .9rem;
+}
+#compare-stats .stats-summary p {
+  margin: 0;
+}
+@media (prefers-color-scheme: dark){
+  #compare-stats {
+    border-color: rgba(255,255,255,.1);
+  }
+}
+
 /* Préférence utilisateur: réduire les animations */
 @media (prefers-reduced-motion: reduce) {
   #compare-history button { transition: none; }
@@ -331,6 +357,33 @@
 #compare-history .chip-order  { border-color: rgba(0,29,133,.35); }         /* léger accent bleu */
 #compare-history .chip-filter { border-color: rgba(245,193,71,.45); }       /* léger accent orange */
 #compare-history .chip-query  { border-style: dashed; }
+
+
+/* A15 — Évolution carbone */
+#compare-carbon {
+  margin-top: 1rem;
+  padding: .75rem;
+  border-top: 1px solid rgba(0,0,0,.1);
+}
+#compare-carbon h2 { margin-bottom: .5rem; font-size: 1.1rem; }
+#compare-carbon .carbon-summary, 
+#compare-carbon .carbon-controls {
+  display: flex; flex-wrap: wrap; gap: 1rem; font-size: .9rem; align-items: center;
+}
+#compare-carbon .carbon-summary p { margin: 0; }
+#compare-carbon .carbon-note { font-size: .8rem; opacity: .8; margin-top: .5rem; }
+@media (prefers-color-scheme: dark){
+  #compare-carbon { border-color: rgba(255,255,255,.1); }
+}
+
+#compare-history #carbon-cache-clear {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history #carbon-cache-clear:hover {
+  background: rgba(122,17,17,.08);
+}
+
 </style>
 
 </head>
@@ -388,11 +441,54 @@
     <input type="checkbox" id="history-show-pinned" />
     Afficher uniquement les épinglés
   </label>
+  <button type="button" id="carbon-cache-clear">Purger cache carbone</button>
+
 </div>
 
-
-
 </section>
+
+   <!-- =======================================================================
+     A14 — Section statistiques de l'historique
+     ======================================================================= -->
+<section id="compare-stats" hidden>
+  <h2>Statistiques d’utilisation</h2>
+  <div class="stats-summary">
+    <p><strong>Total :</strong> <span id="stat-total">0</span> sessions</p>
+    <p><strong>7 derniers jours :</strong> <span id="stat-week">0</span></p>
+    <p><strong>Épinglées :</strong> <span id="stat-pinned">0</span></p>
+    <p><strong>Moyenne produits/session :</strong> <span id="stat-avg">0</span></p>
+  </div>
+
+  <canvas id="stat-chart" width="350" height="180" aria-label="Historique des sessions par jour"></canvas>
+</section>
+     
+
+     <!-- =======================================================================
+     A15 — Évolution carbone
+     ======================================================================= -->
+<section id="compare-carbon" hidden>
+  <h2>Évolution carbone</h2>
+
+  <div class="carbon-summary">
+    <p><strong>Sessions comptabilisées :</strong> <span id="carbon-sessions">0</span></p>
+    <p><strong>Moyenne globale :</strong> <span id="carbon-global-avg">—</span> gCO₂e/session</p>
+  </div>
+
+  <div class="carbon-controls">
+    <label>Mode :
+      <select id="carbon-mode">
+        <option value="avg_per_session" selected>Moyenne par session (gCO₂e/session)</option>
+        <option value="sum_per_session">Total par session (gCO₂e)</option>
+      </select>
+    </label>
+  </div>
+
+  <canvas id="carbon-chart" width="350" height="180" aria-label="Évolution carbone (journalier)"></canvas>
+  <p class="carbon-note">NB : seules les sessions avec au moins une émission connue sont prises en compte.</p>
+</section>
+
+
+
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
       <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
@@ -1757,11 +1853,349 @@ function render() {
 }
 // … (fin code Étape 3)
 
+// Met en pause automatiquement si l’URL contient ?histpause=1
+document.addEventListener('DOMContentLoaded', () => {
+  const p = new URL(location.href).searchParams;
+  if (p.get('histpause') === '1') {
+    window.__honouaHistoryPaused = true;
+  }
+});
+
+const wasPaused = !!window.__honouaHistoryPaused;
+window.__honouaHistoryPaused = true;
+
+try {
+  // … tes opérations bruyantes (ajout EANs, multiples updates, etc.)
+} finally {
+  window.__honouaHistoryPaused = wasPaused; // restaure l’état précédent
+}
+
+</script>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- A15 — Hook de résolution carbone (override) -->
+<script>
+/**
+ * Définis ici comment récupérer l’empreinte d’un EAN (gCO2e).
+ * Retourne un nombre (gCO2e) ou null si inconnu.
+ * Tu peux remplacer l’exemple MAP par un fetch API.
+ */
+window.honouaCarbonLookup = async function(ean){
+  // Exemple simple (mapping local) — à remplacer par ton API
+  const MAP = {
+    "3274080005003": 120,  // ex.
+    "3017620429484": 450   // ex.
+  };
+  return MAP[ean] ?? null;
+};
+</script>
+
+<script>
+window.honouaCarbonLookup = async function(ean){
+  const res = await fetch('/api/honoua/emissions?ean=' + encodeURIComponent(ean));
+  if (!res.ok) return null;
+  const obj = await res.json();
+  // Attendu : { ean: "xxx", gco2e: 123.4 }
+  return (typeof obj.gco2e === 'number') ? obj.gco2e : null;
+};
+</script>
 
 
 
 
 
+<script>
+/* ============================================================================
+   A14 — Statistiques et graphiques d'utilisation
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var $section, $chart, $total, $week, $pinned, $avg;
+  var chartInstance = null;
+
+  function readHistory(){
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  // Calcule les stats de base
+  function computeStats(list){
+    var now = Date.now();
+    var weekAgo = now - 7*24*60*60*1000;
+    var total = list.length;
+    var pinned = list.filter(e => e.pinned).length;
+    var week = list.filter(e => new Date(e.ts).getTime() >= weekAgo).length;
+    var avgProducts = 0;
+    if (total > 0) {
+      avgProducts = list.reduce((sum, e) => sum + (e.productCount || 0), 0) / total;
+      avgProducts = avgProducts.toFixed(1);
+    }
+    return { total, pinned, week, avgProducts };
+  }
+
+  // Prépare les données pour le graphique (sessions/jour)
+  function groupByDay(list){
+    var map = {};
+    list.forEach(e => {
+      var d = new Date(e.ts);
+      var key = d.toISOString().slice(0,10);
+      map[key] = (map[key] || 0) + 1;
+    });
+    var keys = Object.keys(map).sort();
+    return {
+      labels: keys,
+      data: keys.map(k => map[k])
+    };
+  }
+
+  function renderChart(list){
+    var ctx = $chart.getContext('2d');
+    var g = groupByDay(list);
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: g.labels,
+        datasets: [{
+          label: 'Sessions par jour',
+          data: g.data,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#333' } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#333' } }
+        }
+      }
+    });
+  }
+
+  function renderStats(){
+    var list = readHistory();
+    if (!list.length) { $section.hidden = true; return; }
+    var s = computeStats(list);
+    $section.hidden = false;
+    $total.textContent = s.total;
+    $pinned.textContent = s.pinned;
+    $week.textContent = s.week;
+    $avg.textContent = s.avgProducts;
+    renderChart(list);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    $section = document.getElementById('compare-stats');
+    $chart   = document.getElementById('stat-chart');
+    $total   = document.getElementById('stat-total');
+    $week    = document.getElementById('stat-week');
+    $pinned  = document.getElementById('stat-pinned');
+    $avg     = document.getElementById('stat-avg');
+
+    if (!$section || !$chart) return;
+    renderStats();
+
+    // Mettre à jour en live quand l’historique change
+    window.addEventListener('storage', function(e){
+      if (e.key === HISTORY_KEY) renderStats();
+    });
+    window.addEventListener('honoua:compare:updated', renderStats);
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A15 — Évolution carbone (moyenne/somme par session, regroupée par jour)
+   - Hook extensible: window.honouaCarbonLookup(ean) -> Promise<number|null> en gCO2e
+   - Cache local pour accélérer: honoua_carbon_cache_v1
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+
+  var $section, $chart, $sessions, $globalAvg, $modeSel;
+  var chartInstance = null;
+
+  // ---------- Hook de résolution d'émissions par EAN ----------
+  // Surchargable par l'app : window.honouaCarbonLookup = async (ean) => number|null
+  if (typeof window.honouaCarbonLookup !== 'function') {
+    // Stub : renvoie null (inconnu). À remplacer par ta logique.
+    window.honouaCarbonLookup = async function(ean){
+      // Exemple (à adapter) :
+      // return await fetch('/api/emissions?ean='+encodeURIComponent(ean)).then(r=>r.json()).then(o=>o.gco2e ?? null);
+      return null;
+    };
+  }
+
+  // ---------- Cache simple localStorage ----------
+  function readCarbonCache(){
+    try { return JSON.parse(localStorage.getItem(CARBON_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function writeCarbonCache(obj){
+    try { localStorage.setItem(CARBON_CACHE_KEY, JSON.stringify(obj)); }
+    catch(e){ console.warn('[A15] writeCarbonCache:', e); }
+  }
+
+  async function carbonForEAN(ean) {
+    if (!ean) return null;
+    var cache = readCarbonCache();
+    if (Object.prototype.hasOwnProperty.call(cache, ean)) {
+      return cache[ean]; // peut être number ou null (inconnu)
+    }
+    // lookup via hook
+    var val = null;
+    try { val = await window.honouaCarbonLookup(String(ean)); }
+    catch(e){ console.warn('[A15] Lookup error for EAN', ean, e); val = null; }
+    cache[ean] = (typeof val === 'number' && isFinite(val)) ? val : null;
+    writeCarbonCache(cache);
+    return cache[ean];
+  }
+
+  // Calcule les émissions d'une session (avg ou sum) sur les EANs connus
+  async function computeSessionMetric(entry, mode){
+    var eans = (entry && entry.params && Array.isArray(entry.params.eans)) ? entry.params.eans : [];
+    if (!eans.length) return null;
+    var vals = await Promise.all(eans.map(carbonForEAN));
+    var known = vals.filter(v => typeof v === 'number' && isFinite(v));
+    if (!known.length) return null;
+    var sum = known.reduce((a,b)=>a+b, 0);
+    if (mode === 'sum_per_session') return sum;
+    // default: avg per session (gCO2e/session)
+    return sum / known.length;
+  }
+
+  // Agrège par jour: { 'YYYY-MM-DD': [metrics...] }
+  function groupByDay(values){
+    var map = {};
+    values.forEach(v => {
+      var day = v.day;
+      if (!map[day]) map[day] = [];
+      map[day].push(v.value);
+    });
+    var labels = Object.keys(map).sort();
+    var data = labels.map(d => {
+      var arr = map[d];
+      var avg = arr.reduce((a,b)=>a+b,0)/arr.length;
+      return Math.round(avg); // arrondi propre pour l'affichage
+    });
+    return { labels, data, countsByDay: map };
+  }
+
+  function renderChart(series, mode){
+    var ctx = $chart.getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: series.labels,
+        datasets: [{
+          label: (mode === 'sum_per_session' ? 'Total par session (gCO₂e)' : 'Moyenne par session (gCO₂e)'),
+          data: series.data,
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#333' } },
+          y: { beginAtZero: true, ticks: { color: '#333' } }
+        }
+      }
+    });
+  }
+
+  async function renderCarbon(){
+    var history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch{ history = []; }
+
+    if (!history.length) { $section.hidden = true; return; }
+    var mode = $modeSel?.value || 'avg_per_session';
+
+    // Calcule métrique par session (async, respect du cache)
+    // On limite prudemment à 200 sessions pour éviter un premier rendu trop long.
+    var slice = history.slice(-200); 
+    // Convertit en [{day:'YYYY-MM-DD', value:number}, ...] en série
+    var points = [];
+    for (let i=0; i<slice.length; i++){
+      var e = slice[i];
+      var v = await computeSessionMetric(e, mode);
+      if (v == null) continue; // on ignore les sessions sans émission connue
+      var day = new Date(e.ts).toISOString().slice(0,10);
+      points.push({ day, value: v });
+    }
+
+    if (!points.length) {
+      // rien d'exploitable (pas d'émissions connues) -> on masque
+      $section.hidden = true;
+      return;
+    }
+
+    var grouped = groupByDay(points);
+    $section.hidden = false;
+    // sessions comptabilisées = nb de sessions avec au moins 1 émission connue (dans le slice)
+    document.getElementById('carbon-sessions').textContent = String(points.length);
+
+    // moyenne globale des points (moyennes journalières déjà calculées)
+    var globalAvg = 0;
+    if (grouped.data.length) {
+      globalAvg = Math.round(grouped.data.reduce((a,b)=>a+b,0) / grouped.data.length);
+    }
+    document.getElementById('carbon-global-avg').textContent = String(globalAvg);
+
+    renderChart(grouped, mode);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    $section   = document.getElementById('compare-carbon');
+    $chart     = document.getElementById('carbon-chart');
+    $sessions  = document.getElementById('carbon-sessions');
+    $globalAvg = document.getElementById('carbon-global-avg');
+    $modeSel   = document.getElementById('carbon-mode');
+
+    if (!$section || !$chart) return;
+
+    // premier rendu
+    renderCarbon();
+
+    // re-rendu: changements d'historique, mise à jour compare, changement de mode
+    window.addEventListener('storage', function(e){ if (e.key === HISTORY_KEY || e.key === CARBON_CACHE_KEY) renderCarbon(); });
+    window.addEventListener('honoua:compare:updated', renderCarbon);
+    if ($modeSel) $modeSel.addEventListener('change', renderCarbon);
+  });
+})();
+</script>
+
+<script>
+/* A15.bis — Purge du cache carbone */
+(function(){
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('carbon-cache-clear');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      try {
+        localStorage.removeItem(CARBON_CACHE_KEY);
+        // Notifie les listeners (A14/A15 écoutent 'storage')
+        window.dispatchEvent(new StorageEvent('storage', { key: CARBON_CACHE_KEY }));
+        alert('Cache carbone purgé ✅');
+      } catch(e){
+        console.warn('[A15.bis] Purge cache carbone échouée:', e);
+        alert('Impossible de purger le cache carbone ❌');
+      }
+    });
+  });
+})();
 </script>
 
 
