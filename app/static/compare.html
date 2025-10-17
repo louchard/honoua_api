@@ -108,8 +108,13 @@
 
       <!-- A5 : Bouton de partage -->
       <button id="shareBtn" class="btn-primary" aria-label="Copier le lien de comparaison">🔗 Copier le lien</button>
+      <!-- A9 START: Bouton de copie de l’état complet -->
+<button id="copyStateBtn" class="btn-primary" aria-label="Copier l’état complet">📋 État complet</button>
+<!-- A9 END -->
+
 
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
+
 
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
@@ -155,6 +160,9 @@
     const searchInput = document.getElementById("searchInput");
     const clearFilterBtn = document.getElementById("clearFilterBtn");
 // A7 END
+     // A9 START: ref bouton “état complet”
+const copyStateBtn = document.getElementById("copyStateBtn");
+    // A9 END
 
 
     // État
@@ -248,8 +256,21 @@ clearFilterBtn?.addEventListener("click", () => {
   input.focus();
 });
 // A7 END
+   
+    // A9 START: copie du lien avec état complet
+copyStateBtn?.addEventListener("click", async ()=>{
+  const url = buildShareUrl(true); // true = inclure tous les paramètres
+  try{
+    await copyToClipboard(url);
+    notify("Lien (état complet) copié !");
+  }catch{
+    notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+    prompt("Copiez cette URL :", url);
+  }
+});
+// A9 END
 
-
+    
     // ---- Prefs / EANs
     function loadPrefs(){
       try{ return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); }catch{ return {}; }
@@ -460,16 +481,63 @@ clearFilterBtn?.addEventListener("click", () => {
     }
 
     // ---- Helpers
-    function importFromUrl(){
-      const params = new URLSearchParams(location.search);
-      const csv = (params.get("eans")||"").trim();
-      if(!csv){ return notify("Aucun paramètre ?eans trouvé."); }
-      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
-      let added=0;
-      list.forEach(v=> { if(addEAN(v,true)) added++; });
-      if(added>0){ saveEans(); render(); updateCounter(); notify(`${added} EAN importé(s).`); refreshCompare(); }
-      else notify("Aucun EAN nouveau.");
-    }
+    // A9 START: import enrichi depuis l’URL
+function importFromUrl(){
+  const params = new URLSearchParams(location.search);
+
+  // EANs
+  const csv = (params.get("eans")||"").trim();
+  let added=0;
+  if(csv){
+    const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
+    list.forEach(v=> { if(addEAN(v,true)) added++; });
+  }
+
+  // Préférences : sort, rank, order, tiebreak, filter
+  const incoming = {
+    sort: params.get("sort"),
+    rank: params.get("rank"),
+    order: params.get("order"),
+    tiebreak: params.get("tiebreak"),
+    filter: params.get("filter"),
+  };
+
+  let changed = false;
+
+  if(incoming.sort && incoming.sort !== prefs.sort){ prefs.sort = incoming.sort; changed = true; }
+  if(incoming.rank!=null){
+    const val = incoming.rank === "1" || incoming.rank === "true";
+    if(val !== !!prefs.showRank){ prefs.showRank = val; changed = true; }
+  }
+  if(incoming.order && incoming.order !== prefs.order){ prefs.order = incoming.order; changed = true; }
+  if(incoming.tiebreak && incoming.tiebreak !== prefs.tiebreak){ prefs.tiebreak = incoming.tiebreak; changed = true; }
+  if(typeof incoming.filter === "string"){
+    const q = (incoming.filter||"").trim();
+    if(q !== (prefs.filter||"")){ prefs.filter = q; changed = true; }
+  }
+
+  // Répercuter dans l’UI
+  if(changed){
+    savePrefs();
+    if(sortSelect && prefs.sort) sortSelect.value = prefs.sort;
+    if(toggleRank) toggleRank.checked = !!prefs.showRank;
+    if(orderSelect && prefs.order) orderSelect.value = prefs.order;
+    if(tiebreakSelect && prefs.tiebreak) tiebreakSelect.value = prefs.tiebreak;
+    if(searchInput && typeof prefs.filter === "string") searchInput.value = prefs.filter;
+  }
+
+  if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
+  else if(!changed){ notify("Aucun paramètre nouveau à importer."); }
+
+  // Toujours recalculer/synchroniser l’affichage
+  updateCounter();
+  refreshCompare(true);
+  applyFilter();
+  sortCards();
+  paintRanks();
+}
+// A9 END
+
     function pickFootprint(row){
       const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
       const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
@@ -503,21 +571,28 @@ clearFilterBtn?.addEventListener("click", () => {
       setTimeout(()=>toast.style.opacity=0, 1400);
     }
 
-    // A5 — helpers partage
-    function buildShareUrl(){
-      const base = location.origin + location.pathname;
-      const params = new URLSearchParams();
-      if(eans.length) params.set("eans", eans.join(","));
-      if(prefs?.sort) params.set("sort", prefs.sort);
-      if(prefs?.showRank) params.set("rank", prefs.showRank ? "1" : "0");
-      return `${base}?${params.toString()}`;
-    }
-    async function copyToClipboard(text){
-      if(navigator.clipboard?.writeText){ return navigator.clipboard.writeText(text); }
-      const ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta);
-      ta.select(); document.execCommand("copy"); ta.remove();
-    }
+    // A5 — helpers partage 
+    // A9 START: buildShareUrl avec état “complet” optionnel
+function buildShareUrl(full=false){
+  const base = location.origin + location.pathname;
+  const params = new URLSearchParams();
+
+  // Toujours inclure eans + tri principal + rang
+  if(eans.length) params.set("eans", eans.join(","));
+  if(prefs?.sort) params.set("sort", prefs.sort);
+  if(typeof prefs?.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+
+  // En mode “complet”, inclure ordre, départage et filtre
+  if(full){
+    if(prefs?.order) params.set("order", prefs.order);            // 'asc' | 'desc'
+    if(prefs?.tiebreak) params.set("tiebreak", prefs.tiebreak);   // 'name'|'brand'|'ean'
+    if(prefs?.filter){ const q=(prefs.filter||"").trim(); if(q) params.set("filter", q); }
+  }
+
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+// A9 END
 
       // A7 START: filtre & surbrillance
 function normalize(s) {
