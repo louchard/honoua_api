@@ -80,7 +80,7 @@
     <div class="logo" aria-hidden="true"></div>
     <div class="titles">
       <h1>Comparateur carbone</h1>
-      <p>A4 — Tri, rang, états vides, accessibilité</p>
+      <p>A4–A6 — Tri, rang, partage, compteur, retirer tout</p>
     </div>
     <div style="width:40px"></div>
   </header>
@@ -106,14 +106,17 @@
       <button id="importUrlBtn" class="btn-ghost" aria-label="Importer depuis l’URL">Importer URL</button>
       <button id="resetBtn" class="btn-danger" aria-label="Tout effacer">Tout effacer</button>
 
-      <!-- 🟢 DÉBUT A5 : Bouton de partage du lien de comparaison -->
+      <!-- A5 : Bouton de partage -->
       <button id="shareBtn" class="btn-primary" aria-label="Copier le lien de comparaison">🔗 Copier le lien</button>
-      <!-- 🔴 FIN A5 -->
 
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
+
+      <!-- A6 : Compteur + Retirer tout -->
+      <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
+      <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
     </div>
 
-    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>. Le tri et l’option rang sont sauvegardés localement.</p>
+    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>. Le tri, l’option rang et l’URL partagée sont sauvegardés localement.</p>
 
     <section id="track" class="tracks" aria-live="polite">
       <div class="empty">Aucun produit pour l’instant. Ajoutez un EAN pour commencer.</div>
@@ -135,10 +138,9 @@
     const toggleRank = $("#toggleRank");
     const refreshBtn = $("#refreshBtn");
     const toast = $("#toast");
-
-    // 🟢 DÉBUT A5 : Déclaration du bouton de partage (manquante dans ta version)
     const shareBtn = document.getElementById("shareBtn");
-    // 🔴 FIN A5
+    const counter = document.getElementById("counter");
+    const removeAllBtn = document.getElementById("removeAllBtn");
 
     const STORAGE_KEY = "honoua:compare:eanList";
     const PREF_KEY = "honoua:compare:prefs";
@@ -148,18 +150,19 @@
     let prefs = loadPrefs(); // { sort: 'best'|'worst'|'brand'|'name'|'ean', showRank: boolean }
     let compareCache = {};   // { ean: {raw:number, norm:number} }
 
-    // Init prefs UI
+    // Init UI
     sortSelect.value = prefs.sort || "best";
     toggleRank.checked = !!prefs.showRank;
 
     // Rendu initial
     render();
     refreshCompare();
+    updateCounter();
 
     // ---- Events
     addBtn.addEventListener("click", ()=> {
       const val = (input.value||"").replace(/\s+/g,"");
-      if(!val){return notify("Entrez un EAN.");}
+      if(!val){ notify("Entrez un EAN."); input.focus(); return; }
       if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); }
     });
     input.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
@@ -167,7 +170,7 @@
     importUrlBtn.addEventListener("click", importFromUrl);
     resetBtn.addEventListener("click", ()=>{
       if(confirm("Tout effacer de la comparaison ?")){
-        eans = []; saveEans(); compareCache={}; render(); notify("Comparateur réinitialisé.");
+        eans = []; saveEans(); compareCache={}; render(); updateCounter(); notify("Comparateur réinitialisé."); input.focus();
       }
     });
     sortSelect.addEventListener("change", ()=>{
@@ -178,7 +181,7 @@
     });
     refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
 
-    // 🟢 DÉBUT A5 : Événement du bouton de partage
+    // A5 — Partage
     shareBtn?.addEventListener("click", async ()=>{
       const url = buildShareUrl();
       try{
@@ -189,7 +192,20 @@
         prompt("Copiez cette URL :", url);
       }
     });
-    // 🔴 FIN A5
+
+    // A6 — Retirer tout
+    removeAllBtn?.addEventListener("click", () => {
+      if (!eans.length) { notify("Rien à retirer."); input.focus(); return; }
+      if (confirm(`Retirer ${eans.length} produit(s) de la comparaison ?`)) {
+        eans = [];
+        saveEans();
+        compareCache = {};
+        render();
+        updateCounter();
+        notify("Tous les produits ont été retirés.");
+        input.focus();
+      }
+    });
 
     // ---- Prefs / EANs
     function loadPrefs(){
@@ -210,9 +226,9 @@
     }
     function saveEans(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eans)); }
     function addEAN(val, silent=false){
-      if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); return false; }
-      if(eans.includes(val)){ if(!silent) notify("Déjà présent."); return false; }
-      eans.push(val); saveEans(); render(); if(!silent) notify("Produit ajouté."); return true;
+      if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); input.focus(); return false; }
+      if(eans.includes(val)){ if(!silent) notify("Déjà présent."); input.focus(); return false; }
+      eans.push(val); saveEans(); render(); updateCounter(); if(!silent) notify("Produit ajouté."); return true;
     }
 
     // ---- UI
@@ -224,6 +240,7 @@
         d.innerHTML = `Aucun produit. <br/>Saisissez un EAN ou utilisez <code>?eans=</code>.`;
         track.appendChild(d);
         refreshBtn.disabled = true;
+        updateCounter();
         return;
       }
       refreshBtn.disabled = false;
@@ -232,6 +249,7 @@
         track.appendChild(card);
         hydrateCard(card, code);
       }
+      updateCounter();
     }
 
     function makeCardSkeleton(code){
@@ -258,8 +276,9 @@
       `;
       el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
         eans = eans.filter(v=>v!==code);
-        saveEans(); delete compareCache[code]; render(); refreshCompare();
-        notify("Produit retiré.");
+        saveEans(); delete compareCache[code];
+        render(); updateCounter(); refreshCompare();
+        notify("Produit retiré."); input.focus();
       });
       return el;
     }
@@ -273,7 +292,7 @@
         if(!data || data.error){
           const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
           if(q.ok){
-            const list = await r.json ? await q.json() : [];
+            const list = await q.json();
             data = Array.isArray(list) ? list[0] : list;
           }
         }
@@ -400,7 +419,7 @@
       const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
       let added=0;
       list.forEach(v=> { if(addEAN(v,true)) added++; });
-      if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); refreshCompare(); }
+      if(added>0){ saveEans(); render(); updateCounter(); notify(`${added} EAN importé(s).`); refreshCompare(); }
       else notify("Aucun EAN nouveau.");
     }
     function pickFootprint(row){
@@ -436,7 +455,7 @@
       setTimeout(()=>toast.style.opacity=0, 1400);
     }
 
-    // 🟢 DÉBUT A5 : Fonctions utilitaires pour le partage
+    // A5 — helpers partage
     function buildShareUrl(){
       const base = location.origin + location.pathname;
       const params = new URLSearchParams();
@@ -446,15 +465,17 @@
       return `${base}?${params.toString()}`;
     }
     async function copyToClipboard(text){
-      if(navigator.clipboard?.writeText){
-        return navigator.clipboard.writeText(text);
-      }
+      if(navigator.clipboard?.writeText){ return navigator.clipboard.writeText(text); }
       const ta = document.createElement("textarea");
       ta.value = text; document.body.appendChild(ta);
       ta.select(); document.execCommand("copy"); ta.remove();
     }
-    // 🔴 FIN A5
+
+    // A6 — compteur
+    function updateCounter() {
+      const n = eans.length;
+      if (counter) counter.textContent = n === 0 ? "0 article" : `${n} ${n > 1 ? "articles" : "article"}`;
+    }
   </script>
 </body>
 </html>
-
