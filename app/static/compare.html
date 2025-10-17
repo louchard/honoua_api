@@ -114,6 +114,13 @@
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
       <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
+      <!-- A7 START: Recherche locale -->
+      <input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+      <button id="clearFilterBtn" class="btn-ghost" aria-label="Effacer le filtre">Effacer filtre</button>
+<!-- A7 END -->
+
+
+
     </div>
 
     <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>. Le tri, l’option rang et l’URL partagée sont sauvegardés localement.</p>
@@ -144,20 +151,35 @@
 
     const STORAGE_KEY = "honoua:compare:eanList";
     const PREF_KEY = "honoua:compare:prefs";
+    // A7 START: références filtre
+    const searchInput = document.getElementById("searchInput");
+    const clearFilterBtn = document.getElementById("clearFilterBtn");
+// A7 END
+
 
     // État
     let eans = loadEans();
     let prefs = loadPrefs(); // { sort: 'best'|'worst'|'brand'|'name'|'ean', showRank: boolean }
     let compareCache = {};   // { ean: {raw:number, norm:number} }
 
+
     // Init UI
     sortSelect.value = prefs.sort || "best";
     toggleRank.checked = !!prefs.showRank;
+
+    // A7 START: init valeur du filtre depuis prefs
+    if (!prefs) prefs = {};
+    if (typeof prefs.filter !== "string") prefs.filter = "";
+    if (searchInput) searchInput.value = prefs.filter;
+// A7 END
+
 
     // Rendu initial
     render();
     refreshCompare();
     updateCounter();
+    applyFilter(); // A7: appliquer le filtre au démarrage
+
 
     // ---- Events
     addBtn.addEventListener("click", ()=> {
@@ -193,6 +215,7 @@
       }
     });
 
+
     // A6 — Retirer tout
     removeAllBtn?.addEventListener("click", () => {
       if (!eans.length) { notify("Rien à retirer."); input.focus(); return; }
@@ -206,6 +229,26 @@
         input.focus();
       }
     });
+
+
+    // A7 START: événements filtre
+searchInput?.addEventListener("input", () => {
+  prefs.filter = searchInput.value || "";
+  savePrefs();
+  applyFilter();           // masque/affiche + surbrillance
+  updateCounter();         // compteur reflète les visibles
+});
+clearFilterBtn?.addEventListener("click", () => {
+  if (!searchInput) return;
+  searchInput.value = "";
+  prefs.filter = "";
+  savePrefs();
+  applyFilter();
+  updateCounter();
+  input.focus();
+});
+// A7 END
+
 
     // ---- Prefs / EANs
     function loadPrefs(){
@@ -250,6 +293,9 @@
         hydrateCard(card, code);
       }
       updateCounter();
+      applyFilter(); // A7: re-appliquer après hydratation des cartes
+
+
     }
 
     function makeCardSkeleton(code){
@@ -318,6 +364,8 @@
       }else{
         th.textContent = "Pas d’image";
       }
+        // A7: réappliquer le filtre/surbrillance après hydratation des textes
+  applyFilter();
     }
 
     // ===== Calculs + tri/rang =====
@@ -471,11 +519,94 @@
       ta.select(); document.execCommand("copy"); ta.remove();
     }
 
-    // A6 — compteur
-    function updateCounter() {
-      const n = eans.length;
-      if (counter) counter.textContent = n === 0 ? "0 article" : `${n} ${n > 1 ? "articles" : "article"}`;
+      // A7 START: filtre & surbrillance
+function normalize(s) {
+  return (s||"").toString().toLowerCase();
+}
+
+function highlightText(el, text, q) {
+  // Remplace le contenu texte simple par une version avec <mark>…</mark>
+  if (!q) { el.innerHTML = escapeHtml(text); return; }
+  const t = text || "";
+  const idx = t.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) { el.innerHTML = escapeHtml(t); return; }
+  const before = escapeHtml(t.slice(0, idx));
+  const match  = escapeHtml(t.slice(idx, idx + q.length));
+  const after  = escapeHtml(t.slice(idx + q.length));
+  el.innerHTML = `${before}<mark>${match}</mark>${after}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => (
+    m === '&' ? '&amp;' :
+    m === '<' ? '&lt;'  :
+    m === '>' ? '&gt;'  :
+    m === '"' ? '&quot;': '&#39;'
+  ));
+}
+
+function applyFilter() {
+  const q = (prefs.filter || "").trim();
+  const cards = Array.from(document.querySelectorAll('.card'));
+  let visible = 0;
+
+  for (const c of cards) {
+    const ean = c.dataset.ean || "";
+    const titleEl = c.querySelector('[data-role="title"]');
+    const brandEl = c.querySelector('[data-role="brand"]');
+
+    const title = (titleEl?.textContent || "").trim();
+    const brand = (brandEl?.textContent || "").trim();
+    const hay = `${title} ${brand} ${ean}`;
+
+    // Test visibilité
+    const match = !q || normalize(hay).includes(normalize(q));
+    c.style.display = match ? "" : "none";
+    if (match) visible++;
+
+    // Surbrillance non destructive (uniquement si visible)
+    if (match) {
+      if (titleEl) highlightText(titleEl, title, q);
+      if (brandEl) highlightText(brandEl, brand, q);
+    } else {
+      // reset (évite de conserver des <mark> cachés)
+      if (titleEl) titleEl.innerHTML = escapeHtml(title);
+      if (brandEl) brandEl.innerHTML = escapeHtml(brand);
     }
+  }
+
+  // État vide filtré
+  const empty = document.querySelector('.tracks .empty');
+  if (cards.length && visible === 0) {
+    if (!empty) {
+      const d = document.createElement("div");
+      d.className = "empty";
+      d.textContent = "Aucun résultat pour ce filtre.";
+      document.querySelector('.tracks')?.appendChild(d);
+    } else {
+      empty.textContent = "Aucun résultat pour ce filtre.";
+      empty.style.display = "";
+    }
+  } else if (empty) {
+    empty.style.display = "none";
+  }
+}
+// A7 END
+
+
+    // A6 — compteur
+   // A6/A7 — compteur (prend en compte le filtre actif)
+function updateCounter() {
+  const hasFilter = !!(prefs.filter && prefs.filter.trim());
+  const cards = Array.from(document.querySelectorAll('.card'));
+  const visible = cards.filter(c => c.style.display !== 'none').length;
+
+  const n = hasFilter ? visible : eans.length;
+  if (counter) {
+    counter.textContent = `${n} ${n > 1 ? "articles" : "article"}`;
+  }
+}
+
   </script>
 </body>
 </html>
