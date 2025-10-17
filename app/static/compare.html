@@ -136,6 +136,34 @@
   color: #2a2a2a;
 }
 
+#compare-history .history-filters {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin: .5rem 0 1rem;
+}
+#compare-history .history-filters input[type="search"] {
+  padding: .4rem .6rem;
+  border: 1px solid rgba(0,0,0,.15);
+  border-radius: .5rem;
+  font-size: .9rem;
+}
+#compare-history .history-filters .filter-row,
+#compare-history .history-filters .sort-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  font-size: .85rem;
+  align-items: center;
+}
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-filters input[type="search"] {
+    background: #121316;
+    color: #e6e6e6;
+    border-color: rgba(255,255,255,.14);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   #compare-history .history-meta { color: #e6e6e6; }
 }
@@ -331,6 +359,78 @@
 #compare-history .chip-order  { border-color: rgba(0,29,133,.35); }         /* léger accent bleu */
 #compare-history .chip-filter { border-color: rgba(245,193,71,.45); }       /* léger accent orange */
 #compare-history .chip-query  { border-style: dashed; }
+
+/* A13 — Boutons export/import (héritent des styles boutons déjà posés) */
+#compare-history #history-export,
+#compare-history #history-import {
+  color: #062909;
+  border-color: rgba(6,41,9,.25);
+}
+#compare-history #history-export:hover,
+#compare-history #history-import:hover {
+  background: rgba(6,41,9,.08);
+}
+
+/* A13 — Dropzone drag&drop */
+#compare-history .history-dropzone {
+  margin-top: .5rem;
+  padding: .75rem;
+  border: 2px dashed rgba(0,0,0,.2);
+  border-radius: .6rem;
+  text-align: center;
+  font-size: .9rem;
+  color: #555;
+  background: #fafafa;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-dropzone{
+    background: #0e0f11;
+    color: #cfcfcf;
+    border-color: rgba(255,255,255,.25);
+  }
+}
+#compare-history .history-dropzone.is-dragover {
+  background: rgba(0,29,133,.08);
+  border-color: rgba(0,29,133,.45);
+}
+/* Bouton maintenance (accent orange) */
+#compare-history #history-maintenance-toggle {
+  color: #8a6200;
+  border-color: rgba(245,193,71,.45);
+}
+#compare-history #history-maintenance-toggle:hover {
+  background: rgba(245,193,71,.12);
+}
+
+/* Sauvegarde / Restauration (accent vert) */
+#compare-history #history-backup,
+#compare-history #history-restore {
+  color: #062909;
+  border-color: rgba(6,41,9,.25);
+}
+#compare-history #history-backup:hover,
+#compare-history #history-restore:hover {
+  background: rgba(6,41,9,.08);
+}
+
+/* Bandeau maintenance */
+#compare-history .history-maintenance-banner {
+  margin-top: .5rem;
+  padding: .5rem .75rem;
+  border-radius: .6rem;
+  border: 1px solid rgba(245,193,71,.45);
+  background: rgba(245,193,71,.12);
+  color: #8a6200;
+  font-size: .9rem;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-maintenance-banner {
+    border-color: rgba(245,193,71,.55);
+    background: rgba(245,193,71,.18);
+    color: #f6d686;
+  }
+}
+
 </style>
 
 </head>
@@ -373,6 +473,34 @@
 <!-- A9 END -->
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
 
+
+        <!-- =======================================================================
+     A12 — Barre de recherche et filtres historiques
+     ======================================================================= -->
+<div id="compare-history-filters" class="history-filters" hidden>
+  <input type="search" id="history-search" placeholder="Rechercher..." aria-label="Rechercher dans l’historique" />
+
+  <div class="filter-row">
+    <label><input type="checkbox" id="filter-current"> Actuelles</label>
+    <label><input type="checkbox" id="filter-pinned"> Épinglées</label>
+    <label><input type="checkbox" id="filter-24h"> Dernières 24h</label>
+    <label><input type="checkbox" id="filter-7d"> Derniers 7 jours</label>
+  </div>
+
+  <div class="sort-row">
+    <label>Tri :
+      <select id="filter-sort">
+        <option value="desc">Plus récentes d’abord</option>
+        <option value="asc">Plus anciennes d’abord</option>
+      </select>
+    </label>
+  </div>
+</div>
+
+
+
+
+
          <!-- =======================================================================
      A11 — Historique des comparaisons (Étape 2 : affichage + rechargement)
      Section à placer sous le comparateur
@@ -380,6 +508,8 @@
 <section id="compare-history" aria-labelledby="compare-history-title" hidden>
   <h2 id="compare-history-title">Historique des comparaisons</h2>
   <div id="compare-history-list" role="list" aria-live="polite"></div>
+
+
 
   <!-- Barre d’actions (optionnelle, style minimal) -->
 <div id="compare-history-actions" class="history-actions-bar" hidden>
@@ -390,6 +520,26 @@
   </label>
 </div>
 
+<!-- A13.bis — Mode maintenance + sauvegarde/restauration -->
+<button type="button" id="history-maintenance-toggle">Activer maintenance</button>
+<button type="button" id="history-backup">Sauvegarde instantanée</button>
+<button type="button" id="history-restore">Restaurer la dernière sauvegarde</button>
+
+<div id="history-maintenance-banner" class="history-maintenance-banner" hidden>
+  Mode maintenance actif : l’enregistrement automatique est en pause.
+</div>
+
+
+<!-- A13 — Actions Export / Import -->
+<button type="button" id="history-export">Exporter (JSON)</button>
+
+<button type="button" id="history-import">Importer (JSON)</button>
+<input type="file" id="history-import-file" accept="application/json" hidden />
+
+<!-- Zone de dépôt (facultative, peut rester masquée tant qu’on ne s’en sert pas) -->
+<div id="history-dropzone" class="history-dropzone" hidden aria-hidden="true">
+  Glissez un fichier JSON ici pour l’importer…
+</div>
 
 
 </section>
@@ -1273,6 +1423,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // [A12] Permet au module de filtrage d’intervenir avant le rendu
+var customEvent = new CustomEvent('honoua:history:render-request', { detail: { list: history, filtered: null }});
+window.dispatchEvent(customEvent);
+if (customEvent.detail.filtered) {
+  history = customEvent.detail.filtered;
+}
+
+
     // On affiche du plus récent au plus ancien
     var items = history.slice().reverse();
 
@@ -1758,12 +1916,512 @@ function render() {
 // … (fin code Étape 3)
 
 
+/* ============================================================================
+   A12 — Recherche et filtres dans l’historique
+   - Recherche texte live
+   - Filtres rapides : Actuelles, Épinglées, 24h, 7j
+   - Tri dynamique
+   ============================================================================ */
 
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var $filters, $search, $chkCurrent, $chkPinned, $chk24h, $chk7d, $selSort;
 
+  function readHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
 
+  // Utilitaire : formate un timestamp ISO en date locale courte
+  function formatDate(ts) {
+    try { return new Date(ts).toLocaleDateString('fr-FR'); }
+    catch { return ts; }
+  }
+
+  // Vérifie si l’entrée est actuelle (reprise de l’étape 3)
+  function isCurrent(entry) {
+    if (typeof getCompareStateFromURL !== 'function') return false;
+    var state = getCompareStateFromURL();
+    try {
+      return JSON.stringify(entry.params) === JSON.stringify({
+        eans: state.eans,
+        sort: state.sort,
+        order: state.order,
+        filters: state.filters,
+        query: state.query
+      });
+    } catch { return false; }
+  }
+
+  // Applique la recherche et les filtres à la liste
+  function applyFilters(list) {
+    var q = ($search?.value || '').trim().toLowerCase();
+    var onlyCurrent = $chkCurrent?.checked;
+    var onlyPinned  = $chkPinned?.checked;
+    var only24h     = $chk24h?.checked;
+    var only7d      = $chk7d?.checked;
+    var sortOrder   = $selSort?.value || 'desc';
+
+    var now = Date.now();
+
+    var filtered = list.filter(function(entry){
+      var match = true;
+
+      // Filtre texte (recherche globale)
+      if (q) {
+        var str = JSON.stringify(entry).toLowerCase();
+        match = str.includes(q);
+      }
+
+      if (match && onlyCurrent) match = isCurrent(entry);
+      if (match && onlyPinned)  match = entry.pinned;
+
+      if (match && only24h) {
+        var age = now - new Date(entry.ts).getTime();
+        match = age <= 24*60*60*1000;
+      }
+
+      if (match && only7d) {
+        var age = now - new Date(entry.ts).getTime();
+        match = age <= 7*24*60*60*1000;
+      }
+
+      return match;
+    });
+
+    // Tri
+    filtered.sort(function(a,b){
+      var da = new Date(a.ts).getTime(), db = new Date(b.ts).getTime();
+      return sortOrder === 'asc' ? da - db : db - da;
+    });
+
+    return filtered;
+  }
+
+  // Événement déclencheur (live)
+  function onFilterChange() {
+    // On envoie un event custom pour que l’Étape 3 rerende
+    window.dispatchEvent(new CustomEvent('honoua:history:filter'));
+  }
+
+  // Boot
+  document.addEventListener('DOMContentLoaded', function(){
+    $filters    = document.getElementById('compare-history-filters');
+    $search     = document.getElementById('history-search');
+    $chkCurrent = document.getElementById('filter-current');
+    $chkPinned  = document.getElementById('filter-pinned');
+    $chk24h     = document.getElementById('filter-24h');
+    $chk7d      = document.getElementById('filter-7d');
+    $selSort    = document.getElementById('filter-sort');
+
+    if (!$filters) return;
+
+    $filters.hidden = false;
+
+    [$search, $chkCurrent, $chkPinned, $chk24h, $chk7d, $selSort].forEach(function(el){
+      if (!el) return;
+      el.addEventListener('input', onFilterChange);
+      el.addEventListener('change', onFilterChange);
+    });
+  });
+
+  // Hook dans le rendu principal
+  window.addEventListener('honoua:history:render-request', function(ev){
+    var all = ev.detail.list;
+    var filtered = applyFilters(all);
+    ev.detail.filtered = filtered;
+  });
+})();
 
 </script>
 
+<script>
+/* ============================================================================
+   A13 — Export / Import JSON de l'historique
+   - Export: télécharge un JSON propre, versionné
+   - Import: validation, merge non destructif, dédup par params, conserve pinned
+   - Respecte la borne max (pinned prioritaires, puis les plus récents)
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var HISTORY_MAX_ENTRIES = 50;
+
+  var $btnExport, $btnImport, $fileInput, $drop;
+
+  // ---------- Utils lecture/écriture ----------
+  function readHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      // Migration douce
+      arr.forEach(function(e){
+        if (typeof e.pinned !== 'boolean') e.pinned = false;
+      });
+      return arr;
+    } catch(e){ console.warn('[A13] readHistory:', e); return []; }
+  }
+  function writeHistory(arr, silent){
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      if (!silent) window.dispatchEvent(new StorageEvent('storage', { key: HISTORY_KEY }));
+    } catch(e){ console.warn('[A13] writeHistory:', e); }
+  }
+
+  // ---------- Normalisation & validation ----------
+  function isValidEntry(e){
+    // Champs minimum requis
+    return e && typeof e === 'object'
+      && typeof e.id === 'number'
+      && typeof e.ts === 'string'
+      && e.params && typeof e.params === 'object'
+      && Array.isArray(e.params.eans)
+      && 'url' in e;
+  }
+  function normalizeEntry(e){
+    var n = {
+      id: typeof e.id === 'number' ? e.id : Date.now(),
+      ts: typeof e.ts === 'string' ? e.ts : new Date().toISOString(),
+      productCount: typeof e.productCount === 'number'
+        ? e.productCount
+        : (e.params && Array.isArray(e.params.eans) ? e.params.eans.length : 0),
+      params: {
+        eans: Array.isArray(e.params && e.params.eans) ? e.params.eans : [],
+        sort:  e.params ? (e.params.sort ?? null) : null,
+        order: e.params ? (e.params.order ?? null) : null,
+        filters: e.params ? (e.params.filters ?? null) : null,
+        query: e.params ? (e.params.query ?? null) : null
+      },
+      url: (typeof e.url === 'string' ? e.url : null),
+      pinned: !!e.pinned
+    };
+    // Si pas d’URL, on tente d’en régénérer une à partir de l’état courant (facultatif)
+    if (!n.url && typeof URL === 'function') {
+      try {
+        var u = new URL(window.location.href);
+        var p = u.searchParams;
+        p.set('eans', n.params.eans.join(','));
+        if (n.params.sort)  p.set('sort', n.params.sort); else p.delete('sort');
+        if (n.params.order) p.set('order', n.params.order); else p.delete('order');
+        if (n.params.filters != null) {
+          var filters = n.params.filters;
+          if (typeof filters === 'string') p.set('filters', filters);
+          else p.set('filters', JSON.stringify(filters));
+        } else { p.delete('filters'); }
+        if (n.params.query) p.set('q', n.params.query); else p.delete('q');
+        n.url = u.toString();
+      } catch(_) {}
+    }
+    return n;
+  }
+  function sameParams(a, b){
+    try { return JSON.stringify(a.params) === JSON.stringify(b.params); }
+    catch { return false; }
+  }
+
+  // ---------- Merge non destructif ----------
+  function mergeHistories(existing, imported){
+    var map = existing.slice(); // on manipule une copie
+    imported.forEach(function(ent){
+      // Normalise
+      var n = normalizeEntry(ent);
+
+      // Cherche une entrée existante avec mêmes params
+      var idx = map.findIndex(function(x){ return sameParams(x, n); });
+      if (idx >= 0) {
+        // Fusion: pinned (OR), ts = max (on garde la plus récente)
+        var cur = map[idx];
+        cur.pinned = !!(cur.pinned || n.pinned);
+        // ts plus récente
+        try {
+          var tCur = new Date(cur.ts).getTime() || 0;
+          var tNew = new Date(n.ts).getTime() || 0;
+          if (tNew > tCur) {
+            cur.ts = n.ts;
+            cur.id = Date.now(); // rafraîchit l’identifiant pour l’ordre local
+            cur.url = n.url || cur.url;
+            cur.productCount = n.productCount;
+          }
+        } catch(_) {}
+      } else {
+        // Nouveau: on pousse
+        map.push(n);
+      }
+    });
+
+    // Borne: pinned prioritaires, puis plus récents non pinned
+    if (map.length > HISTORY_MAX_ENTRIES) {
+      var pinned = map.filter(function(e){ return e.pinned; });
+      var others = map.filter(function(e){ return !e.pinned; })
+        .sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); }); // récents d’abord
+      var keepOthers = Math.max(0, HISTORY_MAX_ENTRIES - pinned.length);
+      var trimmed = pinned.concat(others.slice(0, keepOthers));
+      // Conserver l’ordre chronologique “ancien→récent” en interne si besoin
+      trimmed.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+      return trimmed;
+    }
+
+    // Aligne l’ordre interne chronologique (ancien→récent) comme A11
+    map.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+    return map;
+  }
+
+  // ---------- Export ----------
+  function exportHistory(){
+    var data = readHistory();
+    var payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      count: data.length,
+      items: data
+    };
+    var json = JSON.stringify(payload, null, 2);
+
+    var stamp = new Date().toISOString().replace(/[:.]/g,'').replace('T','_').slice(0,15);
+    var filename = 'honoua_history_' + stamp + '.json';
+
+    var blob = new Blob([json], {type:'application/json'});
+    var url  = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------- Import (fichier) ----------
+  function handleImportedText(text){
+    try {
+      var obj = JSON.parse(text);
+      var items = Array.isArray(obj) ? obj : (Array.isArray(obj.items) ? obj.items : null);
+      if (!items) throw new Error('Format JSON invalide: items manquant.');
+
+      // Filtrer les entrées valides + normaliser
+      var clean = items
+        .filter(isValidEntry)     // garde seulement les valides
+        .map(normalizeEntry);     // homogénéise le schéma
+
+      if (clean.length === 0) {
+        alert('Aucun élément importable trouvé dans ce fichier.');
+        return;
+      }
+
+      var before = readHistory();
+      var merged = mergeHistories(before, clean);
+      writeHistory(merged);
+
+      // Notifier rendu
+      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+      alert('Import réussi ✅ (' + clean.length + ' élément(s) pris en compte).');
+
+    } catch(e){
+      console.warn('[A13] Import error:', e);
+      alert('Import échoué ❌ : ' + e.message);
+    }
+  }
+
+  function importFromFile(file){
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){ handleImportedText(ev.target.result); };
+    reader.onerror = function(){ alert('Impossible de lire le fichier.'); };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  // ---------- Drag & Drop ----------
+  function setupDropzone(){
+    if (!$drop) return;
+    // Rendre visible si on veut encourager le drag&drop
+    $drop.hidden = false;
+    $drop.setAttribute('aria-hidden','false');
+
+    ['dragenter','dragover'].forEach(function(evName){
+      $drop.addEventListener(evName, function(e){ e.preventDefault(); e.stopPropagation(); $drop.classList.add('is-dragover'); });
+    });
+    ['dragleave','drop'].forEach(function(evName){
+      $drop.addEventListener(evName, function(e){ e.preventDefault(); e.stopPropagation(); $drop.classList.remove('is-dragover'); });
+    });
+    $drop.addEventListener('drop', function(e){
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      importFromFile(files[0]);
+    });
+  }
+
+  // ---------- Boot ----------
+  document.addEventListener('DOMContentLoaded', function(){
+    $btnExport = document.getElementById('history-export');
+    $btnImport = document.getElementById('history-import');
+    $fileInput = document.getElementById('history-import-file');
+    $drop      = document.getElementById('history-dropzone');
+
+    if ($btnExport) $btnExport.addEventListener('click', exportHistory);
+
+    if ($btnImport) {
+      $btnImport.addEventListener('click', function(){
+        if ($fileInput) $fileInput.click();
+      });
+    }
+    if ($fileInput) {
+      $fileInput.addEventListener('change', function(){
+        var file = $fileInput.files && $fileInput.files[0];
+        importFromFile(file);
+        // reset pour permettre réimport du même fichier si besoin
+        $fileInput.value = '';
+      });
+    }
+
+    setupDropzone();
+  });
+})();
+
+
+/* ============================================================================
+   A13.bis — Mode maintenance + Sauvegarde/Restaurer + Backup auto avant import
+   - Maintenance: pause l’enregistrement automatique (saveCurrentSessionToHistory)
+   - Backup: export localStorage + téléchargement JSON
+   - Restore: remplace l’historique via la dernière sauvegarde locale
+   - Hook: backup auto avant chaque import (complémente A13)
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var BACKUP_KEY  = 'honoua_compare_history_backup_v1'; // stocke la DERNIÈRE sauvegarde
+
+  var $btnToggle, $btnBackup, $btnRestore, $banner;
+
+  // ------------------- Utils LS -------------------
+  function readHistory(){
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+  function writeHistory(arr){
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      // notifie le rendu
+      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    } catch(e){ console.warn('[Maintenance] writeHistory:', e); }
+  }
+  function readBackup(){
+    try { return JSON.parse(localStorage.getItem(BACKUP_KEY)) || null; }
+    catch { return null; }
+  }
+  function writeBackup(payload){
+    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(payload)); }
+    catch(e){ console.warn('[Maintenance] writeBackup:', e); }
+  }
+
+  // ------------------- Maintenance -------------------
+  function setMaintenance(on){
+    window.__honouaHistoryPaused = !!on;
+    if ($banner) $banner.hidden = !on;
+    if ($btnToggle) $btnToggle.textContent = on ? 'Désactiver maintenance' : 'Activer maintenance';
+    window.dispatchEvent(new Event('honoua:history:maintenance'));
+  }
+
+  // Monkey-patch non intrusif : si la fonction existe, on l’enveloppe
+  // pour qu’elle respecte le flag window.__honouaHistoryPaused
+  (function patchSave(){
+    if (typeof window.saveCurrentSessionToHistory !== 'function') return;
+    var _orig = window.saveCurrentSessionToHistory;
+    window.saveCurrentSessionToHistory = function(){
+      if (window.__honouaHistoryPaused) {
+        // En pause : on ne snapshot pas
+        return;
+      }
+      return _orig.apply(this, arguments);
+    };
+  })();
+
+  // ------------------- Backup / Download -------------------
+  function buildBackupPayload(){
+    var data = readHistory();
+    return {
+      version: 1,
+      backedUpAt: new Date().toISOString(),
+      count: data.length,
+      items: data
+    };
+  }
+
+  function downloadJSON(obj, filename){
+    var json = JSON.stringify(obj, null, 2);
+    var blob = new Blob([json], {type:'application/json'});
+    var url  = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function doBackup(manualLabel){
+    var payload = buildBackupPayload();
+    writeBackup(payload);
+    var stamp = new Date().toISOString().replace(/[:.]/g,'').replace('T','_').slice(0,15);
+    var name  = 'honoua_history_backup_'+ (manualLabel||'manual') +'_' + stamp + '.json';
+    downloadJSON(payload, name);
+    alert('Sauvegarde effectuée ✅ (' + payload.count + ' élément(s)).');
+  }
+
+  function doRestore(){
+    var payload = readBackup();
+    if (!payload || !Array.isArray(payload.items)) {
+      alert('Aucune sauvegarde trouvée.');
+      return;
+    }
+    if (!confirm('Restaurer l’historique depuis la dernière sauvegarde ? Cette opération remplacera le contenu actuel.')) return;
+    // Option : activer maintenance pendant la restauration pour éviter les snapshots parasites
+    var wasPaused = !!window.__honouaHistoryPaused;
+    setMaintenance(true);
+    writeHistory(payload.items);
+    if (!wasPaused) setMaintenance(false);
+    alert('Restauration réussie ✅ (' + (payload.count||payload.items.length) + ' élément(s)).');
+  }
+
+  // ------------------- Hook: backup auto avant import -------------------
+  // On intercepte la fonction handleImportedText de A13 si elle existe.
+  (function patchImport(){
+    if (typeof window.handleImportedText !== 'function') return;
+    var _origImport = window.handleImportedText;
+    window.handleImportedText = function(text){
+      try {
+        // 1) Sauvegarde automatique (pré-import)
+        var autoPayload = buildBackupPayload();
+        writeBackup(autoPayload);
+        // Téléchargement silencieux optionnel : désactivé par défaut (décommente si voulu)
+        // downloadJSON(autoPayload, 'honoua_history_backup_preimport.json');
+      } catch(e){
+        console.warn('[Maintenance] backup auto pre-import failed:', e);
+      }
+
+      // 2) Activer maintenance pendant l’import pour éviter les snapshots d’URL
+      var wasPaused = !!window.__honouaHistoryPaused;
+      setMaintenance(true);
+      try {
+        return _origImport.apply(this, arguments);
+      } finally {
+        if (!wasPaused) setMaintenance(false);
+      }
+    };
+  })();
+
+  // ------------------- Boot -------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    $btnToggle = document.getElementById('history-maintenance-toggle');
+    $btnBackup = document.getElementById('history-backup');
+    $btnRestore= document.getElementById('history-restore');
+    $banner    = document.getElementById('history-maintenance-banner');
+
+    if ($btnToggle)  $btnToggle.addEventListener('click', function(){ setMaintenance(!window.__honouaHistoryPaused); });
+    if ($btnBackup)  $btnBackup.addEventListener('click', function(){ doBackup('manual'); });
+    if ($btnRestore) $btnRestore.addEventListener('click', doRestore);
+  });
+
+})();
+
+</script>
 
 </body>
 </html>
