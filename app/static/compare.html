@@ -138,550 +138,622 @@
   <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
   <script>
-    // ===== Utilitaires UI =====
-    const $ = (s)=>document.querySelector(s);
-    const track = $("#track");
-    const input = $("#eanInput");
-    const addBtn = $("#addBtn");
-    const clearBtn = $("#clearBtn");
-    const importUrlBtn = $("#importUrlBtn");
-    const resetBtn = $("#resetBtn");
-    const sortSelect = $("#sortSelect");
-    const toggleRank = $("#toggleRank");
-    const refreshBtn = $("#refreshBtn");
-    const toast = $("#toast");
-    const shareBtn = document.getElementById("shareBtn");
-    const counter = document.getElementById("counter");
-    const removeAllBtn = document.getElementById("removeAllBtn");
+  // ===== Utilitaires UI =====
+  const $ = (s)=>document.querySelector(s);
+  const track = $("#track");
+  const input = $("#eanInput");
+  const addBtn = $("#addBtn");
+  const clearBtn = $("#clearBtn");
+  const importUrlBtn = $("#importUrlBtn");
+  const resetBtn = $("#resetBtn");
+  const sortSelect = $("#sortSelect");
+  const toggleRank = $("#toggleRank");
+  const refreshBtn = $("#refreshBtn");
+  const toast = $("#toast");
+  const shareBtn = document.getElementById("shareBtn");
+  const counter = document.getElementById("counter");
+  const removeAllBtn = document.getElementById("removeAllBtn");
 
-    const STORAGE_KEY = "honoua:compare:eanList";
-    const PREF_KEY = "honoua:compare:prefs";
-    // A7 START: références filtre
-    const searchInput = document.getElementById("searchInput");
-    const clearFilterBtn = document.getElementById("clearFilterBtn");
-// A7 END
-     // A9 START: ref bouton “état complet”
-const copyStateBtn = document.getElementById("copyStateBtn");
-    // A9 END
+  const STORAGE_KEY = "honoua:compare:eanList";
+  const PREF_KEY = "honoua:compare:prefs";
 
+  // A7: références filtre
+  const searchInput = document.getElementById("searchInput");
+  const clearFilterBtn = document.getElementById("clearFilterBtn");
 
-    // État
-    let eans = loadEans();
-    let prefs = loadPrefs(); // { sort: 'best'|'worst'|'brand'|'name'|'ean', showRank: boolean }
-    let compareCache = {};   // { ean: {raw:number, norm:number} }
+  // A9: bouton “état complet”
+  const copyStateBtn = document.getElementById("copyStateBtn");
 
+  // A8: contrôles ordre / départage
+  const orderSelect = document.getElementById("orderSelect");
+  const tiebreakSelect = document.getElementById("tiebreakSelect");
 
-    // Init UI
-    sortSelect.value = prefs.sort || "best";
-    toggleRank.checked = !!prefs.showRank;
+  // État
+  let eans = loadEans();
+  let prefs = loadPrefs(); // { sort, showRank, order, tiebreak, filter }
+  let compareCache = {};   // { ean: {raw:number, norm:number} }
 
-    // A7 START: init valeur du filtre depuis prefs
-    if (!prefs) prefs = {};
-    if (typeof prefs.filter !== "string") prefs.filter = "";
-    if (searchInput) searchInput.value = prefs.filter;
-// A7 END
+  // A10 — Restauration automatique de l’état depuis l’URL
+  function restoreStateFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const hasRank = params.has("rank");
+    const fromUrl = {
+      eans: params.get("eans"),
+      sort: params.get("sort"),
+      rank: hasRank ? (params.get("rank") === "1" || params.get("rank")==="true") : null,
+      order: params.get("order"),
+      tiebreak: params.get("tiebreak"),
+      filter: params.get("filter")
+    };
 
-
-    // Rendu initial
-    render();
-    refreshCompare();
-    updateCounter();
-    applyFilter(); // A7: appliquer le filtre au démarrage
-
-
-    // ---- Events
-    addBtn.addEventListener("click", ()=> {
-      const val = (input.value||"").replace(/\s+/g,"");
-      if(!val){ notify("Entrez un EAN."); input.focus(); return; }
-      if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); }
-    });
-    input.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
-    clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); input.focus(); });
-    importUrlBtn.addEventListener("click", importFromUrl);
-    resetBtn.addEventListener("click", ()=>{
-      if(confirm("Tout effacer de la comparaison ?")){
-        eans = []; saveEans(); compareCache={}; render(); updateCounter(); notify("Comparateur réinitialisé."); input.focus();
-      }
-    });
-    sortSelect.addEventListener("change", ()=>{
-      prefs.sort = sortSelect.value; savePrefs(); sortCards(); paintRanks();
-    });
-    toggleRank.addEventListener("change", ()=>{
-      prefs.showRank = toggleRank.checked; savePrefs(); paintRanks();
-    });
-    refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
-
-    // A5 — Partage
-    shareBtn?.addEventListener("click", async ()=>{
-      const url = buildShareUrl();
-      try{
-        await copyToClipboard(url);
-        notify("Lien copié dans le presse-papiers !");
-      }catch{
-        notify("Impossible de copier. Sélectionnez l’URL manuellement.");
-        prompt("Copiez cette URL :", url);
-      }
-    });
-
-
-    // A6 — Retirer tout
-    removeAllBtn?.addEventListener("click", () => {
-      if (!eans.length) { notify("Rien à retirer."); input.focus(); return; }
-      if (confirm(`Retirer ${eans.length} produit(s) de la comparaison ?`)) {
-        eans = [];
-        saveEans();
-        compareCache = {};
-        render();
-        updateCounter();
-        notify("Tous les produits ont été retirés.");
-        input.focus();
-      }
-    });
-
-
-    // A7 START: événements filtre
-searchInput?.addEventListener("input", () => {
-  prefs.filter = searchInput.value || "";
-  savePrefs();
-  applyFilter();           // masque/affiche + surbrillance
-  updateCounter();         // compteur reflète les visibles
-});
-clearFilterBtn?.addEventListener("click", () => {
-  if (!searchInput) return;
-  searchInput.value = "";
-  prefs.filter = "";
-  savePrefs();
-  applyFilter();
-  updateCounter();
-  input.focus();
-});
-// A7 END
-   
-    // A9 START: copie du lien avec état complet
-copyStateBtn?.addEventListener("click", async ()=>{
-  const url = buildShareUrl(true); // true = inclure tous les paramètres
-  try{
-    await copyToClipboard(url);
-    notify("Lien (état complet) copié !");
-  }catch{
-    notify("Impossible de copier. Sélectionnez l’URL manuellement.");
-    prompt("Copiez cette URL :", url);
-  }
-});
-// A9 END
-
-    
-    // ---- Prefs / EANs
-    function loadPrefs(){
-      try{ return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); }catch{ return {}; }
+    // EANs depuis URL
+    if (fromUrl.eans) {
+      eans = fromUrl.eans.split(",").map(s => s.trim()).filter(Boolean);
+      saveEans();
     }
-    function savePrefs(){ localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
-    function loadEans(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        const arr = raw ? JSON.parse(raw) : [];
-        if(!arr.length){
-          const params = new URLSearchParams(location.search);
-          const csv = (params.get("eans")||"").trim();
-          if(csv){ return csv.split(",").map(s=>s.trim()).filter(Boolean); }
-        }
-        return arr;
-      }catch{ return []; }
-    }
-    function saveEans(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eans)); }
-    function addEAN(val, silent=false){
-      if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); input.focus(); return false; }
-      if(eans.includes(val)){ if(!silent) notify("Déjà présent."); input.focus(); return false; }
-      eans.push(val); saveEans(); render(); updateCounter(); if(!silent) notify("Produit ajouté."); return true;
-    }
+    // Prefs depuis URL (si présents)
+    if (fromUrl.sort) prefs.sort = fromUrl.sort;
+    if (fromUrl.rank !== null) prefs.showRank = !!fromUrl.rank;
+    if (fromUrl.order) prefs.order = fromUrl.order;
+    if (fromUrl.tiebreak) prefs.tiebreak = fromUrl.tiebreak;
+    if (typeof fromUrl.filter === "string") prefs.filter = fromUrl.filter;
 
-    // ---- UI
-    function render(){
-      track.innerHTML = "";
-      if(eans.length===0){
-        const d = document.createElement("div");
-        d.className="empty";
-        d.innerHTML = `Aucun produit. <br/>Saisissez un EAN ou utilisez <code>?eans=</code>.`;
-        track.appendChild(d);
-        refreshBtn.disabled = true;
-        updateCounter();
-        return;
-      }
-      refreshBtn.disabled = false;
-      for(const code of eans){
-        const card = makeCardSkeleton(code);
-        track.appendChild(card);
-        hydrateCard(card, code);
-      }
-      updateCounter();
-      applyFilter(); // A7: re-appliquer après hydratation des cartes
-
-
-    }
-
-    function makeCardSkeleton(code){
-      const el = document.createElement("article");
-      el.className="card";
-      el.dataset.ean = code;
-      el.innerHTML = `
-        <span class="rank" aria-hidden="true" data-role="rank">#—</span>
-        <div class="meta">EAN : <strong>${code}</strong></div>
-        <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
-        <h3 data-role="title">—</h3>
-        <div class="meta" data-role="brand">—</div>
-
-        <span class="badge" title="Empreinte normalisée sur la sélection">
-          <span class="dot" data-role="dot"></span>
-          <span data-role="fp-label">Empreinte : —</span>
-        </span>
-        <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
-        <div class="gauge-label" data-role="glabel">—</div>
-
-        <div class="row" style="margin-top:12px">
-          <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
-        </div>
-      `;
-      el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
-        eans = eans.filter(v=>v!==code);
-        saveEans(); delete compareCache[code];
-        render(); updateCounter(); refreshCompare();
-        notify("Produit retiré."); input.focus();
-      });
-      return el;
-    }
-
-    async function hydrateCard(card, code){
-      const $t = (sel)=>card.querySelector(sel);
-      let data=null;
-      try{
-        let r = await fetch(`/products/${encodeURIComponent(code)}`);
-        if(r.ok){ data = await r.json(); }
-        if(!data || data.error){
-          const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
-          if(q.ok){
-            const list = await q.json();
-            data = Array.isArray(list) ? list[0] : list;
-          }
-        }
-      }catch(e){}
-      const th = $t('[data-role="thumb"]');
-      th.classList.remove("shimmer"); th.removeAttribute("aria-busy");
-      if(!data){
-        th.textContent = "Introuvable";
-        $t('[data-role="title"]').textContent = "Produit non trouvé";
-        $t('[data-role="brand"]').textContent = "—";
-        return;
-      }
-      const title = data.name || data.product_name || data.title || "Produit";
-      const brand = data.brand || data.brands || "—";
-      const image = data.image_url || data.image || data.thumbnail || null;
-      $t('[data-role="title"]').textContent = title;
-      $t('[data-role="brand"]').textContent = brand;
-      if(image){
-        const img = new Image();
-        img.alt = title; img.loading = "lazy";
-        img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
-        img.src = image; th.replaceWith(img);
-      }else{
-        th.textContent = "Pas d’image";
-      }
-        // A7: réappliquer le filtre/surbrillance après hydratation des textes
-  applyFilter();
-    }
-
-    // ===== Calculs + tri/rang =====
-    async function refreshCompare(force=false){
-      if(!eans.length) return;
-      if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){
-        sortCards(); paintRanks(); return;
-      }
-      let table=null;
-      try{
-        const url = `/compare?eans=${encodeURIComponent(eans.join(','))}`;
-        const r = await fetch(url);
-        if(r.ok){ table = await r.json(); }
-      }catch(e){ table=null; }
-
-      const byEan = {};
-      if(Array.isArray(table)){
-        for(const row of table){
-          const ean = (row.ean || row.code || row.id || "").toString();
-          const fp = pickFootprint(row);
-          if(ean && fp!=null && !isNaN(fp)){ byEan[ean] = Number(fp); }
-        }
-      }
-
-      const vals = Object.values(byEan);
-      const min = vals.length ? Math.min(...vals) : 0;
-      const max = vals.length ? Math.max(...vals) : 1;
-      const span = Math.max(1e-9, max - min);
-
-      compareCache = {};
-      for(const e of eans){
-        if(byEan[e]!=null){
-          const raw = byEan[e];
-          const norm = (raw - min)/span; // 0 meilleur → 1 pire
-          compareCache[e] = { raw, norm };
-        }
-      }
-
-      document.querySelectorAll('.card').forEach(card=>{
-        const ean = card.dataset.ean;
-        const bar = card.querySelector('[data-role="bar"]');
-        const dot = card.querySelector('[data-role="dot"]');
-        const lab = card.querySelector('[data-role="fp-label"]');
-        const glb = card.querySelector('[data-role="glabel"]');
-        if(!compareCache[ean]){
-          bar.style.width='0%'; dot.style.background='#bbb'; lab.textContent='Empreinte : —'; glb.textContent='—';
-          return;
-        }
-        const {raw, norm} = compareCache[ean];
-        const pct = Math.round(norm*100);
-        bar.style.width = Math.max(6,pct)+'%';
-        dot.style.background = mixColor('#2e7d32','#F5C147', norm);
-        lab.textContent = `Empreinte : ${fmt(raw)}`;
-        glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
-      });
-
-      sortCards(); paintRanks();
-    }
-
-    function sortCards(){
-      const cards = Array.from(document.querySelectorAll('.card'));
-      const sort = prefs.sort || 'best';
-      const items = cards.map(c=>{
-        const ean = c.dataset.ean;
-        const title = (c.querySelector('[data-role="title"]')?.textContent||'').trim();
-        const brand = (c.querySelector('[data-role="brand"]')?.textContent||'').trim();
-        const fp = compareCache[ean]?.raw;
-        const norm = compareCache[ean]?.norm;
-        return {el:c, ean, title, brand, fp, norm};
-      });
-      const collator = new Intl.Collator('fr',{sensitivity:'base',numeric:true});
-      items.sort((a,b)=>{
-        if(sort==='best')  return (a.norm??Infinity) - (b.norm??Infinity);
-        if(sort==='worst') return (b.norm??-Infinity) - (a.norm??-Infinity);
-        if(sort==='brand') return collator.compare(a.brand||'', b.brand||'') || collator.compare(a.title||'', b.title||'');
-        if(sort==='name')  return collator.compare(a.title||'', b.title||'');
-        if(sort==='ean')   return collator.compare(a.ean, b.ean);
-        return 0;
-      });
-      items.forEach(i=>track.appendChild(i.el));
-    }
-
-    function paintRanks(){
-      const show = !!prefs.showRank;
-      const cards = Array.from(document.querySelectorAll('.card'));
-      cards.forEach((c,idx)=>{
-        const rk = c.querySelector('[data-role="rank"]');
-        rk.textContent = `#${idx+1}`;
-        rk.classList.toggle('show', show);
-        rk.style.background = idx===0 ? '#2e7d32' : '#111';
-      });
-    }
-
-    // ---- Helpers
-    // A9 START: import enrichi depuis l’URL
-function importFromUrl(){
-  const params = new URLSearchParams(location.search);
-
-  // EANs
-  const csv = (params.get("eans")||"").trim();
-  let added=0;
-  if(csv){
-    const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
-    list.forEach(v=> { if(addEAN(v,true)) added++; });
-  }
-
-  // Préférences : sort, rank, order, tiebreak, filter
-  const incoming = {
-    sort: params.get("sort"),
-    rank: params.get("rank"),
-    order: params.get("order"),
-    tiebreak: params.get("tiebreak"),
-    filter: params.get("filter"),
-  };
-
-  let changed = false;
-
-  if(incoming.sort && incoming.sort !== prefs.sort){ prefs.sort = incoming.sort; changed = true; }
-  if(incoming.rank!=null){
-    const val = incoming.rank === "1" || incoming.rank === "true";
-    if(val !== !!prefs.showRank){ prefs.showRank = val; changed = true; }
-  }
-  if(incoming.order && incoming.order !== prefs.order){ prefs.order = incoming.order; changed = true; }
-  if(incoming.tiebreak && incoming.tiebreak !== prefs.tiebreak){ prefs.tiebreak = incoming.tiebreak; changed = true; }
-  if(typeof incoming.filter === "string"){
-    const q = (incoming.filter||"").trim();
-    if(q !== (prefs.filter||"")){ prefs.filter = q; changed = true; }
-  }
-
-  // Répercuter dans l’UI
-  if(changed){
     savePrefs();
-    if(sortSelect && prefs.sort) sortSelect.value = prefs.sort;
-    if(toggleRank) toggleRank.checked = !!prefs.showRank;
-    if(orderSelect && prefs.order) orderSelect.value = prefs.order;
-    if(tiebreakSelect && prefs.tiebreak) tiebreakSelect.value = prefs.tiebreak;
-    if(searchInput && typeof prefs.filter === "string") searchInput.value = prefs.filter;
   }
 
-  if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
-  else if(!changed){ notify("Aucun paramètre nouveau à importer."); }
+  // Mettre à jour l’URL quand l’état change
+  function syncUrlState() {
+    const params = new URLSearchParams();
+    if (eans.length) params.set("eans", eans.join(","));
+    if (prefs.sort) params.set("sort", prefs.sort);
+    if (typeof prefs.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+    if (prefs.order) params.set("order", prefs.order);
+    if (prefs.tiebreak) params.set("tiebreak", prefs.tiebreak);
+    if (prefs.filter) params.set("filter", prefs.filter);
+    const newUrl = `${location.pathname}?${params.toString()}`;
+    history.replaceState({}, "", newUrl);
+  }
 
-  // Toujours recalculer/synchroniser l’affichage
+  restoreStateFromUrl();
+
+  // Init UI
+  if (!prefs) prefs = {};
+  if (!prefs.sort) prefs.sort = "best";
+  if (typeof prefs.showRank !== "boolean") prefs.showRank = false;
+  if (!prefs.order) prefs.order = "asc";               // A8
+  if (!prefs.tiebreak) prefs.tiebreak = "name";        // A8
+  if (typeof prefs.filter !== "string") prefs.filter = "";
+
+  if (sortSelect) sortSelect.value = prefs.sort;
+  if (toggleRank) toggleRank.checked = !!prefs.showRank;
+  if (orderSelect) orderSelect.value = prefs.order;
+  if (tiebreakSelect) tiebreakSelect.value = prefs.tiebreak;
+  if (searchInput) searchInput.value = prefs.filter;
+
+  // Rendu initial
+  render();
+  refreshCompare();
   updateCounter();
-  refreshCompare(true);
-  applyFilter();
-  sortCards();
-  paintRanks();
-}
-// A9 END
+  applyFilter();     // appliquer le filtre au démarrage
+  syncUrlState();    // A10: synchroniser l’URL après premier rendu
 
-    function pickFootprint(row){
-      const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
-      const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
-      for(const c of candidates){ if(map[c]) return toNumber(row[map[c]]); }
-      return null;
-    }
-    function toNumber(v){
-      if(v==null) return null;
-      if(typeof v === 'number') return v;
-      const s = String(v).replace(',', '.').replace(/[^\d.\-eE]/g,'');
-      const n = parseFloat(s); return isNaN(n) ? null : n;
-    }
-    function fmt(v){
-      if(v>=1000) return (v/1000).toFixed(2)+'k';
-      if(v>=100) return v.toFixed(0);
-      if(v>=10) return v.toFixed(1);
-      return v.toFixed(2);
-    }
-    function mixColor(hexA, hexB, t){
-      const a = hexToRgb(hexA), b = hexToRgb(hexB);
-      const m = {r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t)};
-      return `rgb(${m.r},${m.g},${m.b})`;
-    }
-    function hexToRgb(h){
-      const x = h.replace('#','');
-      const n = parseInt(x.length===3 ? x.split('').map(c=>c+c).join('') : x, 16);
-      return {r:(n>>16)&255, g:(n>>8)&255, b:(n)&255};
-    }
-    function notify(msg){
-      toast.textContent = msg; toast.style.opacity=1;
-      setTimeout(()=>toast.style.opacity=0, 1400);
-    }
+  // ---- Events
+  addBtn.addEventListener("click", ()=> {
+    const val = (input.value||"").replace(/\s+/g,"");
+    if(!val){ notify("Entrez un EAN."); input.focus(); return; }
+    if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); syncUrlState(); }
+  });
+  input.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
+  clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); input.focus(); });
 
-    // A5 — helpers partage 
-    // A9 START: buildShareUrl avec état “complet” optionnel
-function buildShareUrl(full=false){
-  const base = location.origin + location.pathname;
-  const params = new URLSearchParams();
+  importUrlBtn.addEventListener("click", importFromUrl);
 
-  // Toujours inclure eans + tri principal + rang
-  if(eans.length) params.set("eans", eans.join(","));
-  if(prefs?.sort) params.set("sort", prefs.sort);
-  if(typeof prefs?.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+  resetBtn.addEventListener("click", ()=>{
+    if(confirm("Tout effacer de la comparaison ?")){
+      eans = []; saveEans(); compareCache={}; render(); updateCounter(); syncUrlState();
+      notify("Comparateur réinitialisé."); input.focus();
+    }
+  });
 
-  // En mode “complet”, inclure ordre, départage et filtre
-  if(full){
-    if(prefs?.order) params.set("order", prefs.order);            // 'asc' | 'desc'
-    if(prefs?.tiebreak) params.set("tiebreak", prefs.tiebreak);   // 'name'|'brand'|'ean'
-    if(prefs?.filter){ const q=(prefs.filter||"").trim(); if(q) params.set("filter", q); }
+  sortSelect.addEventListener("change", ()=>{
+    prefs.sort = sortSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+  toggleRank.addEventListener("change", ()=>{
+    prefs.showRank = toggleRank.checked; savePrefs(); paintRanks(); syncUrlState();
+  });
+
+  // A8: ordre / départage
+  orderSelect?.addEventListener("change", ()=>{
+    prefs.order = orderSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+  tiebreakSelect?.addEventListener("change", ()=>{
+    prefs.tiebreak = tiebreakSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+
+  refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
+
+  // A5 — Partage (minimal)
+  shareBtn?.addEventListener("click", async ()=>{
+    const url = buildShareUrl();
+    try{
+      await copyToClipboard(url);
+      notify("Lien copié dans le presse-papiers !");
+    }catch{
+      notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+      prompt("Copiez cette URL :", url);
+    }
+  });
+
+  // A9 — Copier l’état complet
+  copyStateBtn?.addEventListener("click", async ()=>{
+    const url = buildShareUrl(true); // inclut order/tiebreak/filter
+    try{
+      await copyToClipboard(url);
+      notify("Lien (état complet) copié !");
+    }catch{
+      notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+      prompt("Copiez cette URL :", url);
+    }
+  });
+
+  // A6 — Retirer tout
+  removeAllBtn?.addEventListener("click", () => {
+    if (!eans.length) { notify("Rien à retirer."); input.focus(); return; }
+    if (confirm(`Retirer ${eans.length} produit(s) de la comparaison ?`)) {
+      eans = [];
+      saveEans();
+      compareCache = {};
+      render();
+      updateCounter();
+      syncUrlState();
+      notify("Tous les produits ont été retirés.");
+      input.focus();
+    }
+  });
+
+  // A7 — filtre temps réel
+  searchInput?.addEventListener("input", () => {
+    prefs.filter = searchInput.value || "";
+    savePrefs();
+    applyFilter();
+    updateCounter();
+    syncUrlState();
+  });
+  clearFilterBtn?.addEventListener("click", () => {
+    if (!searchInput) return;
+    searchInput.value = "";
+    prefs.filter = "";
+    savePrefs();
+    applyFilter();
+    updateCounter();
+    syncUrlState();
+    input.focus();
+  });
+
+  // ---- Prefs / EANs
+  function loadPrefs(){
+    try{ return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); }catch{ return {}; }
+  }
+  function savePrefs(){ localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
+  function loadEans(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if(!arr.length){
+        const params = new URLSearchParams(location.search);
+        const csv = (params.get("eans")||"").trim();
+        if(csv){ return csv.split(",").map(s=>s.trim()).filter(Boolean); }
+      }
+      return arr;
+    }catch{ return []; }
+  }
+  function saveEans(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eans)); }
+  function addEAN(val, silent=false){
+    if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); input.focus(); return false; }
+    if(eans.includes(val)){ if(!silent) notify("Déjà présent."); input.focus(); return false; }
+    eans.push(val); saveEans(); render(); updateCounter(); if(!silent) notify("Produit ajouté."); return true;
   }
 
-  const qs = params.toString();
-  return qs ? `${base}?${qs}` : base;
-}
-// A9 END
-
-      // A7 START: filtre & surbrillance
-function normalize(s) {
-  return (s||"").toString().toLowerCase();
-}
-
-function highlightText(el, text, q) {
-  // Remplace le contenu texte simple par une version avec <mark>…</mark>
-  if (!q) { el.innerHTML = escapeHtml(text); return; }
-  const t = text || "";
-  const idx = t.toLowerCase().indexOf(q.toLowerCase());
-  if (idx < 0) { el.innerHTML = escapeHtml(t); return; }
-  const before = escapeHtml(t.slice(0, idx));
-  const match  = escapeHtml(t.slice(idx, idx + q.length));
-  const after  = escapeHtml(t.slice(idx + q.length));
-  el.innerHTML = `${before}<mark>${match}</mark>${after}`;
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, m => (
-    m === '&' ? '&amp;' :
-    m === '<' ? '&lt;'  :
-    m === '>' ? '&gt;'  :
-    m === '"' ? '&quot;': '&#39;'
-  ));
-}
-
-function applyFilter() {
-  const q = (prefs.filter || "").trim();
-  const cards = Array.from(document.querySelectorAll('.card'));
-  let visible = 0;
-
-  for (const c of cards) {
-    const ean = c.dataset.ean || "";
-    const titleEl = c.querySelector('[data-role="title"]');
-    const brandEl = c.querySelector('[data-role="brand"]');
-
-    const title = (titleEl?.textContent || "").trim();
-    const brand = (brandEl?.textContent || "").trim();
-    const hay = `${title} ${brand} ${ean}`;
-
-    // Test visibilité
-    const match = !q || normalize(hay).includes(normalize(q));
-    c.style.display = match ? "" : "none";
-    if (match) visible++;
-
-    // Surbrillance non destructive (uniquement si visible)
-    if (match) {
-      if (titleEl) highlightText(titleEl, title, q);
-      if (brandEl) highlightText(brandEl, brand, q);
-    } else {
-      // reset (évite de conserver des <mark> cachés)
-      if (titleEl) titleEl.innerHTML = escapeHtml(title);
-      if (brandEl) brandEl.innerHTML = escapeHtml(brand);
-    }
-  }
-
-  // État vide filtré
-  const empty = document.querySelector('.tracks .empty');
-  if (cards.length && visible === 0) {
-    if (!empty) {
+  // ---- UI
+  function render(){
+    track.innerHTML = "";
+    if(eans.length===0){
       const d = document.createElement("div");
-      d.className = "empty";
-      d.textContent = "Aucun résultat pour ce filtre.";
-      document.querySelector('.tracks')?.appendChild(d);
-    } else {
-      empty.textContent = "Aucun résultat pour ce filtre.";
-      empty.style.display = "";
+      d.className="empty";
+      d.innerHTML = `Aucun produit. <br/>Saisissez un EAN ou utilisez <code>?eans=</code>.`;
+      track.appendChild(d);
+      refreshBtn.disabled = true;
+      updateCounter();
+      return;
     }
-  } else if (empty) {
-    empty.style.display = "none";
+    refreshBtn.disabled = false;
+    for(const code of eans){
+      const card = makeCardSkeleton(code);
+      track.appendChild(card);
+      hydrateCard(card, code);
+    }
+    updateCounter();
+    applyFilter(); // re-appliquer après hydratation
   }
-}
-// A7 END
 
+  function makeCardSkeleton(code){
+    const el = document.createElement("article");
+    el.className="card";
+    el.dataset.ean = code;
+    el.innerHTML = `
+      <span class="rank" aria-hidden="true" data-role="rank">#—</span>
+      <div class="meta">EAN : <strong>${code}</strong></div>
+      <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
+      <h3 data-role="title">—</h3>
+      <div class="meta" data-role="brand">—</div>
 
-    // A6 — compteur
-   // A6/A7 — compteur (prend en compte le filtre actif)
-function updateCounter() {
-  const hasFilter = !!(prefs.filter && prefs.filter.trim());
-  const cards = Array.from(document.querySelectorAll('.card'));
-  const visible = cards.filter(c => c.style.display !== 'none').length;
+      <span class="badge" title="Empreinte normalisée sur la sélection">
+        <span class="dot" data-role="dot"></span>
+        <span data-role="fp-label">Empreinte : —</span>
+      </span>
+      <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
+      <div class="gauge-label" data-role="glabel">—</div>
 
-  const n = hasFilter ? visible : eans.length;
-  if (counter) {
-    counter.textContent = `${n} ${n > 1 ? "articles" : "article"}`;
+      <div class="row" style="margin-top:12px">
+        <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
+      </div>
+    `;
+    el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
+      eans = eans.filter(v=>v!==code);
+      saveEans(); delete compareCache[code];
+      render(); updateCounter(); refreshCompare(); syncUrlState();
+      notify("Produit retiré."); input.focus();
+    });
+    return el;
   }
-}
 
-  </script>
+  async function hydrateCard(card, code){
+    const $t = (sel)=>card.querySelector(sel);
+    let data=null;
+    try{
+      let r = await fetch(`/products/${encodeURIComponent(code)}`);
+      if(r.ok){ data = await r.json(); }
+      if(!data || data.error){
+        const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
+        if(q.ok){
+          const list = await q.json();
+          data = Array.isArray(list) ? list[0] : list;
+        }
+      }
+    }catch(e){}
+    const th = $t('[data-role="thumb"]');
+    th.classList.remove("shimmer"); th.removeAttribute("aria-busy");
+    if(!data){
+      th.textContent = "Introuvable";
+      $t('[data-role="title"]').textContent = "Produit non trouvé";
+      $t('[data-role="brand"]').textContent = "—";
+      applyFilter();
+      return;
+    }
+    const title = data.name || data.product_name || data.title || "Produit";
+    const brand = data.brand || data.brands || "—";
+    const image = data.image_url || data.image || data.thumbnail || null;
+    $t('[data-role="title"]').textContent = title;
+    $t('[data-role="brand"]').textContent = brand;
+    if(image){
+      const img = new Image();
+      img.alt = title; img.loading = "lazy";
+      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
+      img.src = image; th.replaceWith(img);
+    }else{
+      th.textContent = "Pas d’image";
+    }
+    // re-appliquer le filtre/surbrillance après hydratation des textes
+    applyFilter();
+  }
+
+  // ===== Calculs + tri/rang =====
+  async function refreshCompare(force=false){
+    if(!eans.length) return;
+    if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){
+      sortCards(); paintRanks(); return;
+    }
+    let table=null;
+    try{
+      const url = `/compare?eans=${encodeURIComponent(eans.join(','))}`;
+      const r = await fetch(url);
+      if(r.ok){ table = await r.json(); }
+    }catch(e){ table=null; }
+
+    const byEan = {};
+    if(Array.isArray(table)){
+      for(const row of table){
+        const ean = (row.ean || row.code || row.id || "").toString();
+        const fp = pickFootprint(row);
+        if(ean && fp!=null && !isNaN(fp)){ byEan[ean] = Number(fp); }
+      }
+    }
+
+    const vals = Object.values(byEan);
+    const min = vals.length ? Math.min(...vals) : 0;
+    const max = vals.length ? Math.max(...vals) : 1;
+    const span = Math.max(1e-9, max - min);
+
+    compareCache = {};
+    for(const e of eans){
+      if(byEan[e]!=null){
+        const raw = byEan[e];
+        const norm = (raw - min)/span; // 0 meilleur → 1 pire
+        compareCache[e] = { raw, norm };
+      }
+    }
+
+    document.querySelectorAll('.card').forEach(card=>{
+      const ean = card.dataset.ean;
+      const bar = card.querySelector('[data-role="bar"]');
+      const dot = card.querySelector('[data-role="dot"]');
+      const lab = card.querySelector('[data-role="fp-label"]');
+      const glb = card.querySelector('[data-role="glabel"]');
+      if(!compareCache[ean]){
+        bar.style.width='0%'; dot.style.background='#bbb'; lab.textContent='Empreinte : —'; glb.textContent='—';
+        return;
+      }
+      const {raw, norm} = compareCache[ean];
+      const pct = Math.round(norm*100);
+      bar.style.width = Math.max(6,pct)+'%';
+      dot.style.background = mixColor('#2e7d32','#F5C147', norm);
+      lab.textContent = `Empreinte : ${fmt(raw)}`;
+      glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
+    });
+
+    sortCards(); paintRanks();
+  }
+
+  function sortCards(){
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const sort = prefs.sort || 'best';
+    const order = (prefs.order === 'desc') ? -1 : 1; // asc=1, desc=-1
+    const tiebreak = prefs.tiebreak || 'name';
+    const collator = new Intl.Collator('fr',{sensitivity:'base',numeric:true});
+
+    const items = cards.map(c=>{
+      const ean = c.dataset.ean;
+      const title = (c.querySelector('[data-role="title"]')?.textContent||'').trim();
+      const brand = (c.querySelector('[data-role="brand"]')?.textContent||'').trim();
+      const fp = compareCache[ean]?.raw;
+      const norm = compareCache[ean]?.norm;
+      return {el:c, ean, title, brand, fp, norm};
+    });
+
+    const cmpText = (a,b,field)=>{
+      const A = (field==='ean') ? a.ean : (field==='brand' ? a.brand||'' : a.title||'');
+      const B = (field==='ean') ? b.ean : (field==='brand' ? b.brand||'' : b.title||'');
+      return collator.compare(A, B);
+    };
+
+    items.sort((a,b)=>{
+      if (sort==='best' || sort==='worst'){
+        const dir = (sort==='best') ? 1 : -1;
+        const A = (a.norm==null) ? Infinity : a.norm;
+        const B = (b.norm==null) ? Infinity : b.norm;
+        if (A !== B) return dir * (A - B);
+        const Afp = (a.fp==null) ? Infinity : a.fp;
+        const Bfp = (b.fp==null) ? Infinity : b.fp;
+        if (Afp !== Bfp) return dir * (Afp - Bfp);
+        const t = cmpText(a,b,tiebreak);
+        if (t !== 0) return t;
+        return collator.compare(a.ean, b.ean);
+      }
+      if (sort==='brand'){
+        const r = cmpText(a,b,'brand'); if (r!==0) return order*r;
+        const r2 = cmpText(a,b,'name'); if (r2!==0) return order*r2;
+        return order*collator.compare(a.ean, b.ean);
+      }
+      if (sort==='name'){
+        const r = cmpText(a,b,'name'); if (r!==0) return order*r;
+        const r2 = cmpText(a,b,'brand'); if (r2!==0) return order*r2;
+        return order*collator.compare(a.ean, b.ean);
+      }
+      if (sort==='ean'){
+        return order*collator.compare(a.ean, b.ean);
+      }
+      return 0;
+    });
+
+    items.forEach(i=>track.appendChild(i.el));
+  }
+
+  function paintRanks(){
+    const show = !!prefs.showRank;
+    const cards = Array.from(document.querySelectorAll('.card'));
+    cards.forEach((c,idx)=>{
+      const rk = c.querySelector('[data-role="rank"]');
+      rk.textContent = `#${idx+1}`;
+      rk.classList.toggle('show', show);
+      rk.style.background = idx===0 ? '#2e7d32' : '#111';
+    });
+  }
+
+  // ---- Helpers
+  // A9 — import enrichi depuis l’URL (inclut tri/ordre/départage/filtre)
+  function importFromUrl(){
+    const params = new URLSearchParams(location.search);
+
+    // EANs
+    const csv = (params.get("eans")||"").trim();
+    let added=0;
+    if(csv){
+      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
+      list.forEach(v=> { if(addEAN(v,true)) added++; });
+    }
+
+    // Préférences : sort, rank, order, tiebreak, filter
+    const incoming = {
+      sort: params.get("sort"),
+      rank: params.get("rank"),
+      order: params.get("order"),
+      tiebreak: params.get("tiebreak"),
+      filter: params.get("filter"),
+    };
+
+    let changed = false;
+
+    if(incoming.sort && incoming.sort !== prefs.sort){ prefs.sort = incoming.sort; changed = true; }
+    if(incoming.rank!=null){
+      const val = incoming.rank === "1" || incoming.rank === "true";
+      if(val !== !!prefs.showRank){ prefs.showRank = val; changed = true; }
+    }
+    if(incoming.order && incoming.order !== prefs.order){ prefs.order = incoming.order; changed = true; }
+    if(incoming.tiebreak && incoming.tiebreak !== prefs.tiebreak){ prefs.tiebreak = incoming.tiebreak; changed = true; }
+    if(typeof incoming.filter === "string"){
+      const q = (incoming.filter||"").trim();
+      if(q !== (prefs.filter||"")){ prefs.filter = q; changed = true; }
+    }
+
+    // Répercuter dans l’UI
+    if(changed){
+      savePrefs();
+      if(sortSelect && prefs.sort) sortSelect.value = prefs.sort;
+      if(toggleRank) toggleRank.checked = !!prefs.showRank;
+      if(orderSelect && prefs.order) orderSelect.value = prefs.order;
+      if(tiebreakSelect && prefs.tiebreak) tiebreakSelect.value = prefs.tiebreak;
+      if(searchInput && typeof prefs.filter === "string") searchInput.value = prefs.filter;
+    }
+
+    if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
+    else if(!changed){ notify("Aucun paramètre nouveau à importer."); }
+
+    // Toujours recalculer/synchroniser l’affichage
+    updateCounter();
+    refreshCompare(true);
+    applyFilter();
+    sortCards();
+    paintRanks();
+    syncUrlState();   // <— sync à la fin, une seule fois
+  }
+
+  function pickFootprint(row){
+    const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
+    const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
+    for(const c of candidates){ if(map[c]) return toNumber(row[map[c]]); }
+    return null;
+  }
+  function toNumber(v){
+    if(v==null) return null;
+    if(typeof v === 'number') return v;
+    const s = String(v).replace(',', '.').replace(/[^\d.\-eE]/g,'');
+    const n = parseFloat(s); return isNaN(n) ? null : n;
+  }
+  function fmt(v){
+    if(v>=1000) return (v/1000).toFixed(2)+'k';
+    if(v>=100) return v.toFixed(0);
+    if(v>=10) return v.toFixed(1);
+    return v.toFixed(2);
+  }
+  function mixColor(hexA, hexB, t){
+    const a = hexToRgb(hexA), b = hexToRgb(hexB);
+    const m = {r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t)};
+    return `rgb(${m.r},${m.g},${m.b})`;
+  }
+  function hexToRgb(h){
+    const x = h.replace('#','');
+    const n = parseInt(x.length===3 ? x.split('').map(c=>c+c).join('') : x, 16);
+    return {r:(n>>16)&255, g:(n>>8)&255, b:(n)&255};
+  }
+  function notify(msg){
+    toast.textContent = msg; toast.style.opacity=1;
+    setTimeout(()=>toast.style.opacity=0, 1400);
+  }
+
+  // A5 — helpers partage + A9 (état complet)
+  function buildShareUrl(full=false){
+    const base = location.origin + location.pathname;
+    const params = new URLSearchParams();
+
+    if(eans.length) params.set("eans", eans.join(","));
+    if(prefs?.sort) params.set("sort", prefs.sort);
+    if(typeof prefs?.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+
+    if(full){
+      if(prefs?.order) params.set("order", prefs.order);
+      if(prefs?.tiebreak) params.set("tiebreak", prefs.tiebreak);
+      if(prefs?.filter){ const q=(prefs.filter||"").trim(); if(q) params.set("filter", q); }
+    }
+
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+
+  // A7 — filtre & surbrillance
+  function normalize(s) { return (s||"").toString().toLowerCase(); }
+  function highlightText(el, text, q) {
+    if (!q) { el.innerHTML = escapeHtml(text); return; }
+    const t = text || "";
+    const idx = t.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) { el.innerHTML = escapeHtml(t); return; }
+    const before = escapeHtml(t.slice(0, idx));
+    const match  = escapeHtml(t.slice(idx, idx + q.length));
+    const after  = escapeHtml(t.slice(idx + q.length));
+    el.innerHTML = `${before}<mark>${match}</mark>${after}`;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => (
+      m === '&' ? '&amp;' :
+      m === '<' ? '&lt;'  :
+      m === '>' ? '&gt;'  :
+      m === '"' ? '&quot;': '&#39;'
+    ));
+  }
+  function applyFilter() {
+    const q = (prefs.filter || "").trim();
+    const cards = Array.from(document.querySelectorAll('.card'));
+    let visible = 0;
+
+    for (const c of cards) {
+      const ean = c.dataset.ean || "";
+      const titleEl = c.querySelector('[data-role="title"]');
+      const brandEl = c.querySelector('[data-role="brand"]');
+
+      const title = (titleEl?.textContent || "").trim();
+      const brand = (brandEl?.textContent || "").trim();
+      const hay = `${title} ${brand} ${ean}`;
+
+      const match = !q || normalize(hay).includes(normalize(q));
+      c.style.display = match ? "" : "none";
+      if (match) visible++;
+
+      if (match) {
+        if (titleEl) highlightText(titleEl, title, q);
+        if (brandEl) highlightText(brandEl, brand, q);
+      } else {
+        if (titleEl) titleEl.innerHTML = escapeHtml(title);
+        if (brandEl) brandEl.innerHTML = escapeHtml(brand);
+      }
+    }
+
+    const empty = document.querySelector('.tracks .empty');
+    if (cards.length && visible === 0) {
+      if (!empty) {
+        const d = document.createElement("div");
+        d.className = "empty";
+        d.textContent = "Aucun résultat pour ce filtre.";
+        document.querySelector('.tracks')?.appendChild(d);
+      } else {
+        empty.textContent = "Aucun résultat pour ce filtre.";
+        empty.style.display = "";
+      }
+    } else if (empty) {
+      empty.style.display = "none";
+    }
+  }
+
+  // A6/A7 — compteur (prend en compte le filtre actif)
+  function updateCounter() {
+    const hasFilter = !!(prefs.filter && prefs.filter.trim());
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const visible = cards.filter(c => c.style.display !== 'none').length;
+
+    const n = hasFilter ? visible : eans.length;
+    if (counter) {
+      counter.textContent = `${n} ${n > 1 ? "articles" : "article"}`;
+    }
+  }
+</script>
+
 </body>
 </html>
