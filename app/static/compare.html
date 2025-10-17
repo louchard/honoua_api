@@ -74,6 +74,265 @@
     .shimmer{background:linear-gradient(110deg,#eee 8%,#f5f5f7 18%,#eee 33%);background-size:200% 100%;animation:sh 1.2s linear infinite}
     @keyframes sh{to{background-position-x:-200%}}
   </style>
+  <style>
+/* ==========================================================================
+   A11 — Mini-CSS Historique comparateur (sobre + accessible)
+   - Scope strict: #compare-history pour éviter les collisions
+   - Palette discrète Honoua (#062909, #F5C147, #001D85)
+   - Compatibilité dark mode + focus visibles
+   ========================================================================== */
+
+#compare-history {
+  margin-top: 1.25rem;
+  padding-top: .5rem;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history { border-top-color: rgba(255,255,255,.12); }
+}
+
+/* Barre d’actions (Étape 3) */
+#compare-history .history-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .25rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+/* Liste */
+#compare-history #compare-history-list {
+  display: grid;
+  gap: .5rem;
+}
+
+/* Item */
+#compare-history .history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .6rem .75rem;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: .6rem;
+  background: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-item {
+    background: #0e0f11;
+    border-color: rgba(255,255,255,.12);
+  }
+}
+
+/* Meta (date + compte) */
+#compare-history .history-meta {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .935rem;
+  line-height: 1.2;
+  color: #2a2a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-meta { color: #e6e6e6; }
+}
+
+#compare-history .history-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Actions par item */
+#compare-history .history-actions {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+/* Boutons — style minimal */
+#compare-history button {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  border: 1px solid rgba(0,0,0,.10);
+  background: #fff;
+  color: #001D85; /* bleu discret par défaut */
+  font: inherit;
+  font-size: .9rem;
+  padding: .4rem .6rem;
+  border-radius: .5rem;
+  cursor: pointer;
+  transition: transform .06s ease, background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history button {
+    background: #121316;
+    color: #c9d4ff;
+    border-color: rgba(255,255,255,.14);
+  }
+}
+
+#compare-history button:hover {
+  background: rgba(0,29,133,.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history button:hover {
+    background: rgba(201,212,255,.08);
+  }
+}
+
+/* Bouton principal: Recharger (accent vert) */
+#compare-history .history-reload {
+  color: #062909;
+  border-color: rgba(6,41,9,.25);
+}
+#compare-history .history-reload:hover {
+  background: rgba(6,41,9,.08);
+}
+
+/* Bouton secondaire: Épingler / Désépingler (accent orange) */
+#compare-history .history-pin {
+  color: #8a6200; /* dérivé de #F5C147 pour lisibilité */
+  border-color: rgba(245,193,71,.45);
+}
+#compare-history .history-pin:hover {
+  background: rgba(245,193,71,.12);
+}
+
+/* Bouton danger: Supprimer */
+#compare-history .history-delete {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history .history-delete:hover {
+  background: rgba(122,17,17,.08);
+}
+
+/* Barre d’actions : Vider + filtre épinglés */
+#compare-history #history-clear {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history #history-clear:hover {
+  background: rgba(122,17,17,.08);
+}
+
+/* Focus visibles (accessibilité) */
+#compare-history button:focus-visible {
+  outline: 2px solid #001D85;
+  outline-offset: 2px;
+}
+
+/* Small screens */
+@media (max-width: 520px) {
+  #compare-history .history-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #compare-history .history-actions {
+    justify-content: flex-end;
+  }
+}
+
+/* Préférence utilisateur: réduire les animations */
+@media (prefers-reduced-motion: reduce) {
+  #compare-history button { transition: none; }
+}
+
+/* État épinglé (optionnel si tu veux un indicateur visuel)
+   — Ajoute .is-pinned à .history-item lors du rendu si nécessaire.
+*/
+#compare-history .history-item.is-pinned {
+  box-shadow: 0 0 0 2px rgba(245,193,71,.25) inset;
+  border-color: rgba(245,193,71,.55);
+}
+
+/* Badge “Épinglé” (compact, discret, accessible) */
+#compare-history .history-badge {
+  margin-left: .5rem;
+  padding: .1rem .4rem;
+  border-radius: .4rem;
+  font-size: .75rem;
+  line-height: 1.2;
+  background: rgba(245,193,71,.18); /* orange doux */
+  color: #8a6200;
+  border: 1px solid rgba(245,193,71,.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-badge {
+    background: rgba(245,193,71,.15);
+    color: #f6d686;
+    border-color: rgba(245,193,71,.45);
+  }
+}
+
+/* Pastille d’état (épinglée / actuelle / neutre) */
+#compare-history .history-dot {
+  width: .6rem; height: .6rem; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.2);
+  margin-right: .4rem; flex: 0 0 auto;
+  background: #fff;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-dot { background: #0e0f11; border-color: rgba(255,255,255,.2); }
+}
+
+/* Couleurs d’état */
+#compare-history .history-item.is-pinned .history-dot { background: #F5C147; border-color: rgba(245,193,71,.7); }   /* épinglé (orange) */
+#compare-history .history-item.is-current .history-dot { background: #001D85; border-color: rgba(0,29,133,.65); }    /* actuelle (bleu) */
+#compare-history .history-item:not(.is-pinned):not(.is-current) .history-dot { background: #e9ecef; }
+
+/* Ligne meta > on aligne pastille + contenu */
+#compare-history .history-meta {
+  display: flex; align-items: center; gap: .35rem; flex-wrap: wrap;
+}
+#compare-history .history-meta .meta-row {
+  display: flex; align-items: center; gap: .35rem;
+}
+
+/* Badge “Actuelle” (différent du badge “Épinglé”) */
+#compare-history .history-badge-current {
+  margin-left: .25rem;
+  padding: .1rem .4rem;
+  border-radius: .4rem;
+  font-size: .75rem;
+  line-height: 1.2;
+  background: rgba(0,29,133,.12);
+  color: #001D85;
+  border: 1px solid rgba(0,29,133,.35);
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-badge-current {
+    background: rgba(0,29,133,.18);
+    color: #c9d4ff;
+    border-color: rgba(0,29,133,.45);
+  }
+}
+
+/* Mini-chips de récapitulatif (tri, ordre, filtres, recherche) */
+#compare-history .history-chips {
+  display: flex; gap: .25rem; flex-wrap: wrap; margin-top: .25rem;
+}
+#compare-history .chip {
+  padding: .15rem .45rem; font-size: .74rem; line-height: 1.2;
+  border-radius: .4rem; border: 1px solid rgba(0,0,0,.12);
+  background: #fff; color: #2a2a2a;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .chip {
+    background: #121316; color: #e6e6e6; border-color: rgba(255,255,255,.14);
+  }
+}
+#compare-history .chip-sort   { border-color: rgba(6,41,9,.25); }           /* léger accent vert */
+#compare-history .chip-order  { border-color: rgba(0,29,133,.35); }         /* léger accent bleu */
+#compare-history .chip-filter { border-color: rgba(245,193,71,.45); }       /* léger accent orange */
+#compare-history .chip-query  { border-style: dashed; }
+</style>
+
 </head>
 <body>
   <header>
@@ -100,6 +359,7 @@
         <option value="name">Trier : Nom (A→Z)</option>
         <option value="ean">Trier : EAN</option>
       </select>
+
       <label class="switch" title="Afficher le rang sur chaque carte">
         <input id="toggleRank" type="checkbox" /> Afficher le rang
       </label>
@@ -111,11 +371,28 @@
       <!-- A9 START: Bouton de copie de l’état complet -->
 <button id="copyStateBtn" class="btn-primary" aria-label="Copier l’état complet">📋 État complet</button>
 <!-- A9 END -->
-
-
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
 
+         <!-- =======================================================================
+     A11 — Historique des comparaisons (Étape 2 : affichage + rechargement)
+     Section à placer sous le comparateur
+     ======================================================================= -->
+<section id="compare-history" aria-labelledby="compare-history-title" hidden>
+  <h2 id="compare-history-title">Historique des comparaisons</h2>
+  <div id="compare-history-list" role="list" aria-live="polite"></div>
 
+  <!-- Barre d’actions (optionnelle, style minimal) -->
+<div id="compare-history-actions" class="history-actions-bar" hidden>
+  <button type="button" id="history-clear">Vider l’historique</button>
+  <label style="margin-left:.5rem;">
+    <input type="checkbox" id="history-show-pinned" />
+    Afficher uniquement les épinglés
+  </label>
+</div>
+
+
+
+</section>
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
       <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
@@ -754,6 +1031,739 @@
     }
   }
 </script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 1 : stockage auto de la session)
+   - Non intrusif : écoute des changements d’URL + événement custom optionnel
+   - Clair et commenté en FR
+   - Rétro-compatible (aucune dépendance CSS/HTML)
+   ============================================================================ */
+
+/** Clé localStorage dédiée à l'historique */
+const HONOUA_HISTORY_KEY = 'honoua_compare_history_v1';
+
+/** Paramètres : adapte si besoin le nom des query params utilisés par A8–A10 */
+const HISTORY_MAX_ENTRIES = 50; // borne de sécurité
+const URL_PARAM_EANS       = 'eans';   // e.g. "123,456,789"
+const URL_PARAM_SORT       = 'sort';   // e.g. "score" | "name" | ...
+const URL_PARAM_ORDER      = 'order';  // e.g. "asc" | "desc"
+const URL_PARAM_FILTERS    = 'filters';// e.g. "vegan,local" (ou JSON encodé)
+const URL_PARAM_QUERY      = 'q';      // optionnel : mot-clé / recherche
+
+/** Utilitaire sûr : lecture JSON dans localStorage */
+function lsReadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    console.warn('[A11] Lecture JSON LS échouée:', e);
+    return fallback;
+  }
+}
+
+/** Utilitaire sûr : écriture JSON dans localStorage */
+function lsWriteJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn('[A11] Écriture JSON LS échouée:', e);
+  }
+}
+
+/** Parse l'état courant depuis l'URL (source de vérité depuis A8–A10) */
+function getCompareStateFromURL() {
+  const u = new URL(window.location.href);
+  const p = u.searchParams;
+
+  const rawEans   = (p.get(URL_PARAM_EANS) || '').trim();
+  const eans      = rawEans ? rawEans.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const sort      = (p.get(URL_PARAM_SORT)  || '').trim() || null;
+  const order     = (p.get(URL_PARAM_ORDER) || '').trim() || null;
+  const query     = (p.get(URL_PARAM_QUERY) || '').trim() || null;
+
+  // Filtres : laisse souple; si c'est un CSV => array ; si JSON encodé => objet
+  let filtersRaw  = (p.get(URL_PARAM_FILTERS) || '').trim();
+  let filters     = null;
+  if (filtersRaw) {
+    try {
+      // Essaye de décoder du JSON si ça ressemble à du JSON
+      if (filtersRaw.startsWith('{') || filtersRaw.startsWith('[')) {
+        filters = JSON.parse(filtersRaw);
+      } else {
+        // sinon CSV => tableau
+        filters = filtersRaw.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    } catch {
+      // fallback brut : on conserve la chaîne
+      filters = filtersRaw;
+    }
+  }
+
+  return {
+    eans,
+    sort,
+    order,
+    filters,
+    query,
+    // On garde l’URL complète pour restauration/affichage ultérieur
+    url: u.toString()
+  };
+}
+
+/** Crée un enregistrement "session" prêt pour l'historique */
+function buildHistoryEntryFromState(state) {
+  const now = new Date();
+  return {
+    id: now.getTime(),               // identifiant simple (timestamp)
+    ts: now.toISOString(),           // ISO pour affichage futur
+    productCount: state.eans.length, // nombre de produits
+    params: {
+      eans: state.eans,
+      sort: state.sort,
+      order: state.order,
+      filters: state.filters,
+      query: state.query
+    },
+    url: state.url
+  };
+}
+
+/** Compare deux sessions (pour déduplication basique) */
+function shallowEqualSession(a, b) {
+  if (!a || !b) return false;
+  const A = a.params, B = b.params;
+  try {
+    return JSON.stringify(A) === JSON.stringify(B);
+  } catch {
+    return false;
+  }
+}
+
+/** Enregistre la session courante dans l'historique (avec dédup + borne) */
+function saveCurrentSessionToHistory() {
+  const state   = getCompareStateFromURL();
+  const entry   = buildHistoryEntryFromState(state);
+  const history = lsReadJSON(HONOUA_HISTORY_KEY, []);
+
+  // déduplication: si la dernière entrée a le même état, on ne pousse pas
+  const last = history[history.length - 1];
+  if (shallowEqualSession(last, entry)) {
+    // Rien à faire — on ne spam pas l'historique
+    return;
+  }
+
+  history.push(entry);
+
+  // borne de sécurité
+  if (history.length > HISTORY_MAX_ENTRIES) {
+    history.splice(0, history.length - HISTORY_MAX_ENTRIES);
+  }
+
+  lsWriteJSON(HONOUA_HISTORY_KEY, history);
+  // (Étape 2 utilisera cette base pour l’affichage de la liste + bouton "Recharger")
+}
+
+/* ------------------------------
+   Déclencheurs d’enregistrement
+   ------------------------------
+   1) Changements d’URL (pushState / replaceState / popstate) — car A8–A10
+      synchronisent l’état via l’URL.
+   2) Événement personnalisé "honoua:compare:updated" — que tu peux
+      déclencher à la fin de ton cycle de rendu si nécessaire.
+*/
+
+// Patch léger pour émettre un event quand pushState/replaceState sont appelés
+(function patchHistoryMethods(){
+  const _pushState    = history.pushState;
+  const _replaceState = history.replaceState;
+
+  function emitURLChanged() {
+    // On enregistre en léger différé pour laisser l'URL se stabiliser
+    clearTimeout(emitURLChanged._t);
+    emitURLChanged._t = setTimeout(saveCurrentSessionToHistory, 50);
+  }
+
+  history.pushState = function() {
+    const r = _pushState.apply(this, arguments);
+    window.dispatchEvent(new Event('honoua:urlchange'));
+    emitURLChanged();
+    return r;
+  };
+  history.replaceState = function() {
+    const r = _replaceState.apply(this, arguments);
+    window.dispatchEvent(new Event('honoua:urlchange'));
+    emitURLChanged();
+    return r;
+  };
+
+  window.addEventListener('popstate', emitURLChanged);
+  window.addEventListener('honoua:urlchange', emitURLChanged);
+})();
+
+// Écoute d’un éventuel événement applicatif (optionnel mais pratique)
+window.addEventListener('honoua:compare:updated', () => {
+  // debounce léger pour éviter d’écrire trop souvent
+  clearTimeout(window.__honouaHistoryDebounce__);
+  window.__honouaHistoryDebounce__ = setTimeout(saveCurrentSessionToHistory, 100);
+});
+
+// Premier snapshot au chargement si l'URL contient déjà un état
+document.addEventListener('DOMContentLoaded', () => {
+  saveCurrentSessionToHistory();
+});
+</script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 2)
+   - Affiche la liste des sessions sauvegardées (date, nb produits)
+   - Bouton "Recharger" pour restaurer une session (navigation vers l'URL)
+   - Aucun style imposé, rétro-compatible
+   ============================================================================ */
+
+(function(){
+  // --- Constantes & utilitaires (sans redéclarer celles de l'Étape 1) -------
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var $section = null, $list = null;
+
+  function lsReadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      console.warn('[A11:E2] Lecture JSON LS échouée:', e);
+      return fallback;
+    }
+  }
+
+  function formatDateTime(tsISO) {
+    // Affichage local FR court : 17/10/2025 14:32
+    try {
+      var d = new Date(tsISO);
+      return d.toLocaleString('fr-FR', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return tsISO;
+    }
+  }
+
+  function pluralizeProduit(n) {
+    return n + ' produit' + (n > 1 ? 's' : '');
+  }
+
+  // --- Rendu de la liste -----------------------------------------------------
+  function renderHistory() {
+    if (!$section || !$list) return;
+
+    var history = lsReadJSON(HISTORY_KEY, []);
+
+    // Afficher/masquer la section selon contenu
+    $section.hidden = !history || history.length === 0;
+
+    // Vider la liste
+    $list.innerHTML = '';
+
+    if (!history || history.length === 0) {
+      // Message simple, style minimaliste
+      var empty = document.createElement('p');
+      empty.textContent = 'Aucun historique pour le moment.';
+      $list.appendChild(empty);
+      return;
+    }
+
+    // On affiche du plus récent au plus ancien
+    var items = history.slice().reverse();
+
+ // … (le reste du code Étape 3 inchangé au-dessus)
+
+function render() {
+  if (!$section || !$list || !$bar) return;
+
+  pruneIfNeeded();
+  var history = readHistory();
+  var showPinnedOnly = !!($chkPinnedOnly && $chkPinnedOnly.checked);
+
+  var hasItems = history.length > 0;
+  $section.hidden = !hasItems;
+  $bar.hidden = !hasItems;
+
+  $list.innerHTML = '';
+  if (!hasItems) {
+    var empty = document.createElement('p');
+    empty.textContent = 'Aucun historique pour le moment.';
+    $list.appendChild(empty);
+    return;
+  }
+
+  // État courant depuis l’URL (fonction dispo en Étape 1)
+  var currentState = (typeof getCompareStateFromURL === 'function') ? getCompareStateFromURL() : null;
+  function isCurrent(entry){
+    if (!currentState || !entry || !entry.params) return false;
+    try {
+      // Comparaison des paramètres principaux ; ajuste si tu ajoutes d’autres clés
+      return JSON.stringify(entry.params) === JSON.stringify({
+        eans:   currentState.eans,
+        sort:   currentState.sort,
+        order:  currentState.order,
+        filters:currentState.filters,
+        query:  currentState.query
+      });
+    } catch { return false; }
+  }
+
+  var items = history.slice().reverse();
+  if (showPinnedOnly) items = items.filter(function(e){ return e.pinned; });
+
+  if (items.length === 0) {
+    var none = document.createElement('p');
+    none.textContent = 'Aucun élément épinglé.';
+    $list.appendChild(none);
+    return;
+  }
+
+  items.forEach(function(entry){
+    var item = document.createElement('div');
+    item.setAttribute('role','listitem');
+    item.className = 'history-item';
+
+    var current = isCurrent(entry);                  // [NOUVEAU]
+    item.classList.toggle('is-pinned', !!entry.pinned);
+    item.classList.toggle('is-current', !!current);  // [NOUVEAU]
+
+    var meta = document.createElement('div');
+    meta.className = 'history-meta';
+
+    // [NOUVEAU] — Pastille d’état
+    var dot = document.createElement('span');
+    dot.className = 'history-dot';
+    dot.setAttribute('aria-hidden','true');
+
+    // Ligne principale (pastille + date + nb produits + badges)
+    var row1 = document.createElement('div');
+    row1.className = 'meta-row';
+
+    var time = document.createElement('time');
+    time.setAttribute('datetime', entry.ts);
+    time.textContent = formatDateTime(entry.ts);
+
+    var count = document.createElement('span');
+    count.className = 'history-count';
+    count.textContent = ' • ' + pluralizeProduit(entry.productCount);
+
+    row1.appendChild(dot);
+    row1.appendChild(time);
+    row1.appendChild(count);
+
+    // Badge “Épinglé” (si épinglé) — déjà implémenté auparavant
+    if (entry.pinned) {
+      var badgePinned = document.createElement('span');
+      badgePinned.className = 'history-badge';
+      badgePinned.textContent = 'Épinglé';
+      row1.appendChild(badgePinned);
+    }
+
+    // [NOUVEAU] — Badge “Actuelle”
+    if (current) {
+      var badgeCurrent = document.createElement('span');
+      badgeCurrent.className = 'history-badge-current';
+      badgeCurrent.textContent = 'Actuelle';
+      row1.appendChild(badgeCurrent);
+    }
+
+    // [NOUVEAU] — Ligne des chips (tri/ordre/filtre/query)
+    var row2 = document.createElement('div');
+    row2.className = 'history-chips';
+
+    var p = entry.params || {};
+    if (p.sort) {
+      var c1 = document.createElement('span');
+      c1.className = 'chip chip-sort';
+      c1.textContent = 'Tri: ' + p.sort;
+      row2.appendChild(c1);
+    }
+    if (p.order) {
+      var c2 = document.createElement('span');
+      c2.className = 'chip chip-order';
+      c2.textContent = 'Ordre: ' + (p.order === 'desc' ? '↓ desc' : '↑ asc');
+      row2.appendChild(c2);
+    }
+    if (p.filters && (Array.isArray(p.filters) ? p.filters.length : String(p.filters).length)) {
+      var countFilters = Array.isArray(p.filters) ? p.filters.length : 1;
+      var c3 = document.createElement('span');
+      c3.className = 'chip chip-filter';
+      c3.textContent = 'Filtres: ' + countFilters;
+      c3.title = Array.isArray(p.filters) ? p.filters.join(', ') : String(p.filters);
+      row2.appendChild(c3);
+    }
+    if (p.query) {
+      var c4 = document.createElement('span');
+      c4.className = 'chip chip-query';
+      c4.textContent = 'Recherche: "' + p.query + '"';
+      row2.appendChild(c4);
+    }
+
+    meta.appendChild(row1);
+    if (row2.childElementCount > 0) meta.appendChild(row2);
+
+    // Actions
+    var actions = document.createElement('div');
+    actions.className = 'history-actions';
+
+    var btnReload = document.createElement('button');
+    btnReload.type = 'button';
+    btnReload.className = 'history-reload';
+    btnReload.textContent = 'Recharger';
+    btnReload.addEventListener('click', function(){
+      if (!entry || !entry.url) return;
+      window.location.href = entry.url;
+    });
+
+    var btnPin = document.createElement('button');
+    btnPin.type = 'button';
+    btnPin.className = 'history-pin';
+    btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+    btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
+    btnPin.addEventListener('click', function(){ togglePin(entry.id); });
+
+    var btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'history-delete';
+    btnDelete.textContent = 'Supprimer';
+    btnDelete.addEventListener('click', function(){
+      if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
+    });
+
+    actions.appendChild(btnReload);
+    actions.appendChild(btnPin);
+    actions.appendChild(btnDelete);
+
+    item.appendChild(meta);
+    item.appendChild(actions);
+    $list.appendChild(item);
+  });
+}
+
+// … (le reste du code Étape 3 inchangé en dessous)
+
+  // --- Synchronisation avec les changements d'état ---------------------------
+  // On re-render quand:
+  //  - l’URL change (A8–A10)
+  //  - l’app émet "honoua:compare:updated" (si tu l’utilises)
+  //  - un autre onglet modifie le localStorage (événement "storage")
+
+  function requestRender() {
+    clearTimeout(requestRender._t);
+    requestRender._t = setTimeout(renderHistory, 50);
+  }
+
+  window.addEventListener('honoua:urlchange', requestRender);
+  window.addEventListener('honoua:compare:updated', requestRender);
+  window.addEventListener('storage', function(ev){
+    if (ev && ev.key === HISTORY_KEY) requestRender();
+  });
+
+  // --- Boot ------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    $section = document.getElementById('compare-history');
+    $list    = document.getElementById('compare-history-list');
+    if (!$section || !$list) return;
+    renderHistory();
+  });
+})();
+</script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 3 : actions)
+   - Vider l’historique
+   - Épingler / Désépingler une session
+   - Supprimer une entrée
+   - Respect de la borne max en préservant les entrées épinglées
+   ============================================================================ */
+
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var HISTORY_MAX_ENTRIES = 50; // même borne que l’Étape 1
+
+  var $section, $list, $bar, $btnClear, $chkPinnedOnly;
+
+  // -------- LS utils --------
+  function readHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      // Migration douce : ajoute pinned=false si absent
+      arr.forEach(function(e){ if (typeof e.pinned !== 'boolean') e.pinned = false; });
+      return arr;
+    } catch(e){
+      console.warn('[A11:E3] readHistory:', e);
+      return [];
+    }
+  }
+  function writeHistory(arr) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY})); // notifie local
+    } catch(e){
+      console.warn('[A11:E3] writeHistory:', e);
+    }
+  }
+
+  // -------- Actions --------
+  function clearHistory() {
+    if (!confirm('Confirmer la suppression de tout l’historique ?')) return;
+    writeHistory([]);
+    render();
+  }
+
+  function togglePin(id) {
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return;
+    h[i].pinned = !h[i].pinned;
+    writeHistory(h);
+    render();
+  }
+
+  function deleteEntry(id) {
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return;
+    h.splice(i,1);
+    writeHistory(h);
+    render();
+  }
+
+  // Coupe en respectant les épinglés
+  function pruneIfNeeded() {
+    var h = readHistory();
+    if (h.length <= HISTORY_MAX_ENTRIES) return;
+    // Conserve tous les épinglés, puis les plus récents non épinglés
+    var pinned = h.filter(function(e){ return e.pinned; });
+    var others = h.filter(function(e){ return !e.pinned; });
+    // On garde autant de "others" que possible (en fin = plus récents car on pousse en fin)
+    var keepOthers = Math.max(0, HISTORY_MAX_ENTRIES - pinned.length);
+    if (others.length > keepOthers) {
+      others = others.slice(others.length - keepOthers);
+    }
+    // Recompose dans l’ordre chronologique initial
+    var kept = h.filter(function(e){
+      return pinned.includes(e) || others.includes(e);
+    });
+    writeHistory(kept);
+  }
+
+  // -------- Rendu (étend le rendu Étape 2 sans le casser) --------
+  function formatDateTime(tsISO) {
+    try {
+      var d = new Date(tsISO);
+      return d.toLocaleString('fr-FR', {
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit'
+      });
+    } catch { return tsISO; }
+  }
+  function pluralizeProduit(n) {
+    return n + ' produit' + (n>1?'s':'');
+  }
+
+  function render() {
+    if (!$section || !$list || !$bar) return;
+
+    pruneIfNeeded(); // garantit la borne avec respect des épinglés
+    var history = readHistory();
+    var showPinnedOnly = !!($chkPinnedOnly && $chkPinnedOnly.checked);
+
+    // Visibilités
+    var hasItems = history.length > 0;
+    $section.hidden = !hasItems;
+    $bar.hidden = !hasItems;
+
+    // Vide liste
+    $list.innerHTML = '';
+
+    if (!hasItems) {
+      var empty = document.createElement('p');
+      empty.textContent = 'Aucun historique pour le moment.';
+      $list.appendChild(empty);
+      return;
+    }
+
+    // Plus récent → plus ancien
+    var items = history.slice().reverse();
+    if (showPinnedOnly) items = items.filter(function(e){ return e.pinned; });
+
+    if (items.length === 0) {
+      var none = document.createElement('p');
+      none.textContent = 'Aucun élément épinglé.';
+      $list.appendChild(none);
+      return;
+    }
+
+    items.forEach(function(entry){
+      var item = document.createElement('div');
+      item.setAttribute('role','listitem');
+      item.className = 'history-item';
+
+      var meta = document.createElement('div');
+      meta.className = 'history-meta';
+
+      var time = document.createElement('time');
+      time.setAttribute('datetime', entry.ts);
+      time.textContent = formatDateTime(entry.ts);
+
+      var count = document.createElement('span');
+      count.className = 'history-count';
+      count.textContent = ' • ' + pluralizeProduit(entry.productCount);
+
+      meta.appendChild(time);
+      meta.appendChild(count);
+
+      var actions = document.createElement('div');
+      actions.className = 'history-actions';
+
+      // Recharger (déjà présent Étape 2 — on le remet ici de façon autonome)
+      var btnReload = document.createElement('button');
+      btnReload.type = 'button';
+      btnReload.className = 'history-reload';
+      btnReload.textContent = 'Recharger';
+      btnReload.addEventListener('click', function(){
+        if (!entry || !entry.url) return;
+        window.location.href = entry.url;
+      });
+
+      // Épingler
+      var btnPin = document.createElement('button');
+      btnPin.type = 'button';
+      btnPin.className = 'history-pin';
+      btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+      btnPin.addEventListener('click', function(){ togglePin(entry.id); });
+
+      // Supprimer
+      var btnDelete = document.createElement('button');
+      btnDelete.type = 'button';
+      btnDelete.className = 'history-delete';
+      btnDelete.textContent = 'Supprimer';
+      btnDelete.addEventListener('click', function(){
+        if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
+      });
+
+      actions.appendChild(btnReload);
+      actions.appendChild(btnPin);
+      actions.appendChild(btnDelete);
+
+      item.appendChild(meta);
+      item.appendChild(actions);
+
+      $list.appendChild(item);
+    });
+  }
+
+  // -------- Sync évènements --------
+  function requestRender(){ clearTimeout(requestRender._t); requestRender._t = setTimeout(render, 50); }
+  window.addEventListener('honoua:urlchange', requestRender);
+  window.addEventListener('honoua:compare:updated', requestRender);
+  window.addEventListener('storage', function(ev){ if (!ev || ev.key === HISTORY_KEY) requestRender(); });
+
+  // -------- Boot --------
+  document.addEventListener('DOMContentLoaded', function(){
+    $section      = document.getElementById('compare-history');
+    $list         = document.getElementById('compare-history-list');
+    $bar          = document.getElementById('compare-history-actions');
+    $btnClear     = document.getElementById('history-clear');
+    $chkPinnedOnly= document.getElementById('history-show-pinned');
+
+    if (!$section || !$list || !$bar) return;
+
+    if ($btnClear)     $btnClear.addEventListener('click', clearHistory);
+    if ($chkPinnedOnly)$chkPinnedOnly.addEventListener('change', render);
+
+    render();
+  });
+})();
+
+function render() {
+  // … (début de render, inchangé)
+
+  items.forEach(function(entry){
+    var item = document.createElement('div');
+    item.setAttribute('role','listitem');
+    item.className = 'history-item';
+
+    // [NOUVEAU] — État visuel si épinglé
+    item.classList.toggle('is-pinned', !!entry.pinned); // ajoute la classe
+
+    var meta = document.createElement('div');
+    meta.className = 'history-meta';
+
+    var time = document.createElement('time');
+    time.setAttribute('datetime', entry.ts);
+    time.textContent = formatDateTime(entry.ts);
+
+    var count = document.createElement('span');
+    count.className = 'history-count';
+    count.textContent = ' • ' + pluralizeProduit(entry.productCount);
+
+    meta.appendChild(time);
+    meta.appendChild(count);
+
+    // [NOUVEAU] — Mini-badge “Épinglé”
+    if (entry.pinned) {
+      var badge = document.createElement('span');
+      badge.className = 'history-badge';    // style minimal (voir CSS ci-dessous)
+      badge.textContent = 'Épinglé';
+      meta.appendChild(badge);
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'history-actions';
+
+    var btnReload = document.createElement('button');
+    btnReload.type = 'button';
+    btnReload.className = 'history-reload';
+    btnReload.textContent = 'Recharger';
+    btnReload.addEventListener('click', function(){
+      if (!entry || !entry.url) return;
+      window.location.href = entry.url;
+    });
+
+    var btnPin = document.createElement('button');
+    btnPin.type = 'button';
+    btnPin.className = 'history-pin';
+    btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+
+    // [NOUVEAU] — Accessibilité: indique l’état
+    btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
+
+    btnPin.addEventListener('click', function(){ togglePin(entry.id); });
+
+    var btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'history-delete';
+    btnDelete.textContent = 'Supprimer';
+    btnDelete.addEventListener('click', function(){
+      if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
+    });
+
+    actions.appendChild(btnReload);
+    actions.appendChild(btnPin);
+    actions.appendChild(btnDelete);
+
+    item.appendChild(meta);
+    item.appendChild(actions);
+    $list.appendChild(item);
+  });
+}
+// … (fin code Étape 3)
+
+
+
+
+
+
+</script>
+
 
 </body>
 </html>
