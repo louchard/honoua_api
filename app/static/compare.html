@@ -408,6 +408,38 @@
   background: rgba(122,17,17,.08);
 }
 
+
+/* A17 — Toast de confirmation */
+#compare-history #history-toast{
+  position: fixed; right: 1rem; bottom: 1rem;
+  background: #0b5; color: #fff; padding: .5rem .75rem;
+  border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  font-size: .9rem; z-index: 9999;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history #history-toast{ background:#0a7a4f; }
+}
+/* Bouton “Copier” (utilise styles boutons existants) */
+#compare-history .history-copy{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-copy:hover{ background: rgba(0,29,133,.08); }
+
+#compare-history #history-toast{
+  position: fixed; right: 1rem; bottom: 1rem;
+  background: #0b5; color:#fff; padding:.5rem .75rem;
+  border-radius:.5rem; box-shadow:0 6px 20px rgba(0,0,0,.15);
+  font-size:.9rem; z-index:9999;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history #history-toast{ background:#0a7a4f; }
+}
+#compare-history .history-copy{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-copy:hover{ background: rgba(0,29,133,.08); }
+
+
 </style>
 
 </head>
@@ -466,8 +498,8 @@
     Afficher uniquement les épinglés
   </label>
   <button type="button" id="carbon-cache-clear">Purger cache carbone</button>
-
 </div>
+<div id="history-toast" aria-live="polite" hidden>—</div>
 
 </section>
 
@@ -519,6 +551,8 @@
        <button id="export-stats-csv">Exporter stats (CSV)</button>
         <button id="export-carbon-csv">Exporter carbone (CSV)</button>
     </div>
+     
+     <div id="history-toast" aria-live="polite" hidden>—</div>
 
 
 
@@ -1783,6 +1817,9 @@ function render() {
       actions.appendChild(btnPin);
       actions.appendChild(btnDelete);
 
+
+
+
       item.appendChild(meta);
       item.appendChild(actions);
 
@@ -1812,6 +1849,18 @@ function render() {
     render();
   });
 })();
+
+// A17 — utilitaire toast
+function showToast(msg){
+  var el = document.getElementById('history-toast');
+  if (!el) { alert(msg); return; }
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>{ el.hidden = true; }, 1400);
+}
+
+
 
 function render() {
   // … (début de render, inchangé)
@@ -1875,6 +1924,90 @@ function render() {
     btnDelete.addEventListener('click', function(){
       if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
     });
+
+    
+/* ============================================================================
+   A17 — Copier l’URL de session + toast
+   ============================================================================ */
+(function(){
+  var TOAST_MS = 1400; // durée d’affichage
+
+  function showToast(msg){
+    var el = document.getElementById('history-toast');
+    if (!el) return alert(msg);
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>{ el.hidden = true; }, TOAST_MS);
+  }
+
+  // Patch léger: ajoute le bouton "Copier" au rendu existant (Étape 3)
+  // -> Cherche une fonction render() dans le scope précédent
+  // Si elle n'est pas accessible, on ajoute dynamiquement le bouton au vol après chaque render.
+  // Ici, on monkey-patche appendChild sur la liste pour insérer le bouton.
+  document.addEventListener('DOMContentLoaded', function(){
+    var $list = document.getElementById('compare-history-list');
+    if (!$list) return;
+
+    // MutationObserver pour injecter "Copier" à chaque item rendu/refraîchi
+    var obs = new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        m.addedNodes.forEach(function(node){
+          if (!(node instanceof HTMLElement)) return;
+          if (!node.classList.contains('history-item')) return;
+
+          // Trouve le conteneur des actions déjà existant
+          var actions = node.querySelector('.history-actions');
+          if (!actions) return;
+
+          // Crée le bouton “Copier”
+          var btnCopy = document.createElement('button');
+          btnCopy.type = 'button';
+          btnCopy.className = 'history-copy';
+          btnCopy.textContent = 'Copier l’URL';
+
+          // URL à copier depuis l'entrée; elle est stockée côté données dans A11
+          // On la retrouve via l’attribut data-url si présent, sinon via le dernier état injecté.
+          // Plus simple: on parcourt l’historique à partir de l’horodatage affiché.
+          // → On stocke l’URL sur l’élément pour fiabilité (ajout custom ici).
+          // Si déjà présent, ne pas dupliquer
+          if (!node.dataset.url && window.localStorage){
+            try{
+              var history = JSON.parse(localStorage.getItem('honoua_compare_history_v1')) || [];
+              // heuristique : on recompose avec time[datetime]
+              var time = node.querySelector('time');
+              if (time && time.dateTime){
+                var entry = history.find(e => e.ts === time.dateTime);
+                if (entry && entry.url) node.dataset.url = entry.url;
+              }
+            }catch{}
+          }
+
+          btnCopy.addEventListener('click', async function(){
+            var url = node.dataset.url || window.location.href;
+            try{
+              await navigator.clipboard.writeText(url);
+              showToast('Lien copié ✅');
+            }catch(e){
+              // Fallback si clipboard indisponible
+              var ta = document.createElement('textarea');
+              ta.value = url; document.body.appendChild(ta);
+              ta.select(); document.execCommand('copy');
+              ta.remove();
+              showToast('Lien copié ✅');
+            }
+          });
+
+          actions.appendChild(btnCopy);
+        });
+      });
+    });
+
+    obs.observe($list, { childList:true });
+  });
+})();
+
+
 
     actions.appendChild(btnReload);
     actions.appendChild(btnPin);
