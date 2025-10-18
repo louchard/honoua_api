@@ -440,6 +440,24 @@
 #compare-history .history-copy:hover{ background: rgba(0,29,133,.08); }
 
 
+/* A18 — Styles pour le badge de nom et le bouton Renommer */
+#compare-history .history-name{
+  margin-left:.5rem; padding:.1rem .45rem; border-radius:.4rem;
+  font-size:.78rem; line-height:1.2; background:#fff;
+  border:1px solid rgba(0,0,0,.15); color:#2a2a2a;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-name{
+    background:#121316; border-color:rgba(255,255,255,.14); color:#e6e6e6;
+  }
+}
+#compare-history .history-rename{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-rename:hover{
+  background: rgba(0,29,133,.08);
+}
+
 </style>
 
 </head>
@@ -1416,6 +1434,32 @@ document.addEventListener('DOMContentLoaded', () => {
   function pluralizeProduit(n) {
     return n + ' produit' + (n > 1 ? 's' : '');
   }
+/* A18 — Helper : renommer une entrée d'historique par son id
+   - Met à jour entry.name (string ou null)
+   - Écrit dans localStorage + notifie l’UI (storage + honoua:compare:updated)
+*/
+function renameEntryById(id, newName){
+  try {
+    var HISTORY_KEY = 'honoua_compare_history_v1';
+    var h = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return false;
+    var val = (typeof newName === 'string') ? newName.trim() : '';
+    if (!('name' in h[i])) h[i].name = null; // migration douce
+    h[i].name = val || null;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    // Notifie le reste de l’app (Étapes 2/3/14/15 écoutent déjà ces events)
+    window.dispatchEvent(new StorageEvent('storage', { key: HISTORY_KEY }));
+    window.dispatchEvent(new Event('honoua:compare:updated'));
+    return true;
+  } catch(e){
+    console.warn('[A18] renameEntryById error:', e);
+    return false;
+  }
+}
+
+
+
 
   // --- Rendu de la liste -----------------------------------------------------
   function renderHistory() {
@@ -1639,10 +1683,11 @@ function render() {
 </script>
 <script>
 /* ============================================================================
-   A11 — Historique des comparaisons (Étape 3 : actions)
+   A11 — Historique des comparaisons (Étape 3 : actions) + A18 (Favoris nommés)
    - Vider l’historique
    - Épingler / Désépingler une session
    - Supprimer une entrée
+   - Renommer une session (A18) → entry.name (affiché en badge dans la meta)
    - Respect de la borne max en préservant les entrées épinglées
    ============================================================================ */
 
@@ -1657,8 +1702,11 @@ function render() {
     try {
       var raw = localStorage.getItem(HISTORY_KEY);
       var arr = raw ? JSON.parse(raw) : [];
-      // Migration douce : ajoute pinned=false si absent
-      arr.forEach(function(e){ if (typeof e.pinned !== 'boolean') e.pinned = false; });
+      // Migration douce : ajoute pinned=false / name=null si absent
+      arr.forEach(function(e){
+        if (typeof e.pinned !== 'boolean') e.pinned = false;
+        if (!('name' in e)) e.name = null;
+      });
       return arr;
     } catch(e){
       console.warn('[A11:E3] readHistory:', e);
@@ -1668,7 +1716,9 @@ function render() {
   function writeHistory(arr) {
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
-      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY})); // notifie local
+      // notifie l’UI (A11-E2/A14/A15 écoutent déjà)
+      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
     } catch(e){
       console.warn('[A11:E3] writeHistory:', e);
     }
@@ -1699,6 +1749,19 @@ function render() {
     render();
   }
 
+  /* A18 — Helper : renommer une entrée d'historique par son id
+     - Met à jour entry.name (string ou null)
+     - Persiste dans localStorage + notifie l’UI */
+  function renameEntryById(id, newName){
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return false;
+    var val = (typeof newName === 'string') ? newName.trim() : '';
+    h[i].name = val || null;
+    writeHistory(h);
+    return true;
+  }
+
   // Coupe en respectant les épinglés
   function pruneIfNeeded() {
     var h = readHistory();
@@ -1706,19 +1769,17 @@ function render() {
     // Conserve tous les épinglés, puis les plus récents non épinglés
     var pinned = h.filter(function(e){ return e.pinned; });
     var others = h.filter(function(e){ return !e.pinned; });
-    // On garde autant de "others" que possible (en fin = plus récents car on pousse en fin)
     var keepOthers = Math.max(0, HISTORY_MAX_ENTRIES - pinned.length);
     if (others.length > keepOthers) {
       others = others.slice(others.length - keepOthers);
     }
-    // Recompose dans l’ordre chronologique initial
     var kept = h.filter(function(e){
       return pinned.includes(e) || others.includes(e);
     });
     writeHistory(kept);
   }
 
-  // -------- Rendu (étend le rendu Étape 2 sans le casser) --------
+  // -------- Rendu --------
   function formatDateTime(tsISO) {
     try {
       var d = new Date(tsISO);
@@ -1735,18 +1796,15 @@ function render() {
   function render() {
     if (!$section || !$list || !$bar) return;
 
-    pruneIfNeeded(); // garantit la borne avec respect des épinglés
+    pruneIfNeeded();
     var history = readHistory();
     var showPinnedOnly = !!($chkPinnedOnly && $chkPinnedOnly.checked);
 
-    // Visibilités
     var hasItems = history.length > 0;
     $section.hidden = !hasItems;
     $bar.hidden = !hasItems;
 
-    // Vide liste
     $list.innerHTML = '';
-
     if (!hasItems) {
       var empty = document.createElement('p');
       empty.textContent = 'Aucun historique pour le moment.';
@@ -1754,7 +1812,6 @@ function render() {
       return;
     }
 
-    // Plus récent → plus ancien
     var items = history.slice().reverse();
     if (showPinnedOnly) items = items.filter(function(e){ return e.pinned; });
 
@@ -1769,7 +1826,9 @@ function render() {
       var item = document.createElement('div');
       item.setAttribute('role','listitem');
       item.className = 'history-item';
+      item.classList.toggle('is-pinned', !!entry.pinned);
 
+      // --- Meta (date + nb produits + badges) ---
       var meta = document.createElement('div');
       meta.className = 'history-meta';
 
@@ -1784,10 +1843,38 @@ function render() {
       meta.appendChild(time);
       meta.appendChild(count);
 
+             if (entry.name) {
+             var badgeName = document.createElement('span');
+            badgeName.className = 'history-name';
+            badgeName.textContent = entry.name;
+            meta.appendChild(badgeName);
+            }
+
+
+
+      // [A18 — AJOUT 1] : badge nom si présent
+      // (ligne juste AVANT : meta.appendChild(count);)
+      // (ligne juste APRÈS : badge "Épinglé" éventuel)
+      if (entry.name) {
+        var badgeName = document.createElement('span');
+        badgeName.className = 'history-name';
+        badgeName.textContent = entry.name;
+        meta.appendChild(badgeName);
+      }
+
+      // Badge “Épinglé”
+      if (entry.pinned) {
+        var badge = document.createElement('span');
+        badge.className = 'history-badge';
+        badge.textContent = 'Épinglé';
+        meta.appendChild(badge);
+      }
+
+      // --- Actions ---
       var actions = document.createElement('div');
       actions.className = 'history-actions';
 
-      // Recharger (déjà présent Étape 2 — on le remet ici de façon autonome)
+      // Recharger
       var btnReload = document.createElement('button');
       btnReload.type = 'button';
       btnReload.className = 'history-reload';
@@ -1802,6 +1889,7 @@ function render() {
       btnPin.type = 'button';
       btnPin.className = 'history-pin';
       btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+      btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
       btnPin.addEventListener('click', function(){ togglePin(entry.id); });
 
       // Supprimer
@@ -1813,16 +1901,56 @@ function render() {
         if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
       });
 
+      // [A18 — AJOUT 2] : bouton "Renommer"
+      // (ligne juste AVANT : définition de btnDelete)
+      // (ligne juste APRÈS : actions.appendChild(...))
+      var btnRename = document.createElement('button');
+      btnRename.type = 'button';
+      btnRename.className = 'history-rename';
+      btnRename.textContent = 'Renommer';
+      btnRename.addEventListener('click', function(){
+        var current = entry.name || '';
+        var val = prompt('Nom de la session :', current);
+        if (val === null) return; // annulé
+        if (renameEntryById(entry.id, val)) {
+          // MAJ visuelle immédiate
+          var badge = item.querySelector('.history-name');
+          var clean = (val || '').trim();
+          if (clean) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'history-name';
+              meta.appendChild(badge);
+            }
+            badge.textContent = clean;
+          } else if (badge) {
+            badge.remove();
+          }
+        } else {
+          alert('Impossible de renommer cette entrée.');
+        }
+      });
+        
+        var btnRename = document.createElement('button');
+btnRename.className = 'history-rename';
+btnRename.textContent = 'Renommer';
+btnRename.addEventListener('click', () => {
+  var val = prompt('Nom de la session :', entry.name || '');
+  if (val === null) return;
+  if (renameEntryById(entry.id, val)) { /* MAJ du badge */ }
+});
+actions.appendChild(btnRename);
+
+
+
       actions.appendChild(btnReload);
       actions.appendChild(btnPin);
       actions.appendChild(btnDelete);
+      actions.appendChild(btnRename); // ← A18
 
-
-
-
+      // Assemblage
       item.appendChild(meta);
       item.appendChild(actions);
-
       $list.appendChild(item);
     });
   }
@@ -1849,195 +1977,8 @@ function render() {
     render();
   });
 })();
-
-// A17 — utilitaire toast
-function showToast(msg){
-  var el = document.getElementById('history-toast');
-  if (!el) { alert(msg); return; }
-  el.textContent = msg;
-  el.hidden = false;
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(()=>{ el.hidden = true; }, 1400);
-}
-
-
-
-function render() {
-  // … (début de render, inchangé)
-
-  items.forEach(function(entry){
-    var item = document.createElement('div');
-    item.setAttribute('role','listitem');
-    item.className = 'history-item';
-
-    // [NOUVEAU] — État visuel si épinglé
-    item.classList.toggle('is-pinned', !!entry.pinned); // ajoute la classe
-
-    var meta = document.createElement('div');
-    meta.className = 'history-meta';
-
-    var time = document.createElement('time');
-    time.setAttribute('datetime', entry.ts);
-    time.textContent = formatDateTime(entry.ts);
-
-    var count = document.createElement('span');
-    count.className = 'history-count';
-    count.textContent = ' • ' + pluralizeProduit(entry.productCount);
-
-    meta.appendChild(time);
-    meta.appendChild(count);
-
-    // [NOUVEAU] — Mini-badge “Épinglé”
-    if (entry.pinned) {
-      var badge = document.createElement('span');
-      badge.className = 'history-badge';    // style minimal (voir CSS ci-dessous)
-      badge.textContent = 'Épinglé';
-      meta.appendChild(badge);
-    }
-
-    var actions = document.createElement('div');
-    actions.className = 'history-actions';
-
-    var btnReload = document.createElement('button');
-    btnReload.type = 'button';
-    btnReload.className = 'history-reload';
-    btnReload.textContent = 'Recharger';
-    btnReload.addEventListener('click', function(){
-      if (!entry || !entry.url) return;
-      window.location.href = entry.url;
-    });
-
-    var btnPin = document.createElement('button');
-    btnPin.type = 'button';
-    btnPin.className = 'history-pin';
-    btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
-
-    // [NOUVEAU] — Accessibilité: indique l’état
-    btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
-
-    btnPin.addEventListener('click', function(){ togglePin(entry.id); });
-
-    var btnDelete = document.createElement('button');
-    btnDelete.type = 'button';
-    btnDelete.className = 'history-delete';
-    btnDelete.textContent = 'Supprimer';
-    btnDelete.addEventListener('click', function(){
-      if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
-    });
-
-    
-/* ============================================================================
-   A17 — Copier l’URL de session + toast
-   ============================================================================ */
-(function(){
-  var TOAST_MS = 1400; // durée d’affichage
-
-  function showToast(msg){
-    var el = document.getElementById('history-toast');
-    if (!el) return alert(msg);
-    el.textContent = msg;
-    el.hidden = false;
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(()=>{ el.hidden = true; }, TOAST_MS);
-  }
-
-  // Patch léger: ajoute le bouton "Copier" au rendu existant (Étape 3)
-  // -> Cherche une fonction render() dans le scope précédent
-  // Si elle n'est pas accessible, on ajoute dynamiquement le bouton au vol après chaque render.
-  // Ici, on monkey-patche appendChild sur la liste pour insérer le bouton.
-  document.addEventListener('DOMContentLoaded', function(){
-    var $list = document.getElementById('compare-history-list');
-    if (!$list) return;
-
-    // MutationObserver pour injecter "Copier" à chaque item rendu/refraîchi
-    var obs = new MutationObserver(function(muts){
-      muts.forEach(function(m){
-        m.addedNodes.forEach(function(node){
-          if (!(node instanceof HTMLElement)) return;
-          if (!node.classList.contains('history-item')) return;
-
-          // Trouve le conteneur des actions déjà existant
-          var actions = node.querySelector('.history-actions');
-          if (!actions) return;
-
-          // Crée le bouton “Copier”
-          var btnCopy = document.createElement('button');
-          btnCopy.type = 'button';
-          btnCopy.className = 'history-copy';
-          btnCopy.textContent = 'Copier l’URL';
-
-          // URL à copier depuis l'entrée; elle est stockée côté données dans A11
-          // On la retrouve via l’attribut data-url si présent, sinon via le dernier état injecté.
-          // Plus simple: on parcourt l’historique à partir de l’horodatage affiché.
-          // → On stocke l’URL sur l’élément pour fiabilité (ajout custom ici).
-          // Si déjà présent, ne pas dupliquer
-          if (!node.dataset.url && window.localStorage){
-            try{
-              var history = JSON.parse(localStorage.getItem('honoua_compare_history_v1')) || [];
-              // heuristique : on recompose avec time[datetime]
-              var time = node.querySelector('time');
-              if (time && time.dateTime){
-                var entry = history.find(e => e.ts === time.dateTime);
-                if (entry && entry.url) node.dataset.url = entry.url;
-              }
-            }catch{}
-          }
-
-          btnCopy.addEventListener('click', async function(){
-            var url = node.dataset.url || window.location.href;
-            try{
-              await navigator.clipboard.writeText(url);
-              showToast('Lien copié ✅');
-            }catch(e){
-              // Fallback si clipboard indisponible
-              var ta = document.createElement('textarea');
-              ta.value = url; document.body.appendChild(ta);
-              ta.select(); document.execCommand('copy');
-              ta.remove();
-              showToast('Lien copié ✅');
-            }
-          });
-
-          actions.appendChild(btnCopy);
-        });
-      });
-    });
-
-    obs.observe($list, { childList:true });
-  });
-})();
-
-
-
-    actions.appendChild(btnReload);
-    actions.appendChild(btnPin);
-    actions.appendChild(btnDelete);
-
-    item.appendChild(meta);
-    item.appendChild(actions);
-    $list.appendChild(item);
-  });
-}
-// … (fin code Étape 3)
-
-// Met en pause automatiquement si l’URL contient ?histpause=1
-document.addEventListener('DOMContentLoaded', () => {
-  const p = new URL(location.href).searchParams;
-  if (p.get('histpause') === '1') {
-    window.__honouaHistoryPaused = true;
-  }
-});
-
-const wasPaused = !!window.__honouaHistoryPaused;
-window.__honouaHistoryPaused = true;
-
-try {
-  // … tes opérations bruyantes (ajout EANs, multiples updates, etc.)
-} finally {
-  window.__honouaHistoryPaused = wasPaused; // restaure l’état précédent
-}
-
 </script>
+
 
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
