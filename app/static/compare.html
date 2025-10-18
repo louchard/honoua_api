@@ -458,6 +458,33 @@
   background: rgba(0,29,133,.08);
 }
 
+/* A19 — Styles légers pour les boutons Cloud (cohérents avec l'existant) */
+#compare-history #cloud-signin,
+#compare-history #cloud-sync-up,
+#compare-history #cloud-sync-down{
+  border:1px solid rgba(0,0,0,.2);
+  background:#f7f7f7;
+  padding:.35rem .7rem;
+  border-radius:6px;
+}
+#compare-history #cloud-signin:hover,
+#compare-history #cloud-sync-up:hover,
+#compare-history #cloud-sync-down:hover{
+  background:rgba(0,0,0,.05);
+}
+#compare-history button:disabled{ opacity:.5; cursor:not-allowed; }
+@media (prefers-color-scheme: dark){
+  #compare-history #cloud-signin,
+  #compare-history #cloud-sync-up,
+  #compare-history #cloud-sync-down{
+    background:rgba(255,255,255,.08);
+    color:#eee;
+    border-color:rgba(255,255,255,.18);
+  }
+}
+
+
+
 </style>
 
 </head>
@@ -507,6 +534,12 @@
 <section id="compare-history" aria-labelledby="compare-history-title" hidden>
   <h2 id="compare-history-title">Historique des comparaisons</h2>
   <div id="compare-history-list" role="list" aria-live="polite"></div>
+
+  <!-- A19 — Boutons Cloud -->
+<button type="button" id="cloud-signin">Connexion</button>
+<button type="button" id="cloud-sync-up"  disabled>Sync → Cloud</button>
+<button type="button" id="cloud-sync-down" disabled>Sync ← Cloud</button>
+
 
   <!-- Barre d’actions (optionnelle, style minimal) -->
 <div id="compare-history-actions" class="history-actions-bar" hidden>
@@ -1212,6 +1245,223 @@
       counter.textContent = `${n} ${n > 1 ? "articles" : "article"}`;
     }
   }
+
+/* =========================================================================
+     A19 — Sauvegarde Cloud (opt-in)
+     - Connexion (token) → stockage local (sessionStorage)
+     - Sync → Cloud : envoie l’historique local (fusion côté client)
+     - Sync ← Cloud : récupère l’historique cloud (fusion côté client)
+     - Fusion non destructive : dédup par "id" puis par "params"
+     - Ne casse pas A11–A16. Pas de sync auto, tout est manuel et opt-in.
+     ========================================================================= */
+
+
+(function(){
+  // ----- Constantes API (adapter les routes si besoin) -----------------------
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var CLOUD_BASE  = '/api/history';   // ex: /api/history
+  var EP_LOGIN    = CLOUD_BASE + '/login';   // POST {email,password} -> {token}
+  var EP_PULL     = CLOUD_BASE + '/pull';    // GET  -> {history:[...]}
+  var EP_PUSH     = CLOUD_BASE + '/push';    // POST {history:[...]} -> {ok:true}
+
+  // ----- UI refs --------------------------------------------------------------
+  var $btnLogin, $btnUp, $btnDown;
+
+  // ----- Token en session (éphémère et simple) -------------------------------
+  function getToken(){ try{ return sessionStorage.getItem('honoua_token') || null; }catch{ return null; } }
+  function setToken(t){ try{ t?sessionStorage.setItem('honoua_token', t):sessionStorage.removeItem('honoua_token'); }catch{} }
+
+  // ----- LS helpers (réutilisés) ---------------------------------------------
+  function readHistory(){
+    try {
+      var arr = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+      arr.forEach(function(e){
+        if (typeof e.pinned !== 'boolean') e.pinned = false;
+        if (!('name' in e)) e.name = null;
+      });
+      return arr;
+    }catch{ return []; }
+  }
+  function writeHistory(arr){
+    try{
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      window.dispatchEvent(new StorageEvent('storage', {key:HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    }catch(e){ console.warn('[A19] writeHistory:', e); }
+  }
+
+  // ----- Fusion non destructive ----------------------------------------------
+  /* Commentaire :
+     - Déduplication par "id" si identiques.
+     - Si ids différents mais "params" identiques → on conserve le plus récent (ts max).
+     - Les épinglés (pinned=true) sont conservés.
+     - Borne finale ≤ 50 en préservant épinglés (même logique que A11-E3).
+  */
+  function shallowParams(e){
+    return JSON.stringify(e && e.params ? e.params : {});
+  }
+  function mergeHistories(local, remote, max){
+    var mapById = new Map();
+    var mapByParams = new Map();
+
+    function add(e){
+      if (!e || !e.ts) return;
+      // normalisation minimale
+      if (typeof e.pinned !== 'boolean') e.pinned = false;
+      if (!('name' in e)) e.name = null;
+
+      // par id
+      if (e.id != null && !mapById.has(e.id)) {
+        mapById.set(e.id, e);
+      } else if (e.id == null){
+        // si pas d'id (edge rare), génère un id basé sur ts
+        e.id = new Date(e.ts).getTime();
+        if (!mapById.has(e.id)) mapById.set(e.id, e);
+      }
+
+      // par params → on garde le plus récent
+      var key = shallowParams(e);
+      var cur = mapByParams.get(key);
+      if (!cur || new Date(e.ts) > new Date(cur.ts)) {
+        mapByParams.set(key, e);
+      }
+    }
+
+    local.forEach(add);
+    remote.forEach(add);
+
+    // Concat du “meilleur par params” pour éviter doublons logiques
+    var merged = Array.from(mapByParams.values());
+
+    // Préserver borne ≤ max avec priorité aux épinglés + plus récents
+    merged.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); }); // ordre chronologique
+    if (merged.length > max) {
+      var pinned = merged.filter(function(e){ return e.pinned; });
+      var others = merged.filter(function(e){ return !e.pinned; });
+      var keepOthers = Math.max(0, max - pinned.length);
+      if (others.length > keepOthers) {
+        others = others.slice(others.length - keepOthers);
+      }
+      // recomposition (ordre chrono conservé)
+      var keepSet = new Set(pinned.concat(others).map(function(x){ return x.id; }));
+      merged = merged.filter(function(e){ return keepSet.has(e.id); });
+    }
+
+    return merged;
+  }
+
+  // ----- API calls ------------------------------------------------------------
+  async function apiLogin(){
+    // Simple prompt (remplacer par vrai formulaire si besoin)
+    var email = prompt('Email :');
+    if (email === null) return null;
+    var pass = prompt('Mot de passe :');
+    if (pass === null) return null;
+
+    var res = await fetch(EP_LOGIN, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: email.trim(), password: String(pass) })
+    });
+    if (!res.ok) throw new Error('Login échoué');
+    var data = await res.json();
+    return data && data.token ? data.token : null;
+  }
+
+  async function apiPull(){
+    var t = getToken(); if (!t) throw new Error('Non authentifié');
+    var res = await fetch(EP_PULL, { headers:{ 'Authorization':'Bearer '+t } });
+    if (!res.ok) throw new Error('Pull échoué');
+    var data = await res.json();
+    var arr = Array.isArray(data.history) ? data.history : [];
+    return arr;
+  }
+
+  async function apiPush(history){
+    var t = getToken(); if (!t) throw new Error('Non authentifié');
+    var res = await fetch(EP_PUSH, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+t },
+      body: JSON.stringify({ history })
+    });
+    if (!res.ok) throw new Error('Push échoué');
+    return await res.json();
+  }
+
+  // ----- UI state -------------------------------------------------------------
+  function updateButtons(){
+    var logged = !!getToken();
+    if ($btnUp)   $btnUp.disabled   = !logged;
+    if ($btnDown) $btnDown.disabled = !logged;
+    if ($btnLogin){
+      $btnLogin.textContent = logged ? 'Déconnexion' : 'Connexion';
+      $btnLogin.setAttribute('aria-pressed', logged ? 'true' : 'false');
+    }
+  }
+
+  // ----- Handlers -------------------------------------------------------------
+  async function onLoginClick(){
+    try{
+      if (getToken()){
+        // Déconnexion
+        setToken(null);
+        notify('Déconnecté du cloud.');
+        updateButtons();
+        return;
+      }
+      var t = await apiLogin();
+      if (!t) { alert('Impossible de se connecter.'); return; }
+      setToken(t);
+      notify('Connecté ✅');
+      updateButtons();
+    }catch(e){
+      console.warn('[A19] login:', e);
+      alert('Connexion échouée.');
+    }
+  }
+
+  async function onSyncUp(){
+    try{
+      var local = readHistory();
+      if (!local.length){ alert('Aucune donnée locale à envoyer.'); return; }
+      // Pull d’abord pour fusionner avant d’écraser
+      var remote = await apiPull();
+      var merged = mergeHistories(local, remote, 50);
+      await apiPush(merged);
+      notify('Sync → Cloud terminée ✅');
+    }catch(e){
+      console.warn('[A19] sync up:', e);
+      alert('Sync → Cloud échouée.');
+    }
+  }
+
+  async function onSyncDown(){
+    try{
+      var local = readHistory();
+      var remote = await apiPull();
+      var merged = mergeHistories(local, remote, 50);
+      writeHistory(merged); // met à jour local + notifie UI
+      notify('Sync ← Cloud terminée ✅');
+    }catch(e){
+      console.warn('[A19] sync down:', e);
+      alert('Sync ← Cloud échouée.');
+    }
+  }
+
+  // ----- Boot ----------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    $btnLogin = document.getElementById('cloud-signin');
+    $btnUp    = document.getElementById('cloud-sync-up');
+    $btnDown  = document.getElementById('cloud-sync-down');
+
+    if ($btnLogin) $btnLogin.addEventListener('click', onLoginClick);
+    if ($btnUp)    $btnUp.addEventListener('click',    onSyncUp);
+    if ($btnDown)  $btnDown.addEventListener('click',  onSyncDown);
+
+    updateButtons();
+  });
+})();
+
 </script>
 <script>
 /* ============================================================================
