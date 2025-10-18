@@ -238,6 +238,30 @@
 }
 
 
+    
+#compare-export {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+#compare-export button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgba(0,0,0,.2);
+  border-radius: 6px;
+  background: #f8f8f8;
+  cursor: pointer;
+}
+#compare-export button:hover {
+  background: rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  #compare-export button {
+    background: rgba(255,255,255,.1);
+    color: #eee;
+  }
+}
+
+
 /* A14 — Statistiques */
 #compare-stats {
   margin-top: 1rem;
@@ -486,6 +510,16 @@
   <canvas id="carbon-chart" width="350" height="180" aria-label="Évolution carbone (journalier)"></canvas>
   <p class="carbon-note">NB : seules les sessions avec au moins une émission connue sont prises en compte.</p>
 </section>
+
+
+      <!-- =======================================================================
+     A16 — Export CSV
+     ======================================================================= -->
+    <div id="compare-export">
+       <button id="export-stats-csv">Exporter stats (CSV)</button>
+        <button id="export-carbon-csv">Exporter carbone (CSV)</button>
+    </div>
+
 
 
 
@@ -2197,6 +2231,83 @@ window.honouaCarbonLookup = async function(ean){
   });
 })();
 </script>
+
+<script>
+/* ============================================================================
+   A16 — Export CSV des séries (stats et carbone)
+   ============================================================================ */
+(function(){
+  const HISTORY_KEY = 'honoua_compare_history_v1';
+  const CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+
+  // Utilitaires CSV
+  function downloadCSV(filename, rows) {
+    const processRow = (row) => row.map(v => `"${(v ?? '').toString().replace(/"/g, '""')}"`).join(',');
+    const csv = rows.map(processRow).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function groupSessionsByDay(list){
+    const map = {};
+    list.forEach(e => {
+      const d = new Date(e.ts).toISOString().slice(0,10);
+      map[d] = (map[d] || 0) + 1;
+    });
+    return Object.entries(map).map(([day, count]) => [day, count]);
+  }
+
+  async function exportStatsCSV(){
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch {}
+    if (!history.length) return alert("Aucune donnée à exporter.");
+    const grouped = groupSessionsByDay(history);
+    const rows = [["Date", "Nombre de sessions"], ...grouped];
+    downloadCSV("sessions_par_jour.csv", rows);
+  }
+
+  async function exportCarbonCSV(){
+    if (typeof window.honouaCarbonLookup !== "function") {
+      return alert("Le module carbone (A15) n’est pas actif.");
+    }
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch {}
+    if (!history.length) return alert("Aucune donnée carbone.");
+    const cache = JSON.parse(localStorage.getItem(CARBON_CACHE_KEY) || "{}");
+    const dayMap = {};
+    for (const e of history) {
+      const eans = (e.params?.eans) || [];
+      const day = new Date(e.ts).toISOString().slice(0,10);
+      const vals = eans.map(x => cache[x]).filter(v => typeof v === "number");
+      if (!vals.length) continue;
+      const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
+      if (!dayMap[day]) dayMap[day] = [];
+      dayMap[day].push(avg);
+    }
+    const rows = [["Date", "Moyenne gCO2e/session"]];
+    for (const day of Object.keys(dayMap).sort()) {
+      const arr = dayMap[day];
+      const mean = arr.reduce((a,b)=>a+b,0)/arr.length;
+      rows.push([day, mean.toFixed(1)]);
+    }
+    downloadCSV("carbone_journalier.csv", rows);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const btnStats = document.getElementById("export-stats-csv");
+    const btnCarbon = document.getElementById("export-carbon-csv");
+    if (btnStats) btnStats.addEventListener("click", exportStatsCSV);
+    if (btnCarbon) btnCarbon.addEventListener("click", exportCarbonCSV);
+  });
+})();
+</script>
+
+
 
 
 </body>
