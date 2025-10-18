@@ -504,7 +504,16 @@
 .delta-mid    { border-color:rgba(245,193,71,.35); background:rgba(245,193,71,.12); }
 .delta-bad    { border-color:rgba(193, 39,45,.35); background:rgba(193, 39,45,.10); }
 
-
+/* A22 — Encart “Alternative bas carbone” */
+.alt-suggest{
+  margin-top:8px; padding:8px; border:1px dashed rgba(0,0,0,.2);
+  border-radius:8px; background:#fff;
+}
+.alt-suggest .alt-text{ font-size:.9rem; margin-bottom:6px; }
+.alt-suggest .alt-actions{ display:flex; gap:8px; }
+@media (prefers-color-scheme: dark){
+  .alt-suggest{ background:#121316; border-color:rgba(255,255,255,.18); }
+}
 </style>
 
 </head>
@@ -841,87 +850,199 @@
     syncUrlState();
     input.focus();
   });
+         /* A22 — makeCardSkeleton : carte produit + badge A21 + encart alternative */
+function makeCardSkeleton(code){
+  const el = document.createElement("article");
+  el.className = "card";
+  el.dataset.ean = code;
 
-  // ---- Prefs / EANs
-  function loadPrefs(){
-    try{ return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); }catch{ return {}; }
-  }
-  function savePrefs(){ localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
-  function loadEans(){
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      if(!arr.length){
-        const params = new URLSearchParams(location.search);
-        const csv = (params.get("eans")||"").trim();
-        if(csv){ return csv.split(",").map(s=>s.trim()).filter(Boolean); }
-      }
-      return arr;
-    }catch{ return []; }
-  }
-  function saveEans(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(eans)); }
-  function addEAN(val, silent=false){
-    if(!/^\d{8,14}$/.test(val)){ if(!silent) notify("EAN invalide."); input.focus(); return false; }
-    if(eans.includes(val)){ if(!silent) notify("Déjà présent."); input.focus(); return false; }
-    eans.push(val); saveEans(); render(); updateCounter(); if(!silent) notify("Produit ajouté."); return true;
-  }
+  el.innerHTML = `
+    <span class="rank" aria-hidden="true" data-role="rank">#—</span>
+    <div class="meta">EAN : <strong>${code}</strong></div>
+    <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
+    <h3 data-role="title">—</h3>
+    <div class="meta" data-role="brand">—</div>
 
-  // ---- UI
-  function render(){
-    track.innerHTML = "";
-    if(eans.length===0){
-      const d = document.createElement("div");
-      d.className="empty";
-      d.innerHTML = `Aucun produit. <br/>Saisissez un EAN ou utilisez <code>?eans=</code>.`;
-      track.appendChild(d);
-      refreshBtn.disabled = true;
-      updateCounter();
-      return;
-    }
-    refreshBtn.disabled = false;
-    for(const code of eans){
-      const card = makeCardSkeleton(code);
-      track.appendChild(card);
-      hydrateCard(card, code);
-    }
-    updateCounter();
-    applyFilter(); // re-appliquer après hydratation
-  }
+    <span class="badge" title="Empreinte normalisée sur la sélection">
+      <span class="dot" data-role="dot"></span>
+      <span data-role="fp-label">Empreinte : —</span>
+    </span>
+    <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
+    <div class="gauge-label" data-role="glabel">—</div>
 
-  function makeCardSkeleton(code){
-    const el = document.createElement("article");
-    el.className="card";
-    el.dataset.ean = code;
-    el.innerHTML = `
-      <span class="rank" aria-hidden="true" data-role="rank">#—</span>
-      <div class="meta">EAN : <strong>${code}</strong></div>
-      <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
-      <h3 data-role="title">—</h3>
-      <div class="meta" data-role="brand">—</div>
+    <!-- A21 — Badge d’écart carbone vs meilleur -->
+    <span class="delta-badge" data-role="delta" title="Écart carbone vs meilleur">—</span>
 
-      <span class="badge" title="Empreinte normalisée sur la sélection">
-        <span class="dot" data-role="dot"></span>
-        <span data-role="fp-label">Empreinte : —</span>
-      </span>
-      <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
-      <div class="gauge-label" data-role="glabel">—</div>
-
-            <!-- A21 — Badge d’écart carbone vs meilleur -->
-      <span class="delta-badge" data-role="delta" title="Écart carbone vs meilleur">—</span>
-
-
-      <div class="row" style="margin-top:12px">
-        <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
+    <!-- A22 — Zone suggestion “Alternative bas carbone” -->
+    <div class="alt-suggest" data-role="alt-box" hidden>
+      <div class="alt-text" data-role="alt-text">—</div>
+      <div class="alt-actions">
+        <button class="btn-ghost" data-action="alt-replace">Remplacer</button>
+        <button class="btn-ghost" data-action="alt-dismiss">Masquer</button>
       </div>
-    `;
-    el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
-      eans = eans.filter(v=>v!==code);
-      saveEans(); delete compareCache[code];
-      render(); updateCounter(); refreshCompare(); syncUrlState();
-      notify("Produit retiré."); input.focus();
+    </div>
+
+    <!-- A22 — rangée d’actions : Retirer + Alternative bas carbone -->
+    <div class="row" style="margin-top:12px">
+      <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
+      <button class="btn-ghost" data-action="alt-suggest" aria-label="Proposer une alternative bas carbone">
+        Alternative bas carbone
+      </button>
+    </div>
+  `;
+
+  // Retirer
+  const btnRemove = el.querySelector('[data-action="remove"]');
+  if (btnRemove) {
+    btnRemove.addEventListener("click", ()=>{
+      eans = eans.filter(v => v !== code);
+      saveEans();
+      delete compareCache[code];
+      render();
+      updateCounter();
+      refreshCompare();
+      syncUrlState();
+      notify("Produit retiré.");
+      if (typeof input !== "undefined" && input?.focus) input.focus();
     });
-    return el;
   }
+
+  // A22 — Alternative bas carbone
+  const btnSuggest = el.querySelector('[data-action="alt-suggest"]');
+  if (btnSuggest) {
+    btnSuggest.addEventListener("click", ()=>{
+      if (typeof suggestAlternativeFor === "function") {
+        suggestAlternativeFor(code, el);
+      } else {
+        const box  = el.querySelector('[data-role="alt-box"]');
+        const text = el.querySelector('[data-role="alt-text"]');
+        if (box && text) {
+          box.hidden = false;
+          text.textContent = "La suggestion n’est pas encore disponible.";
+          box.dataset.altEan = "";
+        }
+      }
+    });
+  }
+
+  // Encart : Remplacer
+  const btnReplace = el.querySelector('[data-action="alt-replace"]');
+  if (btnReplace) {
+    btnReplace.addEventListener("click", ()=>{
+      const target = el.querySelector('[data-role="alt-box"]')?.dataset.altEan || "";
+      if (!target) { notify("Aucune alternative disponible."); return; }
+      if (typeof replaceEAN === "function") {
+        replaceEAN(code, target);
+      } else {
+        notify("Fonction de remplacement indisponible.");
+      }
+    });
+  }
+
+  // Encart : Masquer
+  const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", ()=>{
+      const box = el.querySelector('[data-role="alt-box"]');
+      if (box) { box.hidden = true; box.dataset.altEan = ""; }
+    });
+  }
+
+  return el;
+}
+
+           
+
+  // Retirer
+  el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
+    eans = eans.filter(v => v !== code);
+    saveEans();
+    delete compareCache[code];
+    render();
+    updateCounter();
+    refreshCompare();
+    syncUrlState();
+    notify("Produit retiré.");
+    input?.focus();
+  });
+
+  // A22 — Alternative bas carbone (si les fonctions existent)
+  const btnSuggest = el.querySelector('[data-action="alt-suggest"]');
+  const btnReplace = el.querySelector('[data-action="alt-replace"]');
+  const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+
+  if (btnSuggest) {
+    btnSuggest.addEventListener("click", ()=>{
+      if (typeof suggestAlternativeFor === "function") {
+        suggestAlternativeFor(code, el);
+      } else {
+        const box = el.querySelector('[data-role="alt-box"]');
+        const text = el.querySelector('[data-role="alt-text"]');
+        if (box && text) {
+          box.hidden = false;
+          text.textContent = "La suggestion n’est pas encore disponible.";
+          box.dataset.altEan = "";
+        }
+      }
+    });
+  }
+
+  if (btnReplace) {
+    btnReplace.addEventListener("click", ()=>{
+      const target = el.querySelector('[data-role="alt-box"]')?.dataset.altEan;
+      if (!target) { notify("Aucune alternative disponible."); return; }
+      if (typeof replaceEAN === "function") {
+        replaceEAN(code, target);
+      } else {
+        notify("Fonction de remplacement indisponible.");
+      }
+    });
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", ()=>{
+      const box = el.querySelector('[data-role="alt-box"]');
+      if (box){ box.hidden = true; box.dataset.altEan = ""; }
+    });
+  }
+
+  return el; // ✅ important
+}
+     
+
+
+
+        /* A22 — bouton “Alternative bas carbone” */
+    el.querySelector('[data-action="alt-suggest"]').addEventListener("click", ()=>{
+      suggestAlternativeFor(code, el);
+    });
+
+   // Gestion des actions de l’encart (Remplacer / Masquer)
+const btnReplace = el.querySelector('[data-action="alt-replace"]');
+if (btnReplace) {
+  btnReplace.addEventListener("click", () => {
+    const box = el.querySelector('[data-role="alt-box"]');
+    const target = box?.dataset.altEan || "";
+    if (!target) { notify("Aucune alternative disponible."); return; }
+    if (typeof replaceEAN === "function") {
+      replaceEAN(code, target);
+    } else {
+      notify("Fonction de remplacement indisponible.");
+    }
+  });
+}
+
+const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+if (btnDismiss) {
+  btnDismiss.addEventListener("click", () => {
+    const box = el.querySelector('[data-role="alt-box"]');
+    if (box) { box.hidden = true; box.dataset.altEan = ""; }
+  });
+}
+
+return el;
+}
+
 
   async function hydrateCard(card, code){
     const $t = (sel)=>card.querySelector(sel);
@@ -1125,6 +1246,107 @@
     });
   }
 
+  /* ============================================================================
+   A22 — Suggestion d’alternative bas carbone (locale)
+   - Cherche, parmi les EANs affichés, celui avec l’empreinte la plus basse
+     (compareCache) et différent du produit courant.
+   - Si trouvé et meilleur, propose “Remplacer” (swap d’EAN in-place).
+   ============================================================================ */
+
+/** Trouve l’EAN le plus bas carbone dans la sélection courante (hors `exclude`) */
+function findBestAlternative(exclude){
+  if (!eans.length) return null;
+  // On cherche le plus bas raw connu
+  let best = null;
+  for (const e of eans){
+    if (e === exclude) continue;
+    const fp = compareCache[e]?.raw;
+    if (typeof fp !== "number" || !isFinite(fp)) continue;
+    if (!best || fp < best.fp) best = { ean: e, fp };
+  }
+  return best; // {ean, fp} ou null
+}
+
+/** Affiche l’encart de suggestion pour la carte `cardEl` */
+function showAlternative(cardEl, currentEan, alt){
+  const box = cardEl.querySelector('[data-role="alt-box"]');
+  const text = cardEl.querySelector('[data-role="alt-text"]');
+  if (!box || !text) return;
+
+  if (!alt){
+    box.hidden = false;
+    box.dataset.altEan = "";
+    text.textContent = "Aucune alternative plus bas carbone n’a été trouvée dans la sélection.";
+    return;
+  }
+
+  const cur = compareCache[currentEan]?.raw;
+  const diff = (typeof cur === "number" && isFinite(cur)) ? (cur - alt.fp) : null;
+
+  box.hidden = false;
+  box.dataset.altEan = alt.ean;
+
+  if (diff != null && diff > 0){
+    const pct = cur > 0 ? Math.round((diff / cur) * 100) : 0;
+    text.textContent = `Suggestion : ${alt.ean} — environ ${diff.toFixed(0)} gCO₂e de moins (~${pct}%).`;
+  } else {
+    text.textContent = `Déjà le meilleur choix carbone de la sélection.`;
+  }
+}
+
+/** Logique de suggestion déclenchée par le bouton */
+function suggestAlternativeFor(currentEan, cardEl){
+  // Conditions minimales
+  if (!eans || eans.length < 2) {
+    const box = cardEl.querySelector('[data-role="alt-box"]');
+    const text = cardEl.querySelector('[data-role="alt-text"]');
+    if (box && text){ box.hidden = false; text.textContent = "Ajoutez un autre produit pour proposer une alternative."; box.dataset.altEan=""; }
+    return;
+  }
+  // Besoin des empreintes actualisées
+  if (!compareCache || !Object.keys(compareCache).length){
+    refreshCompare(true);
+  }
+
+  const best = findBestAlternative(currentEan);
+  // Si pas d’empreinte pour le courant, on propose simplement le meilleur global
+  if (!compareCache[currentEan] && best){
+    showAlternative(cardEl, currentEan, best);
+    return;
+  }
+  // Si courant est le meilleur (ou égal), aucune alternative
+  const curRaw = compareCache[currentEan]?.raw;
+  if (best && typeof curRaw === "number" && best.fp < curRaw){
+    showAlternative(cardEl, currentEan, best);
+  } else {
+    showAlternative(cardEl, currentEan, null);
+  }
+}
+
+/** Remplace `oldEan` par `newEan` dans la sélection (swap in-place) */
+function replaceEAN(oldEan, newEan){
+  if (!newEan || newEan === oldEan) return;
+  const idx = eans.indexOf(oldEan);
+  if (idx === -1) return;
+
+  // Si la cible existe déjà, on retire simplement l’ancien
+  const exists = eans.includes(newEan);
+  if (exists){
+    eans = eans.filter(v => v !== oldEan);
+  } else {
+    eans.splice(idx, 1, newEan);
+  }
+
+  saveEans();
+  compareCache = {}; // force recalcul
+  render();
+  updateCounter();
+  refreshCompare(true);
+  syncUrlState();
+  notify("Produit remplacé par une alternative plus bas carbone.");
+}
+
+
   // ---- Helpers
   // A9 — import enrichi depuis l’URL (inclut tri/ordre/départage/filtre)
   function importFromUrl(){
@@ -1215,6 +1437,107 @@
     toast.textContent = msg; toast.style.opacity=1;
     setTimeout(()=>toast.style.opacity=0, 1400);
   }
+
+  /* ============================================================================
+   A22 — Suggestion d’alternative bas carbone (locale)
+   - Cherche, parmi les EANs affichés, celui avec l’empreinte la plus basse
+     (compareCache) et différent du produit courant.
+   - Si trouvé et meilleur, propose “Remplacer” (swap d’EAN in-place).
+   ============================================================================ */
+
+/** Trouve l’EAN le plus bas carbone dans la sélection courante (hors `exclude`) */
+function findBestAlternative(exclude){
+  if (!eans.length) return null;
+  // On cherche le plus bas raw connu
+  let best = null;
+  for (const e of eans){
+    if (e === exclude) continue;
+    const fp = compareCache[e]?.raw;
+    if (typeof fp !== "number" || !isFinite(fp)) continue;
+    if (!best || fp < best.fp) best = { ean: e, fp };
+  }
+  return best; // {ean, fp} ou null
+}
+
+/** Affiche l’encart de suggestion pour la carte `cardEl` */
+function showAlternative(cardEl, currentEan, alt){
+  const box = cardEl.querySelector('[data-role="alt-box"]');
+  const text = cardEl.querySelector('[data-role="alt-text"]');
+  if (!box || !text) return;
+
+  if (!alt){
+    box.hidden = false;
+    box.dataset.altEan = "";
+    text.textContent = "Aucune alternative plus bas carbone n’a été trouvée dans la sélection.";
+    return;
+  }
+
+  const cur = compareCache[currentEan]?.raw;
+  const diff = (typeof cur === "number" && isFinite(cur)) ? (cur - alt.fp) : null;
+
+  box.hidden = false;
+  box.dataset.altEan = alt.ean;
+
+  if (diff != null && diff > 0){
+    const pct = cur > 0 ? Math.round((diff / cur) * 100) : 0;
+    text.textContent = `Suggestion : ${alt.ean} — environ ${diff.toFixed(0)} gCO₂e de moins (~${pct}%).`;
+  } else {
+    text.textContent = `Déjà le meilleur choix carbone de la sélection.`;
+  }
+}
+
+/** Logique de suggestion déclenchée par le bouton */
+function suggestAlternativeFor(currentEan, cardEl){
+  // Conditions minimales
+  if (!eans || eans.length < 2) {
+    const box = cardEl.querySelector('[data-role="alt-box"]');
+    const text = cardEl.querySelector('[data-role="alt-text"]');
+    if (box && text){ box.hidden = false; text.textContent = "Ajoutez un autre produit pour proposer une alternative."; box.dataset.altEan=""; }
+    return;
+  }
+  // Besoin des empreintes actualisées
+  if (!compareCache || !Object.keys(compareCache).length){
+    refreshCompare(true);
+  }
+
+  const best = findBestAlternative(currentEan);
+  // Si pas d’empreinte pour le courant, on propose simplement le meilleur global
+  if (!compareCache[currentEan] && best){
+    showAlternative(cardEl, currentEan, best);
+    return;
+  }
+  // Si courant est le meilleur (ou égal), aucune alternative
+  const curRaw = compareCache[currentEan]?.raw;
+  if (best && typeof curRaw === "number" && best.fp < curRaw){
+    showAlternative(cardEl, currentEan, best);
+  } else {
+    showAlternative(cardEl, currentEan, null);
+  }
+}
+
+/** Remplace `oldEan` par `newEan` dans la sélection (swap in-place) */
+function replaceEAN(oldEan, newEan){
+  if (!newEan || newEan === oldEan) return;
+  const idx = eans.indexOf(oldEan);
+  if (idx === -1) return;
+
+  // Si la cible existe déjà, on retire simplement l’ancien
+  const exists = eans.includes(newEan);
+  if (exists){
+    eans = eans.filter(v => v !== oldEan);
+  } else {
+    eans.splice(idx, 1, newEan);
+  }
+
+  saveEans();
+  compareCache = {}; // force recalcul
+  render();
+  updateCounter();
+  refreshCompare(true);
+  syncUrlState();
+  notify("Produit remplacé par une alternative plus bas carbone.");
+}
+
 
   // A5 — helpers partage + A9 (état complet)
   function buildShareUrl(full=false){
