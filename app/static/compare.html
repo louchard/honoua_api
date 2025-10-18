@@ -483,6 +483,26 @@
   }
 }
 
+/* A21 — Badge écart carbone */
+.delta-badge{
+  display:inline-block;
+  margin-top:6px;
+  padding:.15rem .45rem;
+  border-radius:.5rem;
+  font-size:.78rem;
+  border:1px solid rgba(0,0,0,.15);
+  background:#fff;
+  color:#333;
+}
+@media (prefers-color-scheme: dark){
+  .delta-badge{
+    background:#121316; border-color:rgba(255,255,255,.14); color:#eee;
+  }
+}
+/* états */
+.delta-good   { border-color:rgba(33,150,83,.35);  background:rgba(33,150,83,.08);  }
+.delta-mid    { border-color:rgba(245,193,71,.35); background:rgba(245,193,71,.12); }
+.delta-bad    { border-color:rgba(193, 39,45,.35); background:rgba(193, 39,45,.10); }
 
 
 </style>
@@ -886,6 +906,10 @@
       <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
       <div class="gauge-label" data-role="glabel">—</div>
 
+            <!-- A21 — Badge d’écart carbone vs meilleur -->
+      <span class="delta-badge" data-role="delta" title="Écart carbone vs meilleur">—</span>
+
+
       <div class="row" style="margin-top:12px">
         <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
       </div>
@@ -964,6 +988,9 @@
     const vals = Object.values(byEan);
     const min = vals.length ? Math.min(...vals) : 0;
     const max = vals.length ? Math.max(...vals) : 1;
+        // A21 — meilleur absolu (gCO2e) pour les deltas
+    const bestRaw = vals.length ? min : null;
+
     const span = Math.max(1e-9, max - min);
 
     compareCache = {};
@@ -981,15 +1008,52 @@
       const dot = card.querySelector('[data-role="dot"]');
       const lab = card.querySelector('[data-role="fp-label"]');
       const glb = card.querySelector('[data-role="glabel"]');
+            // A21 — badge delta
+      const deltaEl = card.querySelector('[data-role="delta"]');
+
       if(!compareCache[ean]){
         bar.style.width='0%'; dot.style.background='#bbb'; lab.textContent='Empreinte : —'; glb.textContent='—';
+                bar.style.width='0%';
+        dot.style.background='#bbb';
+        lab.textContent='Empreinte : —';
+        glb.textContent='—';
+        if (deltaEl){
+          deltaEl.textContent = '—';
+          deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+          deltaEl.title = 'Écart carbone vs meilleur';
+        }
         return;
+
       }
       const {raw, norm} = compareCache[ean];
       const pct = Math.round(norm*100);
       bar.style.width = Math.max(6,pct)+'%';
       dot.style.background = mixColor('#2e7d32','#F5C147', norm);
       lab.textContent = `Empreinte : ${fmt(raw)}`;
+            // A21 — Calculs d'écart vs meilleur (en % et en absolu gCO2e)
+      if (deltaEl && bestRaw != null && isFinite(raw)) {
+        const diffAbs = raw - bestRaw;                 // gCO2e au-dessus du meilleur (>= 0)
+        const diffPct = (bestRaw > 0) ? (diffAbs / bestRaw) * 100 : 0; // %
+        const pctTxt  = (diffPct >= 0 ? '+' : '') + diffPct.toFixed(0) + '%';
+        const absTxt  = (diffAbs >= 1000) ? (diffAbs/1000).toFixed(2)+'k' : diffAbs.toFixed(0);
+        deltaEl.textContent = `${pctTxt} (${absTxt} g)`;
+        deltaEl.title = `Écart vs meilleur : ${diffPct.toFixed(1)}% • ${diffAbs.toFixed(0)} gCO₂e`;
+
+        // couleur (seuils ajustables)
+        deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+        if (diffPct <= 10) {
+          deltaEl.classList.add('delta-good');
+        } else if (diffPct <= 35) {
+          deltaEl.classList.add('delta-mid');
+        } else {
+          deltaEl.classList.add('delta-bad');
+        }
+      } else if (deltaEl) {
+        deltaEl.textContent = '—';
+        deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+        deltaEl.title = 'Écart carbone vs meilleur';
+      }
+
       glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
     });
 
