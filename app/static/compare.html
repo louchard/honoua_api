@@ -2233,32 +2233,114 @@ actions.appendChild(btnRename);
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<!-- A15 — Hook de résolution carbone (override) -->
 <script>
-/**
- * Définis ici comment récupérer l’empreinte d’un EAN (gCO2e).
- * Retourne un nombre (gCO2e) ou null si inconnu.
- * Tu peux remplacer l’exemple MAP par un fetch API.
- */
-window.honouaCarbonLookup = async function(ean){
-  // Exemple simple (mapping local) — à remplacer par ton API
-  const MAP = {
-    "3274080005003": 120,  // ex.
-    "3017620429484": 450   // ex.
+/* ============================================================================
+   A20 — Source carbone (hook connecté à l’API Honoua) + cache TTL
+   - Remplace les anciens hooks A15 (supprime les 2 scripts qui redéfinissaient
+     window.honouaCarbonLookup).
+   - Utilise /api/honoua/emissions?ean=... (JSON attendu: { ean, gco2e:number })
+   - Met en cache local (clé: honoua_carbon_cache_v1) avec TTL (jours)
+   - Si A19 (auth cloud) est en place, ajoute le header Bearer (sessionStorage)
+   - Rétro-compatible: A15 consomme ce hook sans autre changement.
+   ============================================================================ */
+
+(function(){
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+  var TTL_DAYS = 7;                 // durée de vie du cache (jours)
+  var ENDPOINT = '/api/honoua/emissions?ean='; // adapter si besoin
+
+  // ----- Cache helpers (avec horodatage) ------------------------------------
+  function readCache(){
+    try { return JSON.parse(localStorage.getItem(CARBON_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function writeCache(obj){
+    try {
+      localStorage.setItem(CARBON_CACHE_KEY, JSON.stringify(obj));
+      // notifie A15 pour re-render éventuel
+      window.dispatchEvent(new StorageEvent('storage', { key: CARBON_CACHE_KEY }));
+    } catch(e){ console.warn('[A20] writeCache:', e); }
+  }
+  function isFresh(entry){
+    if (!entry || typeof entry !== 'object') return false;
+    if (!('ts' in entry)) return false;
+    var ageMs = Date.now() - Number(entry.ts || 0);
+    var ttlMs = TTL_DAYS * 24 * 60 * 60 * 1000;
+    return ageMs >= 0 && ageMs <= ttlMs;
+  }
+
+  // ----- Fetch util (timeout + Bearer optionnel si A19 actif) ----------------
+  async function fetchJSON(url, opts){
+    var ctrl = new AbortController();
+    var t = setTimeout(()=>ctrl.abort(), 8000); // 8s timeout
+    var headers = Object.assign({ 'Accept':'application/json' }, (opts && opts.headers) || {});
+    // Si A19 connecté, on propage le token
+    try {
+      var token = sessionStorage.getItem('honoua_token');
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+    } catch {}
+    try{
+      var res = await fetch(url, { signal: ctrl.signal, headers: headers });
+      clearTimeout(t);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      return await res.json();
+    }catch(e){
+      clearTimeout(t);
+      throw e;
+    }
+  }
+
+  // ----- Hook global consommé par A15 ---------------------------------------
+  window.honouaCarbonLookup = async function(ean){
+    if (!ean) return null;
+    ean = String(ean);
+
+    // 1) Cache (fresh → retourne direct; stale → tente réseau, sinon valeur stale)
+    var cache = readCache();
+    var entry = cache[ean]; // { v: number|null, ts: epoch }
+    if (isFresh(entry)) {
+      return (typeof entry.v === 'number') ? entry.v : null;
+    }
+
+    // 2) Réseau
+    try{
+      var data = await fetchJSON(ENDPOINT + encodeURIComponent(ean));
+      var val = (data && typeof data.gco2e === 'number' && isFinite(data.gco2e)) ? data.gco2e : null;
+
+      // 3) Écrit cache + notifie
+      cache[ean] = { v: val, ts: Date.now() };
+      writeCache(cache);
+
+      return val;
+    } catch(err){
+      console.warn('[A20] lookup fail for', ean, err);
+
+      // Fallback: si on a une valeur en cache (même périmée), on la rend.
+      if (entry && ('v' in entry)) {
+        return (typeof entry.v === 'number') ? entry.v : null;
+      }
+      // Sinon: inconnu
+      return null;
+    }
   };
-  return MAP[ean] ?? null;
-};
+
+  // ----- Pré-chauffage facultatif: EANs affichés à l’écran -------------------
+  // On pré-remplit le cache pour améliorer le premier rendu de A15.
+  document.addEventListener('DOMContentLoaded', function(){
+    var cards = Array.from(document.querySelectorAll('.card[data-ean]'));
+    var eans = cards.map(function(c){ return c.getAttribute('data-ean'); }).filter(Boolean);
+    if (!eans.length) return;
+    // On déclenche en arrière-plan sans bloquer l’UI
+    setTimeout(async function(){
+      for (const e of eans) {
+        try { await window.honouaCarbonLookup(e); } catch {}
+      }
+    }, 0);
+  });
+
+})();
 </script>
 
-<script>
-window.honouaCarbonLookup = async function(ean){
-  const res = await fetch('/api/honoua/emissions?ean=' + encodeURIComponent(ean));
-  if (!res.ok) return null;
-  const obj = await res.json();
-  // Attendu : { ean: "xxx", gco2e: 123.4 }
-  return (typeof obj.gco2e === 'number') ? obj.gco2e : null;
-};
-</script>
 
 
 
