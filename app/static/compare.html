@@ -514,6 +514,31 @@
 @media (prefers-color-scheme: dark){
   .alt-suggest{ background:#121316; border-color:rgba(255,255,255,.18); }
 }
+
+/* A23 — Badge "au-dessus du seuil" + état visuel */
+.card.over-threshold{
+  outline: 2px dashed rgba(193,39,45,.45);
+  outline-offset: 3px;
+}
+.threshold-badge{
+  display:inline-block;
+  margin-top:6px;
+  padding:.15rem .45rem;
+  border-radius:.5rem;
+  font-size:.78rem;
+  border:1px solid rgba(193,39,45,.35);
+  background:rgba(193,39,45,.10);
+  color:#b02328;
+}
+@media (prefers-color-scheme: dark){
+  .threshold-badge{
+    background:rgba(193,39,45,.15);
+    border-color:rgba(193,39,45,.45);
+    color:#ffb3b6;
+  }
+}
+
+
 </style>
 
 </head>
@@ -693,11 +718,17 @@
   let eans = loadEans();
   let prefs = loadPrefs(); // { sort, showRank, order, tiebreak, filter }
   let compareCache = {};   // { ean: {raw:number, norm:number} }
+  // A23: champ seuil carbone (injecté dynamiquement)
+  let threshInput = null;
+
 
   // A10 — Restauration automatique de l’état depuis l’URL
   function restoreStateFromUrl() {
     const params = new URLSearchParams(location.search);
     const hasRank = params.has("rank");
+    // A23 — seuil carbone (gCO2e)
+    const tmax = params.get("tmax");
+
     const fromUrl = {
       eans: params.get("eans"),
       sort: params.get("sort"),
@@ -706,6 +737,14 @@
       tiebreak: params.get("tiebreak"),
       filter: params.get("filter")
     };
+
+   // A23 — appliquer tmax si fourni (nombre > 0)
+if (tmax != null) {
+  const n = Number(tmax);
+  if (!isNaN(n) && n > 0) prefs.carbonThreshold = n;
+}
+ 
+
 
     // EANs depuis URL
     if (fromUrl.eans) {
@@ -731,6 +770,11 @@
     if (prefs.order) params.set("order", prefs.order);
     if (prefs.tiebreak) params.set("tiebreak", prefs.tiebreak);
     if (prefs.filter) params.set("filter", prefs.filter);
+    // A23 — seuil carbone
+   if (typeof prefs.carbonThreshold === "number" && prefs.carbonThreshold > 0) {
+  params.set("tmax", String(prefs.carbonThreshold));
+}
+
     const newUrl = `${location.pathname}?${params.toString()}`;
     history.replaceState({}, "", newUrl);
   }
@@ -750,6 +794,62 @@
   if (orderSelect) orderSelect.value = prefs.order;
   if (tiebreakSelect) tiebreakSelect.value = prefs.tiebreak;
   if (searchInput) searchInput.value = prefs.filter;
+
+  // A23 — init seuil carbone (valeur par défaut : none)
+if (typeof prefs.carbonThreshold !== "number") prefs.carbonThreshold = 0;
+
+// A23 — injecter le champ "Seuil gCO2e"
+(function injectThresholdField(){
+  // On va mettre le champ juste après sortSelect s'il existe, sinon on le met discrètement près du refreshBtn
+  const anchor = sortSelect || refreshBtn || document.body;
+  const wrapper = document.createElement('span');
+  wrapper.style.marginLeft = '8px';
+  wrapper.style.display = 'inline-flex';
+  wrapper.style.alignItems = 'center';
+  wrapper.style.gap = '6px';
+
+  const label = document.createElement('label');
+  label.textContent = 'Seuil (gCO₂e) :';
+  label.style.fontSize = '.9rem';
+
+  const inputEl = document.createElement('input');
+  inputEl.type = 'number';
+  inputEl.min = '0';
+  inputEl.step = '1';
+  inputEl.style.width = '7.5rem';
+  inputEl.value = (prefs.carbonThreshold > 0) ? String(prefs.carbonThreshold) : '';
+  inputEl.placeholder = 'ex: 200';
+
+  threshInput = inputEl;
+
+  inputEl.addEventListener('change', ()=>{
+    const v = Number(inputEl.value);
+    prefs.carbonThreshold = (!isNaN(v) && v > 0) ? v : 0;
+    savePrefs();
+    applyThresholdStyles(); // met à jour les badges
+    syncUrlState();
+  });
+
+  label.htmlFor = ''; // (pas d’id nécessaire)
+  wrapper.appendChild(label);
+  wrapper.appendChild(inputEl);
+
+  // Insertion dans le flux UI
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
+  } else {
+    // fallback très discret
+    document.body.appendChild(wrapper);
+    wrapper.style.position = 'fixed';
+    wrapper.style.bottom = '1rem';
+    wrapper.style.right = '1rem';
+    wrapper.style.background = 'rgba(255,255,255,.9)';
+    wrapper.style.padding = '.4rem .6rem';
+    wrapper.style.borderRadius = '.5rem';
+    wrapper.style.boxShadow = '0 8px 24px rgba(0,0,0,.15)';
+  }
+})();
+
 
   // Rendu initial
   render();
@@ -872,6 +972,10 @@ function makeCardSkeleton(code){
 
     <!-- A21 — Badge d’écart carbone vs meilleur -->
     <span class="delta-badge" data-role="delta" title="Écart carbone vs meilleur">—</span>
+
+    <!-- A23 — Badge "au-dessus du seuil" -->
+<span class="threshold-badge" data-role="tbadge" hidden>Au-dessus du seuil</span>
+
 
     <!-- A22 — Zone suggestion “Alternative bas carbone” -->
     <div class="alt-suggest" data-role="alt-box" hidden>
@@ -1088,7 +1192,9 @@ return el;
   async function refreshCompare(force=false){
     if(!eans.length) return;
     if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){
-      sortCards(); paintRanks(); return;
+      sortCards(); paintRanks();     // A23 — appliquer l’état seuil après calcul/tri
+    applyThresholdStyles();
+ return;
     }
     let table=null;
     try{
@@ -1403,6 +1509,9 @@ function replaceEAN(oldEan, newEan){
     sortCards();
     paintRanks();
     syncUrlState();   // <— sync à la fin, une seule fois
+        // A23 — premier passage
+    applyThresholdStyles();
+
   }
 
   function pickFootprint(row){
