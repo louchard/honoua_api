@@ -626,6 +626,17 @@
   <span id="cloud-msg" style="font-size:.95rem;opacity:.9">Cloud : inactif</span>
 </div>
 
+<!-- A28 — Sécurité du token (chiffrement + rotation) -->
+<div id="cloud-security" class="row" style="gap:8px; align-items:center; margin-top:6px">
+  <input id="cloud-passphrase" type="password" placeholder="Phrase secrète (A28)" style="width:220px">
+  <button id="cloud-lock"   class="btn-ghost" title="Chiffrer/Mettre à jour le token">Protéger</button>
+  <button id="cloud-reveal" class="btn-ghost" title="Déchiffrer pour vérif locale">Révéler</button>
+  <button id="cloud-rotate" class="btn-ghost" title="Rotation du token">Rotation</button>
+  <span id="cloud-sec-status" style="opacity:.7"></span>
+</div>
+
+
+
 
 
   <!-- Barre d’actions (optionnelle, style minimal) -->
@@ -3785,6 +3796,186 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (isEnabled()) processQueue();
   });
 
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A28 — Sécurisation du token Cloud (AES-GCM + PBKDF2) + rotation
+   - Stocke le token uniquement chiffré en localStorage
+   - Nécessite une "phrase secrète" côté utilisateur (ne sort jamais du device)
+   - Compatibles A26/A27 : on fournit un getter "getDecryptedToken()"
+   ============================================================================ */
+
+(function(){
+  const CFG_KEY   = "honoua:cloud:cfg_v1";          // { enabled, token? (legacy), enc? }
+  const ENC_KEY   = "honoua:cloud:enc_v1";          // { v:1, salt, iv, ct }  (token chiffré)
+  const STATUS    = document.getElementById('cloud-sec-status');
+  const $pass     = document.getElementById('cloud-passphrase');
+  const $lock     = document.getElementById('cloud-lock');
+  const $reveal   = document.getElementById('cloud-reveal');
+  const $rotate   = document.getElementById('cloud-rotate');
+  const $cfgToken = document.getElementById('cloud-token'); // champ A26 existant (peut être vide)
+
+  if (!$pass || !$lock || !$reveal || !$rotate) return;
+
+  // ---- Utils JSON LS
+  const J = {
+    read(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } },
+    write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k){ try { localStorage.removeItem(k); } catch{} }
+  };
+
+  // ---- WebCrypto helpers
+  async function importKeyFromPass(pass, salt){
+    const enc = new TextEncoder();
+    const keyMat = await crypto.subtle.importKey(
+      "raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 120_000, hash: "SHA-256" },
+      keyMat,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt","decrypt"]
+    );
+  }
+  function randBytes(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  function b64(a){ return btoa(String.fromCharCode(...a)); }
+  function ub64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+
+  async function encryptToken(token, pass){
+    const salt = randBytes(16), iv = randBytes(12);
+    const key = await importKeyFromPass(pass, salt);
+    const ct = new Uint8Array(await crypto.subtle.encrypt(
+      { name:"AES-GCM", iv }, key, new TextEncoder().encode(token)
+    ));
+    return { v:1, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  }
+  async function decryptToken(encObj, pass){
+    const salt = ub64(encObj.salt), iv = ub64(encObj.iv), ct = ub64(encObj.ct);
+    const key = await importKeyFromPass(pass, salt);
+    const pt  = await crypto.subtle.decrypt({ name:"AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  }
+
+  function setStatus(msg){ if (STATUS) STATUS.textContent = msg; }
+
+  // ---- API publique pour A26 : résolution du token déchiffré si besoin
+  window.getDecryptedToken = async function(){
+    const cfg = J.read(CFG_KEY, {});
+    // priorité au token chiffré
+    const enc = J.read(ENC_KEY, null);
+    if (enc) {
+      const pass = ($pass.value || "").trim();
+      if (!pass) return null; // l’utilisateur doit fournir la phrase
+      try { return await decryptToken(enc, pass); }
+      catch { return null; }
+    }
+    // fallback legacy (A26 avant A28)
+    return (cfg.token || "").trim() || null;
+  };
+
+  // ---- Branche A26 pour utiliser getDecryptedToken() automatiquement
+  // Remplace l’accès direct cfg.token par une résolution à la volée.
+  const _cloudHeadersOrig = (typeof window.cloudHeaders === 'function') ? window.cloudHeaders : null;
+  window.cloudHeaders = async function(tokenMaybe){
+    let token = tokenMaybe;
+    if (!token) token = await window.getDecryptedToken();
+    const h = { 'Content-Type':'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  };
+  // Adapte aussi apiGet/apiPut d’A26 si présents
+  const _apiGet = window.apiGet, _apiPut = window.apiPut;
+  if (typeof _apiGet === 'function') {
+    window.apiGet = async function(path, _token){
+      const token = _token || await window.getDecryptedToken();
+      const url = (window.HONOUA_CLOUD.baseUrl + path);
+      const r = await fetch(url, { headers: await window.cloudHeaders(token) });
+      if (!r.ok) throw new Error('GET '+path+' '+r.status);
+      return await r.json();
+    };
+  }
+  if (typeof _apiPut === 'function') {
+    window.apiPut = async function(path, _token, body){
+      const token = _token || await window.getDecryptedToken();
+      const url = (window.HONOUA_CLOUD.baseUrl + path);
+      const r = await fetch(url, { method:'PUT', headers: await window.cloudHeaders(token), body: JSON.stringify(body||{}) });
+      if (!r.ok) throw new Error('PUT '+path+' '+r.status);
+      return await r.json().catch(()=> ({}));
+    };
+  }
+
+  // ---- Bouton "Protéger" : chiffrer/mettre à jour le token
+  $lock.addEventListener('click', async ()=>{
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+
+    const cfg = J.read(CFG_KEY, {});
+    // Source du token : champ A26 si valeur présente, sinon legacy cfg.token (si encore là)
+    let token = ($cfgToken?.value || "").trim();
+    if (!token) token = (cfg.token || "").trim();
+
+    if (!token) { alert("Colle d’abord ton token (champ Cloud)."); return; }
+
+    try{
+      const enc = await encryptToken(token, pass);
+      J.write(ENC_KEY, enc);
+      // Efface l’ancien token en clair (sécurité)
+      if (cfg.token) { delete cfg.token; J.write(CFG_KEY, cfg); }
+      if ($cfgToken) $cfgToken.value = ""; // vider l’UI
+      setStatus("Token chiffré ✅");
+    }catch(e){
+      console.warn("[A28] encrypt error:", e);
+      setStatus("Erreur de chiffrement ❌");
+    }
+  });
+
+  // ---- Bouton "Révéler" : déchiffre pour inspection locale (jamais stocké)
+  $reveal.addEventListener('click', async ()=>{
+    const enc = J.read(ENC_KEY, null);
+    if (!enc) { alert("Aucun token chiffré."); return; }
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+    try{
+      const token = await decryptToken(enc, pass);
+      // Affiche de façon non persistante
+      prompt("Token (copie locale, non stockée):", token);
+      setStatus("Déchiffrement OK");
+    }catch(e){
+      setStatus("Phrase secrète invalide ❌");
+    }
+  });
+
+  // ---- Bouton "Rotation" : remplace proprement le token
+  $rotate.addEventListener('click', async ()=>{
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+    // on demande le nouveau token (fourni par l’API / portail)
+    const newTok = prompt("Nouveau token (coller ici) :");
+    if (!newTok) return;
+    try{
+      const enc = await encryptToken(newTok.trim(), pass);
+      J.write(ENC_KEY, enc);
+      // purge de tout résidu legacy
+      const cfg = J.read(CFG_KEY, {});
+      if (cfg.token) { delete cfg.token; J.write(CFG_KEY, cfg); }
+      if ($cfgToken) $cfgToken.value = "";
+      setStatus("Rotation effectuée ✅");
+      // Optionnel: déclenche une sync (A27)
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    }catch(e){
+      setStatus("Rotation échouée ❌");
+    }
+  });
+
+  // ---- Indication d’état au chargement
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const enc = J.read(ENC_KEY, null);
+    if (enc) setStatus("Token protégé (A28)");
+    else     setStatus("Pas de token protégé");
+  });
 })();
 </script>
 
