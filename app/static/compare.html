@@ -550,6 +550,8 @@
       <p>A4–A6 — Tri, rang, partage, compteur, retirer tout</p>
     </div>
     <div style="width:40px"></div>
+    <button id="export-pdf" class="btn-ghost" title="Exporter un résumé PDF">Exporter PDF (Résumé)</button>
+
   </header>
 
   <main>
@@ -576,6 +578,8 @@
 
       <!-- A5 : Bouton de partage -->
       <button id="shareBtn" class="btn-primary" aria-label="Copier le lien de comparaison">🔗 Copier le lien</button>
+    
+
       <!-- A9 START: Bouton de copie de l’état complet -->
 <button id="copyStateBtn" class="btn-primary" aria-label="Copier l’état complet">📋 État complet</button>
 <!-- A9 END -->
@@ -623,6 +627,10 @@
   <canvas id="stat-chart" width="350" height="180" aria-label="Historique des sessions par jour"></canvas>
 </section>
      
+
+     <!-- A25 — jsPDF CDN -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 
      <!-- =======================================================================
      A15 — Évolution carbone
@@ -706,14 +714,14 @@
   const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
   async function fetchLeaderboard(scope, month){
-    // TODO: remplace par GET /api/leaderboard?scope=...&month=...
-    // Mock local pour prévisualiser l’UI
-    return [
-      { rank:1, pseudo:"GreenFox",   score: 120, n: 24 },
-      { rank:2, pseudo:"EcoNinja",   score: 145, n: 18 },
-      { rank:3, pseudo:"LowCO2Life", score: 162, n: 32 },
-    ];
-  }
+  const token = sessionStorage.getItem('honoua_token'); // A19
+  const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+  });
+  if (!res.ok) throw new Error('Leaderboard fetch failed');
+  return await res.json(); // -> [{rank,pseudo,score,n}, ...]
+}
+
   function renderRows(rows){
     if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
     const html = [
@@ -3283,6 +3291,119 @@ actions.appendChild(btnRename);
   });
 })();
 </script>
+<script>
+/* ============================================================================
+   A25 — Export PDF (Résumé comparateur)
+   - Génère un PDF local avec contexte (tri/filtre/seuil/budget) + graphiques A14/A15
+   - Rétro-compatible : si un élément manque (chart, budget…), on passe outre proprement
+   ============================================================================ */
+(function(){
+  const BTN_ID = "export-pdf";
+  document.addEventListener("DOMContentLoaded", ()=>{
+    const btn = document.getElementById(BTN_ID);
+    if (!btn) return;
+    btn.addEventListener("click", exportPdfSummary);
+  });
+
+  function getPrefsSafe(){
+    try { return JSON.parse(localStorage.getItem("honoua:compare:prefs")||"{}"); }
+    catch { return {}; }
+  }
+  function getHistorySafe(){
+    try { return JSON.parse(localStorage.getItem("honoua_compare_history_v1")||"[]"); }
+    catch { return []; }
+  }
+  function fmtInt(n){ return (n==null?0:n).toLocaleString('fr-FR'); }
+
+  function grabCanvasDataURL(id){
+    const el = document.getElementById(id);
+    if (!el || el.tagName !== "CANVAS") return null;
+    try { return el.toDataURL("image/png"); } catch { return null; }
+  }
+
+  async function exportPdfSummary(){
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) { alert("jsPDF introuvable."); return; }
+
+    const prefs = getPrefsSafe();
+    const history = getHistorySafe();
+    const now = new Date();
+
+    // Contexte
+    const eans = (Array.isArray(window.eans) ? window.eans.length : null);
+    const tri  = prefs.sort || "best";
+    const ordre= prefs.order || "asc";
+    const tieb = prefs.tiebreak || "name";
+    const filt = (prefs.filter||"").trim() || "—";
+    const seuil= (typeof prefs.carbonThreshold==="number" && prefs.carbonThreshold>0) ? prefs.carbonThreshold : 0;
+    const adults = prefs.householdAdults|0, kids = prefs.householdKids|0;
+    const hhSize = Math.max(0, adults)+Math.max(0, kids);
+    const hhBudget = hhSize ? hhSize * 2_000_000 : 0; // gCO2e/an
+
+    // Stats simples
+    const totalSessions = history.length;
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    const weekCount = history.filter(e => new Date(e.ts).getTime() >= weekAgo).length;
+    const avgProducts = totalSessions ? (
+      (history.reduce((s,e)=> s + (e.productCount||0), 0) / totalSessions).toFixed(1)
+    ) : "0.0";
+
+    // Graphiques (si présents)
+    const statPNG   = grabCanvasDataURL("stat-chart");    // A14
+    const carbonPNG = grabCanvasDataURL("carbon-chart");  // A15
+
+    // PDF
+    const doc = new jsPDF({ unit:"pt", format:"a4" });
+    let y = 48, left = 48, right = 547; // 595-48
+    doc.setFont("helvetica","bold"); doc.setFontSize(16);
+    doc.text("Honoua — Résumé de comparaison", left, y); y += 18;
+    doc.setFont("helvetica","normal"); doc.setFontSize(10);
+    doc.text(`Généré le : ${now.toLocaleString('fr-FR')}`, left, y); y += 18;
+    doc.text(`Articles comparés (actuels) : ${eans ?? "—"}`, left, y); y += 14;
+    doc.text(`Tri / Ordre / Départage : ${tri} / ${ordre} / ${tieb}`, left, y); y += 14;
+    doc.text(`Filtre : ${filt}`, left, y); y += 14;
+
+    if (seuil>0) { doc.text(`Seuil perso (A23) : ${fmtInt(seuil)} gCO₂e`, left, y); y += 14; }
+    if (hhSize>0) {
+      doc.text(`Foyer (A24) : ${adults} adulte(s), ${kids} enfant(s) — Budget annuel : ${fmtInt(hhBudget)} gCO₂e`, left, y);
+      y += 14;
+    }
+
+    y += 6;
+    doc.setLineWidth(.5); doc.line(left, y, right, y); y += 16;
+    doc.setFont("helvetica","bold"); doc.text("Historique (A11–A16)", left, y);
+    doc.setFont("helvetica","normal");
+    y += 14;
+    doc.text(`Total sessions : ${fmtInt(totalSessions)}  •  7 derniers jours : ${fmtInt(weekCount)}  •  Moyenne produits/session : ${avgProducts}`, left, y);
+    y += 18;
+
+    if (statPNG) {
+      doc.setFont("helvetica","bold"); doc.text("Sessions par jour", left, y); y += 10;
+      const w = 480, h = 220;
+      doc.addImage(statPNG, "PNG", left, y, w, h, undefined, "FAST");
+      y += h + 16;
+    }
+
+    if (carbonPNG) {
+      doc.setFont("helvetica","bold"); doc.text("Évolution carbone", left, y); y += 10;
+      const w = 480, h = 220;
+      doc.addImage(carbonPNG, "PNG", left, y, w, h, undefined, "FAST");
+      y += h + 16;
+    }
+
+    // Pied
+    if (y > 760) { doc.addPage(); y = 48; }
+    doc.setLineWidth(.2); doc.line(left, 812, right, 812);
+    doc.setFontSize(9);
+    doc.text("Honoua — Export PDF local (A25). Données locales, à usage informatif.", left, 826);
+
+    // Nom de fichier
+    const fname = `honoua_resume_${now.toISOString().slice(0,10)}.pdf`;
+    doc.save(fname);
+  }
+})();
+</script>
+
 
 
 
