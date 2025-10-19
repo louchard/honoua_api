@@ -549,10 +549,56 @@
   .pill-off   { background:#9e9e9e !important; }  /* hors ligne/inactif */
 
 
+/* A30 — focus visibles (clavier) */
+:focus {
+  outline: 2px solid #2e7d32;
+  outline-offset: 2px;
+}
+
+/* Lien d'évitement (visible seulement au focus) */
+.skip-link {
+  position: absolute; left: -9999px; top: 8px;
+  background: #111; color: #fff; padding: 8px 12px; border-radius: 8px;
+  z-index: 1000;
+}
+.skip-link:focus { left: 8px; }
+
+/* Respecte prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Thème sombre natif si tu as un thème : exemple minimal */
+@media (prefers-color-scheme: dark) {
+  body { background: #0f1113; color: #e6e6e6; }
+  .card { background: #16181b; }
+}
+
+/* États visuels des badges A27 (si présents) — contraste renforcé */
+.pill-ok   { background: #2e7d32 !important; }
+.pill-warn { background: #f5c147 !important; }
+.pill-err  { background: #c62828 !important; }
+.pill-off  { background: #9e9e9e !important; }
+
+/* Utilitaire écran lecteur : contenu uniquement pour SR */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+:focus { outline:2px solid #2e7d32; outline-offset:2px; }
+.skip-link{ position:absolute; left:-9999px; top:8px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000; }
+.skip-link:focus{ left:8px; }
+
+
 </style>
 
 </head>
 <body>
+
+  <!-- A30 — Lien d'évitement pour clavier/lecteur d'écran -->
+<a href="#main" class="skip-link">Aller au contenu principal</a>
+
   <header>
     <div class="logo" aria-hidden="true"></div>
     <div class="titles">
@@ -569,6 +615,14 @@
       <input id="eanInput" type="text" inputmode="numeric" placeholder="Ajouter un EAN (ex : 3017620422003)" aria-label="EAN à ajouter" />
       <button id="addBtn" class="btn-primary" aria-label="Ajouter le produit">Ajouter</button>
       <button id="clearBtn" class="btn-ghost" title="Réinitialiser le champ">↺</button>
+
+      <!-- A30 — Point d'ancrage du contenu principal -->
+       <div id="main" role="main">
+  <!-- ... contenu existant ... -->
+        </div>
+
+
+
     </div>
 
     <div class="toolbar" role="region" aria-label="Outils de comparaison">
@@ -594,6 +648,14 @@
 <button id="copyStateBtn" class="btn-primary" aria-label="Copier l’état complet">📋 État complet</button>
 <!-- A9 END -->
       <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
+
+      <!-- A30 — Sélecteur de langue -->
+       <label for="i18n-select" class="sr-only">Langue</label>
+       <select id="i18n-select" aria-label="Langue">
+       <option value="fr">Français</option>
+       <option value="en">English</option>
+       </select>
+
 
          <!-- =======================================================================
      A11 — Historique des comparaisons (Étape 2 : affichage + rechargement)
@@ -659,6 +721,9 @@
   <button type="button" id="carbon-cache-clear">Purger cache carbone</button>
 </div>
 <div id="history-toast" aria-live="polite" hidden>—</div>
+<!-- A30 — Toast accessible -->
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
 
 </section>
 
@@ -1317,9 +1382,18 @@ return el;
     }else{
       th.textContent = "Pas d’image";
     }
+
     // re-appliquer le filtre/surbrillance après hydratation des textes
     applyFilter();
   }
+
+  // A30 — a11y : relie l’article à son titre pour les lecteurs d'écran
+const h3 = $t('[data-role="title"]');
+if (h3 && !h3.id) {
+  h3.id = 'card-title-' + code;
+  card.setAttribute('aria-labelledby', h3.id);
+}
+
 
   // ===== Calculs + tri/rang =====
   async function refreshCompare(force=false){
@@ -4141,6 +4215,187 @@ document.addEventListener('DOMContentLoaded', ()=>{
       $file.value = ""; // reset input
     }
   });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A30 — i18n minimal (FR/EN) + améliorations ARIA
+   - Détecte navigator.language au premier chargement
+   - Expose window.i18n.t(key) et applique les libellés dynamiques clés
+   - Enveloppe notify() pour traduire les toasts
+   ============================================================================ */
+(function(){
+  // 1) Dictionnaire
+  const DICT = {
+    fr: {
+      'ui.add_ean': 'Entrez un EAN.',
+      'ui.invalid_ean': 'EAN invalide.',
+      'ui.already_present': 'Déjà présent.',
+      'ui.added': 'Produit ajouté.',
+      'ui.removed': 'Produit retiré.',
+      'ui.reset_done': 'Comparateur réinitialisé.',
+      'ui.copied_url': 'Lien copié dans le presse-papiers !',
+      'ui.copy_fail': 'Impossible de copier. Sélectionnez l’URL manuellement.',
+      'ui.copied_state': 'Lien (état complet) copié !',
+      'ui.no_results_filter': 'Aucun résultat pour ce filtre.',
+      'ui.nothing_to_remove': 'Rien à retirer.',
+      'ui.all_removed': 'Tous les produits ont été retirés.',
+      'ui.articles_one': '1 article',
+      'ui.articles_many': '{n} articles',
+      'lbl.share': 'Partager',
+      'lbl.copy_state': 'Copier l’état',
+      'lbl.reload': 'Recharger',
+      'lbl.remove': 'Retirer',
+      'lbl.alt_low_carbon': 'Alternative bas carbone',
+      'lbl.alt_replace': 'Remplacer',
+      'lbl.alt_hide': 'Masquer',
+      'lbl.rank': 'Rang',
+      'lbl.footprint': 'Empreinte',
+      'lbl.filter_placeholder': 'Rechercher…',
+      'lbl.language': 'Langue',
+      'toast.imported_n': '{n} EAN importé(s).',
+      'toast.no_new_params': 'Aucun paramètre nouveau à importer.',
+      'toast.cloud_import_ok': 'Cloud import terminé.',
+      'toast.cloud_import_err': 'Cloud import: erreur.',
+      'toast.cloud_export_ok': 'Cloud export terminé.',
+      'toast.cloud_export_err': 'Cloud export: erreur.',
+    },
+    en: {
+      'ui.add_ean': 'Enter an EAN.',
+      'ui.invalid_ean': 'Invalid EAN.',
+      'ui.already_present': 'Already present.',
+      'ui.added': 'Product added.',
+      'ui.removed': 'Product removed.',
+      'ui.reset_done': 'Comparator reset.',
+      'ui.copied_url': 'Link copied to clipboard!',
+      'ui.copy_fail': 'Unable to copy. Select the URL manually.',
+      'ui.copied_state': 'Full state link copied!',
+      'ui.no_results_filter': 'No results for this filter.',
+      'ui.nothing_to_remove': 'Nothing to remove.',
+      'ui.all_removed': 'All products have been removed.',
+      'ui.articles_one': '1 item',
+      'ui.articles_many': '{n} items',
+      'lbl.share': 'Share',
+      'lbl.copy_state': 'Copy full state',
+      'lbl.reload': 'Reload',
+      'lbl.remove': 'Remove',
+      'lbl.alt_low_carbon': 'Low-carbon alternative',
+      'lbl.alt_replace': 'Replace',
+      'lbl.alt_hide': 'Hide',
+      'lbl.rank': 'Rank',
+      'lbl.footprint': 'Footprint',
+      'lbl.filter_placeholder': 'Search…',
+      'lbl.language': 'Language',
+      'toast.imported_n': '{n} EAN(s) imported.',
+      'toast.no_new_params': 'No new parameter to import.',
+      'toast.cloud_import_ok': 'Cloud import completed.',
+      'toast.cloud_import_err': 'Cloud import: error.',
+      'toast.cloud_export_ok': 'Cloud export completed.',
+      'toast.cloud_export_err': 'Cloud export: error.',
+    }
+  };
+
+  // 2) Langue courante (persistée)
+  const LANG_KEY = 'honoua:i18n:lang';
+  function getLang(){
+    const s = localStorage.getItem(LANG_KEY);
+    if (s) return s;
+    const nav = (navigator.language || 'fr').slice(0,2).toLowerCase();
+    const lang = (nav === 'en') ? 'en' : 'fr';
+    localStorage.setItem(LANG_KEY, lang);
+    return lang;
+  }
+  function setLang(l){
+    const lang = (l==='en'?'en':'fr');
+    localStorage.setItem(LANG_KEY, lang);
+    applyStaticLabels();
+    // Re-appliquer tout ce qui dépend de la langue (compteur, toasts via wrapper, placeholders…)
+    applyDynamicBits();
+  }
+
+  // 3) t() simple
+  function t(key, vars){
+    const lang = getLang();
+    const pack = DICT[lang] || DICT.fr;
+    let s = pack[key] || key;
+    if (vars && typeof vars === 'object'){
+      Object.keys(vars).forEach(k => {
+        s = s.replace(new RegExp('\\{'+k+'\\}','g'), String(vars[k]));
+      });
+    }
+    return s;
+  }
+  window.i18n = { t, setLang, getLang };
+
+  // 4) Wire du sélecteur
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const sel = document.getElementById('i18n-select');
+    if (sel){
+      sel.value = getLang();
+      sel.addEventListener('change', ()=> setLang(sel.value));
+      sel.setAttribute('aria-label', t('lbl.language'));
+    }
+    applyStaticLabels();
+    applyDynamicBits();
+  });
+
+  // 5) Appliquer labels statiques (ex : placeholder du filtre)
+  function applyStaticLabels(){
+    const search = document.getElementById('searchInput');
+    if (search){
+      search.setAttribute('placeholder', t('lbl.filter_placeholder'));
+      search.setAttribute('aria-label', t('lbl.filter_placeholder'));
+    }
+  }
+
+  // 6) Compteur traduit
+  function updateCounterI18n(){
+    try{
+      const counter = document.getElementById('counter');
+      if (!counter) return;
+      const hasFilter = !!(window.prefs && window.prefs.filter && window.prefs.filter.trim());
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const visible = cards.filter(c => c.style.display !== 'none').length;
+      const n = hasFilter ? visible : (Array.isArray(window.eans)?window.eans.length:0);
+      counter.textContent = (n===1) ? t('ui.articles_one') : t('ui.articles_many',{n});
+    }catch{}
+  }
+
+  // 7) Wrapper de notify() pour traduire les messages connus
+  const _notify = (typeof window.notify === 'function') ? window.notify : null;
+  window.notify = function(msgKeyOrText){
+    const mapKnown = new Set(Object.keys(DICT.fr).concat(Object.keys(DICT.en)));
+    const msg = mapKnown.has(msgKeyOrText) ? t(msgKeyOrText) : msgKeyOrText;
+    const el = document.getElementById('toast');
+    if (el){
+      // ARIA: forcer annonce (aria-live polite)
+      el.textContent = msg;
+      el.style.opacity = 1;
+      setTimeout(()=> el.style.opacity = 0, 1400);
+    } else if (_notify){
+      _notify(msg);
+    }
+  };
+
+  // 8) Réappliquer les parties dynamiques au bon moment
+  function applyDynamicBits(){
+    updateCounterI18n();
+    const sel = document.getElementById('i18n-select');
+    if (sel) sel.setAttribute('aria-label', t('lbl.language'));
+  }
+
+  // 9) Observe changements impactant le compteur
+  const obs = new MutationObserver(()=>{
+    updateCounterI18n();
+  });
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const track = document.getElementById('track');
+    if (track) obs.observe(track, { childList:true, subtree:false });
+  });
+
+  // 10) Expose helper si d’autres modules veulent une string traduite
+  window.__t = t;
 })();
 </script>
 
