@@ -620,6 +620,16 @@
 </div>
 
 
+<!-- A29 — Export/Import sécurisé (.honoua) -->
+<div id="secure-transfer" class="row" style="gap:8px; align-items:center; margin-top:6px">
+  <button id="honoua-export" class="btn-ghost" title="Exporter .honoua (chiffré)">Exporter .honoua</button>
+  <input  id="honoua-import-file" type="file" accept=".honoua,application/octet-stream" style="display:none">
+  <button id="honoua-import" class="btn-ghost" title="Importer .honoua (chiffré)">Importer .honoua</button>
+  <span id="secure-transfer-status" style="opacity:.7"></span>
+</div>
+
+
+
 <!-- A27 — Bandeau d’état Cloud -->
 <div id="cloud-banner" aria-live="polite" style="display:flex;align-items:center;gap:8px;margin-top:6px">
   <span id="cloud-pill" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#bbb" aria-hidden="true"></span>
@@ -3975,6 +3985,161 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const enc = J.read(ENC_KEY, null);
     if (enc) setStatus("Token protégé (A28)");
     else     setStatus("Pas de token protégé");
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A29 — Export/Import sécurisé (.honoua)
+   - Exporte {prefs, history} en JSON, puis chiffre (AES-GCM, PBKDF2 120k)
+   - Import: déchiffre + MERGE non destructif (priorité local si conflit)
+   - Réutilise la phrase secrète A28 (champ #cloud-passphrase)
+   ============================================================================ */
+(function(){
+  const STATUS = document.getElementById('secure-transfer-status');
+  const $btnExp = document.getElementById('honoua-export');
+  const $btnImp = document.getElementById('honoua-import');
+  const $file   = document.getElementById('honoua-import-file');
+  const $pass   = document.getElementById('cloud-passphrase'); // A28
+
+  if (!$btnExp || !$btnImp || !$file) return;
+
+  const HK = 'honoua_compare_history_v1';
+  const PK = 'honoua:compare:prefs';
+
+  const J = {
+    read(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } },
+    write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+
+  function setStatus(msg){ if (STATUS) STATUS.textContent = msg; }
+
+  // ---- Crypto utils (identiques à A28) -------------------------------------
+  function randBytes(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  function b64(a){ return btoa(String.fromCharCode(...a)); }
+  function ub64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+
+  async function importKeyFromPass(pass, salt){
+    const enc = new TextEncoder();
+    const keyMat = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name:"PBKDF2", salt, iterations:120_000, hash:"SHA-256" },
+      keyMat,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["encrypt","decrypt"]
+    );
+  }
+  async function encryptBytes(plainBytes, pass){
+    const salt = randBytes(16), iv = randBytes(12);
+    const key = await importKeyFromPass(pass, salt);
+    const ct  = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, plainBytes));
+    return { v:1, salt:b64(salt), iv:b64(iv), ct:b64(ct) };
+  }
+  async function decryptToBytes(encObj, pass){
+    const salt = ub64(encObj.salt), iv = ub64(encObj.iv), ct = ub64(encObj.ct);
+    const key  = await importKeyFromPass(pass, salt);
+    const pt   = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    return new Uint8Array(pt);
+  }
+
+  // ---- Merge non destructif (réutilise A26 si dispo, sinon fallback) -------
+  function fallbackMergeHistory(localArr, remoteArr){
+    const byId = new Map();
+    const push = (e, from) => {
+      if(!e || typeof e!=='object' || e.id==null) return;
+      const prev = byId.get(e.id);
+      if (!prev) { byId.set(e.id, e); return; }
+      // LWW : on garde le plus récent ; si doute -> garder local (prev)
+      try{
+        const tPrev = new Date(prev.ts||0).getTime()||0;
+        const tNew  = new Date(e.ts||0).getTime()||0;
+        if (tNew >= tPrev) byId.set(e.id, e);
+      }catch{}
+    };
+    (localArr||[]).forEach(e=>push(e,'local'));
+    (remoteArr||[]).forEach(e=>push(e,'remote'));
+    return Array.from(byId.values()).sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+  }
+  function fallbackMergePrefs(localObj, remoteObj){
+    const out = Object.assign({}, localObj||{});
+    const src = remoteObj||{};
+    for(const k of Object.keys(src)){
+      if (out[k]===undefined || out[k]===null) out[k] = src[k]; // ne pas écraser une valeur locale existante
+    }
+    return out;
+  }
+  const mergeHistory = (window.mergeHistory || fallbackMergeHistory);
+  const mergePrefs   = (window.mergePrefs   || fallbackMergePrefs);
+
+  // ---- Export sécurisé ------------------------------------------------------
+  $btnExp.addEventListener('click', async ()=>{
+    const pass = ($pass?.value||"").trim();
+    if (!pass) { alert("Saisis ta phrase secrète (A28) pour chiffrer l’export."); return; }
+
+    // snapshot
+    const payload = {
+      kind: "honoua.backup",
+      version: 1,
+      ts: new Date().toISOString(),
+      prefs:   J.read(PK, {}),
+      history: J.read(HK, [])
+      // (optionnel) tu peux ajouter d’autres clés plus tard (ex: budget calculé)
+    };
+    const json = new TextEncoder().encode(JSON.stringify(payload));
+    try{
+      const enc = await encryptBytes(json, pass);
+      const blob = new Blob([JSON.stringify(enc)], { type: "application/octet-stream" });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const d = payload.ts.slice(0,10);
+      a.download = `honoua_${d}.honoua`; // extension dédiée
+      document.body.appendChild(a); a.click(); a.remove();
+      setStatus("Export .honoua généré ✅");
+    }catch(e){
+      console.warn("[A29] export error:", e);
+      setStatus("Export échoué ❌");
+    }
+  });
+
+  // ---- Import sécurisé ------------------------------------------------------
+  $btnImp.addEventListener('click', ()=> $file.click());
+  $file.addEventListener('change', async ()=>{
+    const f = $file.files && $file.files[0];
+    if (!f) return;
+    const pass = ($pass?.value||"").trim();
+    if (!pass) { alert("Saisis ta phrase secrète (A28) pour déchiffrer l’import."); $file.value=""; return; }
+
+    try{
+      const text = await f.text();
+      const encObj = JSON.parse(text);
+      const bytes  = await decryptToBytes(encObj, pass);
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+
+      if (payload.kind !== "honoua.backup") throw new Error("Fichier non reconnu");
+      // Merge non destructif
+      const localH = J.read(HK, []);
+      const localP = J.read(PK, {});
+      const mergedH = mergeHistory(localH, payload.history||[]);
+      const mergedP = mergePrefs(localP, payload.prefs||{});
+      J.write(HK, mergedH);
+      J.write(PK, mergedP);
+
+      // notifier l’app
+      window.dispatchEvent(new StorageEvent('storage', {key:HK}));
+      window.dispatchEvent(new StorageEvent('storage', {key:PK}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+
+      setStatus("Import .honoua appliqué (fusion) ✅");
+      notify?.("Import terminé. Vos données locales ont été conservées.");
+    }catch(e){
+      console.warn("[A29] import error:", e);
+      setStatus("Import échoué ❌ (phrase ou fichier invalide)");
+      alert("Impossible de lire le fichier .honoua : phrase secrète ou fichier invalide.");
+    }finally{
+      $file.value = ""; // reset input
+    }
   });
 })();
 </script>
