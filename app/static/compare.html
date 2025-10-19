@@ -683,6 +683,81 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
+  <!-- A24+ — Classements mensuels -->
+<section id="leaderboard" style="margin-top:18px">
+  <h3 style="margin:0 0 8px">Classements mensuels</h3>
+  <div style="display:flex;gap:8px;align-items:center">
+    <select id="lb-scope">
+      <option value="country">National</option>
+      <option value="region">Régional</option>
+    </select>
+    <input id="lb-month" type="month"/>
+    <button id="lb-refresh">Voir</button>
+    <span id="lb-status" style="opacity:.7"></span>
+  </div>
+  <div id="lb-table" style="margin-top:10px"></div>
+</section>
+<script>
+(function(){
+  const $ = s=>document.querySelector(s);
+  const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
+  const $status=$("#lb-status"), $table=$("#lb-table");
+  // init mois courant
+  const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  async function fetchLeaderboard(scope, month){
+    // TODO: remplace par GET /api/leaderboard?scope=...&month=...
+    // Mock local pour prévisualiser l’UI
+    return [
+      { rank:1, pseudo:"GreenFox",   score: 120, n: 24 },
+      { rank:2, pseudo:"EcoNinja",   score: 145, n: 18 },
+      { rank:3, pseudo:"LowCO2Life", score: 162, n: 32 },
+    ];
+  }
+  function renderRows(rows){
+    if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
+    const html = [
+      '<table style="width:100%;border-collapse:collapse">',
+      '<thead><tr>',
+      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+      '</tr></thead><tbody>'
+    ];
+    rows.forEach(r=>{
+      html.push(
+        `<tr>
+          <td style="padding:6px;border-bottom:1px solid #eee">${r.rank}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee">${r.pseudo}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.score.toLocaleString('fr-FR')}</td>
+          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.n}</td>
+        </tr>`
+      );
+    });
+    html.push('</tbody></table>');
+    $table.innerHTML = html.join('');
+  }
+  async function refresh(){
+    const scope=$scope.value, month=$month.value;
+    $status.textContent="Chargement…";
+    try{
+      const rows=await fetchLeaderboard(scope, month);
+      renderRows(rows);
+      $status.textContent = `${rows.length} entrées`;
+    }catch(e){
+      console.warn(e); $status.textContent="Erreur de chargement.";
+    }
+  }
+  $btn.addEventListener('click', refresh);
+  document.addEventListener('DOMContentLoaded', refresh);
+})();
+</script>
+
+
+
+
+
   <script>
   // ===== Utilitaires UI =====
   const $ = (s)=>document.querySelector(s);
