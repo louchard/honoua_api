@@ -537,6 +537,10 @@
     color:#ffb3b6;
   }
 }
+/* A26 — panneau cloud discret */
+#cloud-panel input[type="password"]{
+  padding:.2rem .4rem; border-radius:6px; border:1px solid rgba(0,0,0,.15);
+}
 
 
 </style>
@@ -597,6 +601,19 @@
 <button type="button" id="cloud-signin">Connexion</button>
 <button type="button" id="cloud-sync-up"  disabled>Sync → Cloud</button>
 <button type="button" id="cloud-sync-down" disabled>Sync ← Cloud</button>
+
+<!-- A26 — Panneau Cloud (opt-in + sync) -->
+<div id="cloud-panel" class="row" style="gap:8px; align-items:center; margin-top:8px">
+  <label style="opacity:.85">Cloud Sync</label>
+  <input id="cloud-token" type="password" placeholder="Bearer token" style="width:220px">
+  <button id="cloud-toggle" class="btn-ghost">Activer</button>
+  <button id="cloud-pull"   class="btn-ghost">Importer</button>
+  <button id="cloud-push"   class="btn-ghost">Exporter</button>
+  <button id="cloud-sync"   class="btn-ghost" title="Importer puis Exporter">Forcer sync</button>
+  <span id="cloud-status" style="opacity:.7"></span>
+</div>
+
+
 
 
   <!-- Barre d’actions (optionnelle, style minimal) -->
@@ -3402,6 +3419,202 @@ actions.appendChild(btnRename);
     doc.save(fname);
   }
 })();
+</script>
+<script>
+/* ============================================================================
+   A26 — Cloud Sync multi-device (opt-in, merge non destructif)
+   - Endpoints configurables via window.HONOUA_CLOUD
+   - Jamais d'écrasement de la version locale: merge + LWW
+   ============================================================================ */
+
+/* === 2.1 Endpoints (adapter si besoin) ===================================== */
+window.HONOUA_CLOUD = Object.assign({
+  baseUrl:   "/api/cloud",           // racine API (à adapter)
+  getHistory:"/history",             // GET
+  putHistory:"/history",             // PUT
+  getPrefs:  "/prefs",               // GET
+  putPrefs:  "/prefs"                // PUT
+}, window.HONOUA_CLOUD||{});
+
+/* === 2.2 Stockage config locale =========================================== */
+const CLOUD_CFG_KEY = "honoua:cloud:cfg_v1"; // { enabled:boolean, token:string }
+function readCloudCfg(){
+  try { return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY)||"{}"); } catch { return {}; }
+}
+function writeCloudCfg(cfg){
+  try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg||{})); } catch {}
+}
+
+/* === 2.3 Accès données locales (history/prefs) ============================= */
+const HISTORY_KEY = 'honoua_compare_history_v1';
+const PREF_KEY    = 'honoua:compare:prefs';
+
+function readHistorySafe(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); } catch { return []; } }
+function writeHistorySafe(v){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(v||[])); } catch {} }
+
+function readPrefsSafe(){ try { return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); } catch { return {}; } }
+function writePrefsSafe(v){ try { localStorage.setItem(PREF_KEY, JSON.stringify(v||{})); } catch {} }
+
+/* === 2.4 Merge non destructif ============================================= */
+/* Historique: union par id ; si même id -> garde l'entrée au ts max (LWW).
+   Jamais de suppression du local; on renvoie la fusion. */
+function mergeHistory(localArr, remoteArr){
+  const byId = new Map();
+  const push = (e, src) => {
+    if(!e || typeof e!=='object' || e.id==null) return;
+    const prev = byId.get(e.id);
+    if (!prev) { byId.set(e.id, e); return; }
+    try{
+      const tPrev = new Date(prev.ts||0).getTime()||0;
+      const tNew  = new Date(e.ts||0).getTime()||0;
+      // LWW: garde le plus récent
+      if (tNew >= tPrev) byId.set(e.id, e);
+    }catch{ /* si doute, conserve prev (local) */ }
+  };
+  (localArr||[]).forEach(e=>push(e,'local'));
+  (remoteArr||[]).forEach(e=>push(e,'remote'));
+  // trie par ts croissant (cohérent avec A11)
+  return Array.from(byId.values()).sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+}
+
+/* Prefs: merge clé à clé ; priorité aux valeurs "récentes" si on trouve un champ ts.
+   À défaut de ts, on NE REMPLACE PAS une valeur locale déjà présente.
+   (=> évite d’écraser l’utilisateur) */
+function mergePrefs(localObj, remoteObj){
+  const out = Object.assign({}, localObj||{});
+  const src = remoteObj||{};
+  for (const k of Object.keys(src)){
+    if (out[k] === undefined || out[k] === null) {
+      out[k] = src[k]; // complète sans écraser
+    } else {
+      // si ts présent sous forme prefs._ts : compare
+      // (tu peux poser out._ts et src._ts si tu veux suivre l'antériorité)
+    }
+  }
+  return out;
+}
+
+/* === 2.5 Fetch helpers ===================================================== */
+function cloudHeaders(token){
+  const h = { 'Content-Type':'application/json' };
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
+async function apiGet(path, token){
+  const url = (window.HONOUA_CLOUD.baseUrl + path);
+  const r = await fetch(url, { headers: cloudHeaders(token) });
+  if (!r.ok) throw new Error('GET '+path+' '+r.status);
+  return await r.json();
+}
+async function apiPut(path, token, body){
+  const url = (window.HONOUA_CLOUD.baseUrl + path);
+  const r = await fetch(url, { method:'PUT', headers: cloudHeaders(token), body: JSON.stringify(body||{}) });
+  if (!r.ok) throw new Error('PUT '+path+' '+r.status);
+  return await r.json().catch(()=> ({}));
+}
+
+/* === 2.6 Actions Cloud ===================================================== */
+async function cloudPull(cfg, $status){
+  if (!cfg?.enabled) { $status.textContent='Cloud: inactif'; return; }
+  $status.textContent='Import…';
+  try{
+    const remoteHistory = await apiGet(window.HONOUA_CLOUD.getHistory, cfg.token).catch(()=>[]);
+    const remotePrefs   = await apiGet(window.HONOUA_CLOUD.getPrefs, cfg.token).catch(()=> ({}));
+
+    const mergedH = mergeHistory(readHistorySafe(), Array.isArray(remoteHistory)?remoteHistory:[]);
+    writeHistorySafe(mergedH);
+
+    const mergedP = mergePrefs(readPrefsSafe(), remotePrefs||{});
+    writePrefsSafe(mergedP);
+
+    // notifie l'app
+    window.dispatchEvent(new StorageEvent('storage', {key:HISTORY_KEY}));
+    window.dispatchEvent(new StorageEvent('storage', {key:PREF_KEY}));
+    window.dispatchEvent(new Event('honoua:compare:updated'));
+
+    $status.textContent='Import OK';
+    notify?.('Cloud import terminé.');
+  }catch(e){
+    console.warn('[A26] pull error', e);
+    $status.textContent='Import échec';
+    notify?.('Cloud import: erreur.');
+  }
+}
+
+async function cloudPush(cfg, $status){
+  if (!cfg?.enabled) { $status.textContent='Cloud: inactif'; return; }
+  $status.textContent='Export…';
+  try{
+    const payloadH = readHistorySafe();
+    const payloadP = readPrefsSafe();
+    await apiPut(window.HONOUA_CLOUD.putHistory, cfg.token, payloadH);
+    await apiPut(window.HONOUA_CLOUD.putPrefs,   cfg.token, payloadP);
+    $status.textContent='Export OK';
+    notify?.('Cloud export terminé.');
+  }catch(e){
+    console.warn('[A26] push error', e);
+    $status.textContent='Export échec';
+    notify?.('Cloud export: erreur.');
+  }
+}
+
+async function cloudSync(cfg, $status){
+  // Pour éviter d’écraser: PULL -> merge local -> PUSH
+  await cloudPull(cfg, $status);
+  await cloudPush(cfg, $status);
+}
+
+/* === 2.7 Auto-push (debounce) quand historique/prefs changent ============== */
+function setupAutoPush(cfg, $status){
+  if (!cfg?.enabled) return;
+  const debounced = (()=> {
+    let t; return ()=>{ clearTimeout(t); t = setTimeout(()=>cloudPush(cfg,$status), 2000); };
+  })();
+  window.addEventListener('storage', (ev)=>{
+    if (ev && (ev.key===HISTORY_KEY || ev.key===PREF_KEY)) debounced();
+  });
+  window.addEventListener('honoua:compare:updated', debounced);
+}
+
+/* === 2.8 UI wiring ========================================================= */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const $token  = document.getElementById('cloud-token');
+  const $toggle = document.getElementById('cloud-toggle');
+  const $pull   = document.getElementById('cloud-pull');
+  const $push   = document.getElementById('cloud-push');
+  const $sync   = document.getElementById('cloud-sync');
+  const $status = document.getElementById('cloud-status');
+  if (!$token || !$toggle || !$pull || !$push || !$sync) return;
+
+  let cfg = readCloudCfg();
+  $token.value = cfg.token || '';
+  $toggle.textContent = cfg.enabled ? 'Désactiver' : 'Activer';
+  $status.textContent = cfg.enabled ? 'Actif' : 'Inactif';
+
+  $toggle.addEventListener('click', ()=>{
+    cfg.enabled = !cfg.enabled;
+    if (cfg.enabled && !$token.value.trim()){
+      cfg.enabled = false;
+      notify?.('Renseigne d’abord ton token.');
+    }
+    writeCloudCfg(cfg);
+    $toggle.textContent = cfg.enabled ? 'Désactiver' : 'Activer';
+    $status.textContent = cfg.enabled ? 'Actif' : 'Inactif';
+    if (cfg.enabled) setupAutoPush(cfg, $status);
+  });
+
+  $token.addEventListener('change', ()=>{
+    cfg.token = $token.value.trim();
+    writeCloudCfg(cfg);
+  });
+
+  $pull.addEventListener('click', ()=> cloudPull(cfg, $status));
+  $push.addEventListener('click', ()=> cloudPush(cfg, $status));
+  $sync.addEventListener('click', ()=> cloudSync(cfg, $status));
+
+  // auto-push si déjà actif
+  if (cfg.enabled) setupAutoPush(cfg, $status);
+});
 </script>
 
 
