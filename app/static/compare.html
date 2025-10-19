@@ -542,6 +542,12 @@
   padding:.2rem .4rem; border-radius:6px; border:1px solid rgba(0,0,0,.15);
 }
 
+  /* A27 — couleurs du pill selon l’état */
+  .pill-ok    { background:#2e7d32 !important; }  /* OK */
+  .pill-warn  { background:#f5c147 !important; }  /* attente/retry */
+  .pill-err   { background:#c62828 !important; }  /* erreur */
+  .pill-off   { background:#9e9e9e !important; }  /* hors ligne/inactif */
+
 
 </style>
 
@@ -613,6 +619,12 @@
   <span id="cloud-status" style="opacity:.7"></span>
 </div>
 
+
+<!-- A27 — Bandeau d’état Cloud -->
+<div id="cloud-banner" aria-live="polite" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+  <span id="cloud-pill" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#bbb" aria-hidden="true"></span>
+  <span id="cloud-msg" style="font-size:.95rem;opacity:.9">Cloud : inactif</span>
+</div>
 
 
 
@@ -3617,6 +3629,164 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 </script>
 
+<script>
+/* ============================================================================
+   A27 — Bandeau d’état Cloud + reprise automatique
+   - Backoff progressif, file d’attente locale, gestion offline/online
+   - S’appuie sur cloudPush / cloudPull / cloudSync d’A26 si présents
+   - Jamais destructif : n’écrase pas A26, merge non destructif conservé
+   ============================================================================ */
+
+(function(){
+  const QKEY   = "honoua:cloud:queue_v1";   // [{type:'push'|'sync', ts:number}]
+  const CFGKEY = "honoua:cloud:cfg_v1";     // A26
+  const HK     = "honoua_compare_history_v1";
+  const PK     = "honoua:compare:prefs";
+
+  const $pill = document.getElementById('cloud-pill');
+  const $msg  = document.getElementById('cloud-msg');
+  const $ban  = document.getElementById('cloud-banner');
+
+  if (!$ban || !$pill || !$msg) return; // UI absente => no-op
+
+  // --- Utils storage ---------------------------------------------------------
+  function readJSON(k, fb){ try { return JSON.parse(localStorage.getItem(k)||JSON.stringify(fb)); } catch { return fb; } }
+  function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+
+  function readCfg(){ return readJSON(CFGKEY, {}); }
+  function isEnabled(){ const c = readCfg(); return !!c.enabled && !!(c.token||"").trim(); }
+
+  function readQ(){ return readJSON(QKEY, []); }
+  function writeQ(arr){ writeJSON(QKEY, Array.isArray(arr)?arr:[]); }
+
+  // --- UI status -------------------------------------------------------------
+  function setPill(cls){
+    $pill.classList.remove('pill-ok','pill-warn','pill-err','pill-off');
+    $pill.classList.add(cls);
+  }
+  function setStatus(text, cls){
+    $msg.textContent = text;
+    setPill(cls);
+  }
+
+  // --- File d’attente --------------------------------------------------------
+  function enqueue(opType){
+    if (!opType) return;
+    const q = readQ();
+    q.push({ type: opType, ts: Date.now() });
+    writeQ(q);
+    // feedback visuel
+    setStatus(`Cloud : en attente (${q.length})`, 'pill-warn');
+  }
+  function dequeue(){
+    const q = readQ();
+    q.shift();
+    writeQ(q);
+  }
+
+  // --- Backoff/retry scheduler ----------------------------------------------
+  let retryTimer = null;
+  let retryCount = 0;
+  const STEPS = [5, 15, 45, 90, 180]; // secondes (progressif)
+  function scheduleRetry(label){
+    clearTimeout(retryTimer);
+    const delaySec = STEPS[Math.min(retryCount, STEPS.length-1)];
+    const eta = new Date(Date.now() + delaySec*1000);
+    setStatus(`${label} — reprise dans ${delaySec}s`, 'pill-warn');
+    retryTimer = setTimeout(processQueue, delaySec*1000);
+    retryCount++;
+  }
+  function resetBackoff(){ retryCount = 0; clearTimeout(retryTimer); retryTimer = null; }
+
+  // --- Wrappers sûrs autour d’A26 -------------------------------------------
+  const hasPush = (typeof window.cloudPush === 'function');
+  const hasSync = (typeof window.cloudSync === 'function');
+
+  async function safePush(){
+    if (!hasPush) throw new Error('cloudPush indisponible');
+    const cfg = readCfg();
+    if (!cfg.enabled) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) throw new Error('offline');
+    setStatus('Cloud : export…', 'pill-warn');
+    await window.cloudPush(cfg, $msg); // A26 accepte (cfg, $status)
+  }
+
+  async function safeSync(){
+    if (!hasSync) {
+      // fallback : push simple si sync indispo
+      return safePush();
+    }
+    const cfg = readCfg();
+    if (!cfg.enabled) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) throw new Error('offline');
+    setStatus('Cloud : synchronisation…', 'pill-warn');
+    await window.cloudSync(cfg, $msg);
+  }
+
+  // --- Moteur de traitement de la file --------------------------------------
+  async function processQueue(){
+    if (!isEnabled()) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) { setStatus('Cloud : hors ligne', 'pill-off'); return; }
+
+    const q = readQ();
+    if (!q.length) {
+      setStatus('Cloud : sync OK', 'pill-ok');
+      resetBackoff();
+      return;
+    }
+
+    try {
+      const item = q[0];
+      if (item.type === 'push') await safePush(); else await safeSync();
+      dequeue();
+      resetBackoff();
+      // Chain: continue si d’autres ops en attente
+      processQueue();
+    } catch (e){
+      // Erreur réseau ou 5xx : replanifier
+      if (String(e||'').includes('offline')) {
+        setStatus('Cloud : hors ligne', 'pill-off');
+      } else {
+        scheduleRetry('Cloud : erreur réseau');
+      }
+    }
+  }
+
+  // --- Abonnements aux évènements locaux (déclencheurs) ---------------------
+  // Quand l’historique/prefs changent et que le cloud est actif → on file un push
+  function armProducers(){
+    const prod = ()=>{
+      if (!isEnabled()) return;
+      enqueue('push');
+      // petit “auto-kick” si rien ne tourne
+      if (!retryTimer) processQueue();
+    };
+    window.addEventListener('storage', (ev)=>{
+      if (ev && (ev.key===HK || ev.key===PK)) prod();
+    });
+    window.addEventListener('honoua:compare:updated', prod);
+  }
+
+  // Online/offline pour reprise auto
+  window.addEventListener('online',  ()=>{ if (isEnabled()) processQueue(); });
+  window.addEventListener('offline', ()=>{ setStatus('Cloud : hors ligne', 'pill-off'); });
+
+  // --- Boot ------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // État initial
+    if (!isEnabled()) setStatus('Cloud : inactif', 'pill-off');
+    else if (!navigator.onLine) setStatus('Cloud : hors ligne', 'pill-off');
+    else setStatus('Cloud : prêt', 'pill-ok');
+
+    // Armer les déclencheurs si A26 est là
+    if (hasPush || hasSync) armProducers();
+
+    // Relance douce au démarrage s’il y a une file
+    if (isEnabled()) processQueue();
+  });
+
+})();
+</script>
 
 
 
