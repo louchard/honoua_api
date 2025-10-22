@@ -4,6 +4,60 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Honoua — Comparateur</title>
+
+<!-- A33 — Resource Hints -->
+<link rel="preconnect" href="/" crossorigin> <!-- API même origine -->
+<link rel="dns-prefetch" href="//cdn.jsdelivr.net"> <!-- adapte si tu utilises un autre CDN -->
+<link rel="dns-prefetch" href="//unpkg.com">
+
+<!-- A33 — Performance budgets (LCP/CLS/TBT guard) -->
+<script>
+/* Mesure LCP, CLS, TBT et log si budget dépassé */
+(function(){
+  var B = { LCP:2500, CLS:0.1, TBT:200 }; // ms
+  // CLS via PerformanceObserver
+  try{
+    var cls=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){ if (!e.hadRecentInput) cls += e.value; });
+    }).observe({type:'layout-shift', buffered:true});
+    window.__getCLS = function(){ return cls; };
+  }catch(e){}
+  // LCP via PO
+  try{
+    var lcp=0; new PerformanceObserver(function(list){
+      var last = list.getEntries().pop(); if (last) lcp = last.renderTime || last.loadTime || 0;
+    }).observe({type:'largest-contentful-paint', buffered:true});
+    window.__getLCP = function(){ return Math.round(lcp); };
+  }catch(e){}
+  // TBT approx via Long Tasks
+  try{
+    var tbt=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){
+        var block = e.duration - 50; if (block>0) tbt += block;
+      });
+    }).observe({type:'longtask', buffered:true});
+    window.__getTBT = function(){ return Math.round(tbt); };
+  }catch(e){}
+  // Rapport à l'onglet DevTools (dev uniquement)
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var L = window.__getLCP?__getLCP():-1;
+      var C = window.__getCLS?__getCLS():-1;
+      var T = window.__getTBT?__getTBT():-1;
+      if (L>-1||C>-1||T>-1) {
+        console.log('[A33] Budgets perf → LCP:%sms CLS:%s TBT:%sms (budgets %s/%s/%s)',
+          L, C, T, B.LCP, B.CLS, B.TBT);
+      }
+      if ((L>0 && L>B.LCP) || (C>0 && C>B.CLS) || (T>0 && T>B.TBT)) {
+        console.warn('[A33] ⚠️ Budgets dépassés. Voir optimisations (lazy, preconnect, defers).');
+      }
+    }, 1500);
+  });
+})();
+</script>
+
+
+
   <style>
     :root{
       --green:#2e7d32; --orange:#F5C147; --blue:#001D85;
@@ -182,6 +236,11 @@
   #compare-history button:hover {
     background: rgba(201,212,255,.08);
   }
+  /* A33 — limiter les reflows : évite changements de taille inattendus */
+#compare-history button, #compare-export button {
+  will-change: background-color, color, border-color;
+}
+
 }
 
 /* Bouton principal: Recharger (accent vert) */
@@ -1375,10 +1434,25 @@ return el;
     $t('[data-role="title"]').textContent = title;
     $t('[data-role="brand"]').textContent = brand;
     if(image){
-      const img = new Image();
-      img.alt = title; img.loading = "lazy";
-      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
-      img.src = image; th.replaceWith(img);
+     const img = new Image();
+img.alt = title;
+img.loading = "lazy";
+img.decoding = "async";
+// Anti-CLS : fixe dimensions réelles connues ou ratio approximé
+img.width = 300;  // adapte à ton layout
+img.height = 120; // idem
+img.style.width="100%";
+img.style.height="120px";
+img.style.objectFit="contain";
+img.style.borderRadius="10px";
+// Boost LCP sur la toute 1ʳᵉ image visible si applicable
+if (!document.querySelector('[data-lcp-mark]')) {
+  img.setAttribute('fetchpriority','high');
+  img.setAttribute('data-lcp-mark','1');
+}
+img.src = image;
+th.replaceWith(img);
+
     }else{
       th.textContent = "Pas d’image";
     }
@@ -4571,6 +4645,18 @@ if (window.honouaGetRanking) {
   }
   // Exemple : __devTestRanking('region','latest');
 }
+</script>
+<script>
+// A33 — ajournement non-critique
+(function(run){
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    setTimeout(run, 350);
+  }
+})(function initNonCritical(){
+  // … init des stats/graphes ici …
+});
 </script>
 
 
