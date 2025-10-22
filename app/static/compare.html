@@ -828,6 +828,35 @@
   // init mois courant
   const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
+  // A32 — Étape 2 : navigation clavier & focus
+// 1) Activer "Voir" au clavier (Enter/Espace)
+$btn.setAttribute('type','button');
+$btn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $btn.click(); }
+});
+
+// 2) Auto-refresh accessible sur changement (sélecteur + mois)
+$scope.addEventListener('change', ()=> $btn.click());
+$month.addEventListener('change', ()=> $btn.click());
+
+// 3) Enter dans le champ month déclenche la mise à jour
+$month.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); $btn.click(); }
+});
+
+// 4) Raccourci clavier global Alt+R pour "Voir"
+document.addEventListener('keydown', (e)=>{
+  if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    $btn.focus();
+    $btn.click();
+  }
+});
+
+
+
+
+
   async function fetchLeaderboard(scope, month){
   const token = sessionStorage.getItem('honoua_token'); // A19
   const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
@@ -839,15 +868,17 @@
 
   function renderRows(rows){
     if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
-    const html = [
-      '<table style="width:100%;border-collapse:collapse">',
-      '<thead><tr>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
-      '</tr></thead><tbody>'
-    ];
+   const html = [
+  '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+  '<caption class="visually-hidden">Classement mensuel</caption>',
+  '<thead><tr>',
+  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+  '</tr></thead><tbody>'
+];
+
     rows.forEach(r=>{
       html.push(
         `<tr>
@@ -861,17 +892,29 @@
     html.push('</tbody></table>');
     $table.innerHTML = html.join('');
   }
+
   async function refresh(){
-    const scope=$scope.value, month=$month.value;
-    $status.textContent="Chargement…";
-    try{
-      const rows=await fetchLeaderboard(scope, month);
-      renderRows(rows);
-      $status.textContent = `${rows.length} entrées`;
-    }catch(e){
-      console.warn(e); $status.textContent="Erreur de chargement.";
-    }
+  const scope=$scope.value, month=$month.value;
+  $status.textContent="Chargement…";
+  try{
+    const rows=await fetchLeaderboard(scope, month);
+    renderRows(rows);
+    $status.textContent = `${rows.length} entrées`;
+
+    // A32 — Focus management : envoyer le focus sur le tableau
+    // (tabindex -1 => focus programmatique sans polluer l'ordre naturel)
+    if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
+    $table.focus({ preventScroll:false });
+
+  }catch(e){
+    console.warn(e);
+    $status.textContent="Erreur de chargement.";
+    // Option : annoncer une erreur plus "forte"
+    // const toast = document.getElementById('toast');
+    // if (toast) { toast.setAttribute('role','alert'); setTimeout(()=>toast.setAttribute('role','status'), 1000); }
   }
+}
+ 
   $btn.addEventListener('click', refresh);
   document.addEventListener('DOMContentLoaded', refresh);
 })();
