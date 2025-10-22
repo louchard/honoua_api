@@ -821,7 +821,8 @@
   <div id="lb-table" style="margin-top:10px"></div>
 </section>
 
-  <script>
+
+     <script>
 /* A33 — Étape 2 : lazy init du panneau “Classements” pour réduire TBT/LCP */
 (function(){
   const $ = s=>document.querySelector(s);
@@ -867,7 +868,8 @@
       const rows=await fetchLeaderboard(scope, month);
       renderRows(rows);
       $status.textContent = `${rows.length} entrées`;
-      // AA (Étape 2 A32) : focus programmatique sur la table
+
+      // AA (A32 Étape 2) : focus programmatique sur la table
       if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
       $table.focus({ preventScroll:false });
     }catch(e){
@@ -913,9 +915,6 @@
   }
 })();
 </script>
-
-
-
 
 
 
