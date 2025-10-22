@@ -917,8 +917,9 @@
   const $ = s=>document.querySelector(s);
   const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
   const $status=$("#lb-status"), $table=$("#lb-table");
-  // init mois courant
-  const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const $section = document.getElementById('leaderboard');
+
+  function throttle(fn, wait){ let t=0; return (...a)=>{ const n=Date.now(); if(n-t>=wait){ t=n; fn(...a); } }; }
 
   // A32 — Étape 2 : navigation clavier & focus
 // 1) Activer "Voir" au clavier (Enter/Espace)
@@ -950,13 +951,13 @@ document.addEventListener('keydown', (e)=>{
 
 
   async function fetchLeaderboard(scope, month){
-  const token = sessionStorage.getItem('honoua_token'); // A19
-  const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
-    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-  });
-  if (!res.ok) throw new Error('Leaderboard fetch failed');
-  return await res.json(); // -> [{rank,pseudo,score,n}, ...]
-}
+    const token = sessionStorage.getItem('honoua_token');
+    const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (!res.ok) throw new Error('Leaderboard fetch failed');
+    return await res.json();
+  }
 
   function renderRows(rows){
     if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
@@ -1011,9 +1012,6 @@ document.addEventListener('keydown', (e)=>{
   document.addEventListener('DOMContentLoaded', refresh);
 })();
 </script>
-
-
-
 
 
   <script>
