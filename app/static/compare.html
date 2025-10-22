@@ -820,47 +820,46 @@
   </div>
   <div id="lb-table" style="margin-top:10px"></div>
 </section>
-<script>
+
+  <script>
+/* A33 — Étape 2 : lazy init du panneau “Classements” pour réduire TBT/LCP */
 (function(){
   const $ = s=>document.querySelector(s);
   const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
   const $status=$("#lb-status"), $table=$("#lb-table");
-  // init mois courant
-  const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const $section = document.getElementById('leaderboard');
 
+  // -- Petit utilitaire anti-spam (throttle 400ms)
+  function throttle(fn, wait){
+    let t=0; return (...a)=>{ const now=Date.now(); if (now-t>=wait){ t=now; fn(...a); } };
+  }
+
+  // -- Fonctions “métier” (inchangées)
   async function fetchLeaderboard(scope, month){
-  const token = sessionStorage.getItem('honoua_token'); // A19
-  const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
-    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-  });
-  if (!res.ok) throw new Error('Leaderboard fetch failed');
-  return await res.json(); // -> [{rank,pseudo,score,n}, ...]
-}
+    const token = sessionStorage.getItem('honoua_token'); // A19
+    const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (!res.ok) throw new Error('Leaderboard fetch failed');
+    return await res.json(); // -> [{rank,pseudo,score,n}, ...]
+  }
 
   function renderRows(rows){
     if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
     const html = [
-      '<table style="width:100%;border-collapse:collapse">',
+      '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+      '<caption class="visually-hidden">Classement mensuel</caption>',
       '<thead><tr>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+      '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+      '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+      '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+      '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
       '</tr></thead><tbody>'
     ];
-    rows.forEach(r=>{
-      html.push(
-        `<tr>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.rank}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.pseudo}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.score.toLocaleString('fr-FR')}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.n}</td>
-        </tr>`
-      );
-    });
-    html.push('</tbody></table>');
+    // … push rows …
     $table.innerHTML = html.join('');
   }
+
   async function refresh(){
     const scope=$scope.value, month=$month.value;
     $status.textContent="Chargement…";
@@ -868,14 +867,53 @@
       const rows=await fetchLeaderboard(scope, month);
       renderRows(rows);
       $status.textContent = `${rows.length} entrées`;
+      // AA (Étape 2 A32) : focus programmatique sur la table
+      if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
+      $table.focus({ preventScroll:false });
     }catch(e){
       console.warn(e); $status.textContent="Erreur de chargement.";
     }
   }
-  $btn.addEventListener('click', refresh);
-  document.addEventListener('DOMContentLoaded', refresh);
+  const refreshThrottled = throttle(refresh, 400);
+
+  // -- Initialisation paresseuse uniquement quand la section devient visible
+  let initialized = false;
+  function initOnce(){
+    if (initialized) return;
+    initialized = true;
+
+    // Init mois courant (maintenu mais retardé à l'init réelle)
+    const now=new Date();
+    $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+    // Bind événements (clavier + change)
+    $btn.setAttribute('type','button');
+    $btn.addEventListener('keydown', (e)=>{
+      if (e.key==='Enter' || e.key===' ') { e.preventDefault(); $btn.click(); }
+    });
+    $scope.addEventListener('change', ()=> $btn.click());
+    $month.addEventListener('change', ()=> $btn.click());
+    $month.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ e.preventDefault(); $btn.click(); } });
+
+    // Premier chargement réel
+    requestAnimationFrame(()=> refreshThrottled());
+  }
+
+  // IO : charge seulement si visible ≥ 1px
+  if ('IntersectionObserver' in window && $section){
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{
+        if (e.isIntersecting){ initOnce(); io.disconnect(); }
+      });
+    }, { root:null, rootMargin:'0px', threshold:0.01 });
+    io.observe($section);
+  } else {
+    // Fallback : init après load (comportement proche d’un defer)
+    window.addEventListener('load', initOnce);
+  }
 })();
 </script>
+
 
 
 
