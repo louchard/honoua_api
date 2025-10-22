@@ -1,0 +1,21 @@
+# A34.b — .dockerignore
+.git
+.gitignore
+.github
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite
+.env
+.env.*
+.venv
+venv
+node_modules
+dist
+build
+.coverage
+.pytest_cache
+.mypy_cache
+.DS_Store
