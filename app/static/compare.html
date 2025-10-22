@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Honoua — Comparateur</title>
 
-<!-- A33 — Resource Hints -->
+  <!-- A33 — Resource Hints -->
 <link rel="preconnect" href="/" crossorigin> <!-- API même origine -->
 <link rel="dns-prefetch" href="//cdn.jsdelivr.net"> <!-- adapte si tu utilises un autre CDN -->
 <link rel="dns-prefetch" href="//unpkg.com">
@@ -55,6 +55,7 @@
   });
 })();
 </script>
+
 
 
 
@@ -232,15 +233,16 @@
   background: rgba(0,29,133,.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  #compare-history button:hover {
-    background: rgba(201,212,255,.08);
-  }
-  /* A33 — limiter les reflows : évite changements de taille inattendus */
+/* A33 — limiter les reflows : évite changements de taille inattendus */
 #compare-history button, #compare-export button {
   will-change: background-color, color, border-color;
 }
 
+
+@media (prefers-color-scheme: dark) {
+  #compare-history button:hover {
+    background: rgba(201,212,255,.08);
+  }
 }
 
 /* Bouton principal: Recharger (accent vert) */
@@ -649,6 +651,23 @@
 .skip-link{ position:absolute; left:-9999px; top:8px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000; }
 .skip-link:focus{ left:8px; }
 
+/* A32 — Accessibilité : focus visibles + skip-link */
+:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
+.skip-link{
+  position:absolute; left:-9999px; top:8px;
+  background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000;
+}
+.skip-link:focus-visible{ left:8px; }
+
+/* A32 — classe utilitaire pour contenu accessible mais invisible visuellement */
+.visually-hidden {
+  position:absolute!important; width:1px!important; height:1px!important;
+  padding:0!important; margin:-1px!important; overflow:hidden!important;
+  clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important;
+}
+
+
+
 
 </style>
 
@@ -866,19 +885,33 @@
   <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
   <!-- A24+ — Classements mensuels -->
-<section id="leaderboard" style="margin-top:18px">
-  <h3 style="margin:0 0 8px">Classements mensuels</h3>
+<section id="leaderboard" style="margin-top:18px" aria-labelledby="lb-title">
+  <h3 id="lb-title" style="margin:0 0 8px">Classements mensuels</h3>
+
   <div style="display:flex;gap:8px;align-items:center">
-    <select id="lb-scope">
+    <label for="lb-scope" class="visually-hidden">Portée du classement</label>
+    <select id="lb-scope" name="lb-scope" aria-describedby="lb-hint-scope">
       <option value="country">National</option>
       <option value="region">Régional</option>
     </select>
-    <input id="lb-month" type="month"/>
-    <button id="lb-refresh">Voir</button>
-    <span id="lb-status" style="opacity:.7"></span>
+    <span id="lb-hint-scope" class="visually-hidden">Choisissez national ou régional</span>
+
+    <label for="lb-month" class="visually-hidden">Mois</label>
+    <input id="lb-month" name="lb-month" type="month" inputmode="numeric" aria-describedby="lb-hint-month"/>
+
+    <button id="lb-refresh" type="button" aria-describedby="lb-hint-refresh">Voir</button>
+    <span id="lb-hint-month" class="visually-hidden">Format AAAA-MM</span>
+    <span id="lb-hint-refresh" class="visually-hidden">Mettre à jour le tableau</span>
+
+    <span id="lb-status" role="status" aria-live="polite" style="opacity:.7"></span>
   </div>
+
   <div id="lb-table" style="margin-top:10px"></div>
 </section>
+
+
+
+
 <script>
 (function(){
   const $ = s=>document.querySelector(s);
@@ -886,6 +919,35 @@
   const $status=$("#lb-status"), $table=$("#lb-table");
   // init mois courant
   const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // A32 — Étape 2 : navigation clavier & focus
+// 1) Activer "Voir" au clavier (Enter/Espace)
+$btn.setAttribute('type','button');
+$btn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $btn.click(); }
+});
+
+// 2) Auto-refresh accessible sur changement (sélecteur + mois)
+$scope.addEventListener('change', ()=> $btn.click());
+$month.addEventListener('change', ()=> $btn.click());
+
+// 3) Enter dans le champ month déclenche la mise à jour
+$month.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); $btn.click(); }
+});
+
+// 4) Raccourci clavier global Alt+R pour "Voir"
+document.addEventListener('keydown', (e)=>{
+  if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    $btn.focus();
+    $btn.click();
+  }
+});
+
+
+
+
 
   async function fetchLeaderboard(scope, month){
   const token = sessionStorage.getItem('honoua_token'); // A19
@@ -898,15 +960,17 @@
 
   function renderRows(rows){
     if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
-    const html = [
-      '<table style="width:100%;border-collapse:collapse">',
-      '<thead><tr>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
-      '</tr></thead><tbody>'
-    ];
+   const html = [
+  '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+  '<caption class="visually-hidden">Classement mensuel</caption>',
+  '<thead><tr>',
+  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+  '</tr></thead><tbody>'
+];
+
     rows.forEach(r=>{
       html.push(
         `<tr>
@@ -920,17 +984,29 @@
     html.push('</tbody></table>');
     $table.innerHTML = html.join('');
   }
+
   async function refresh(){
-    const scope=$scope.value, month=$month.value;
-    $status.textContent="Chargement…";
-    try{
-      const rows=await fetchLeaderboard(scope, month);
-      renderRows(rows);
-      $status.textContent = `${rows.length} entrées`;
-    }catch(e){
-      console.warn(e); $status.textContent="Erreur de chargement.";
-    }
+  const scope=$scope.value, month=$month.value;
+  $status.textContent="Chargement…";
+  try{
+    const rows=await fetchLeaderboard(scope, month);
+    renderRows(rows);
+    $status.textContent = `${rows.length} entrées`;
+
+    // A32 — Focus management : envoyer le focus sur le tableau
+    // (tabindex -1 => focus programmatique sans polluer l'ordre naturel)
+    if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
+    $table.focus({ preventScroll:false });
+
+  }catch(e){
+    console.warn(e);
+    $status.textContent="Erreur de chargement.";
+    // Option : annoncer une erreur plus "forte"
+    // const toast = document.getElementById('toast');
+    // if (toast) { toast.setAttribute('role','alert'); setTimeout(()=>toast.setAttribute('role','status'), 1000); }
   }
+}
+ 
   $btn.addEventListener('click', refresh);
   document.addEventListener('DOMContentLoaded', refresh);
 })();
@@ -1434,7 +1510,11 @@ return el;
     $t('[data-role="title"]').textContent = title;
     $t('[data-role="brand"]').textContent = brand;
     if(image){
-     const img = new Image();
+      const img = new Image();
+      img.alt = title; img.loading = "lazy";
+      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
+      img.src = image; th.replaceWith(img);
+  const img = new Image();
 img.alt = title;
 img.loading = "lazy";
 img.decoding = "async";
@@ -1452,6 +1532,8 @@ if (!document.querySelector('[data-lcp-mark]')) {
 }
 img.src = image;
 th.replaceWith(img);
+
+
 
     }else{
       th.textContent = "Pas d’image";
@@ -4646,6 +4728,7 @@ if (window.honouaGetRanking) {
   // Exemple : __devTestRanking('region','latest');
 }
 </script>
+
 <script>
 // A33 — ajournement non-critique
 (function(run){
@@ -4658,7 +4741,6 @@ if (window.honouaGetRanking) {
   // … init des stats/graphes ici …
 });
 </script>
-
 
 
 
