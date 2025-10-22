@@ -4,6 +4,61 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Honoua — Comparateur</title>
+
+  <!-- A33 — Resource Hints -->
+<link rel="preconnect" href="/" crossorigin> <!-- API même origine -->
+<link rel="dns-prefetch" href="//cdn.jsdelivr.net"> <!-- adapte si tu utilises un autre CDN -->
+<link rel="dns-prefetch" href="//unpkg.com">
+
+<!-- A33 — Performance budgets (LCP/CLS/TBT guard) -->
+<script>
+/* Mesure LCP, CLS, TBT et log si budget dépassé */
+(function(){
+  var B = { LCP:2500, CLS:0.1, TBT:200 }; // ms
+  // CLS via PerformanceObserver
+  try{
+    var cls=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){ if (!e.hadRecentInput) cls += e.value; });
+    }).observe({type:'layout-shift', buffered:true});
+    window.__getCLS = function(){ return cls; };
+  }catch(e){}
+  // LCP via PO
+  try{
+    var lcp=0; new PerformanceObserver(function(list){
+      var last = list.getEntries().pop(); if (last) lcp = last.renderTime || last.loadTime || 0;
+    }).observe({type:'largest-contentful-paint', buffered:true});
+    window.__getLCP = function(){ return Math.round(lcp); };
+  }catch(e){}
+  // TBT approx via Long Tasks
+  try{
+    var tbt=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){
+        var block = e.duration - 50; if (block>0) tbt += block;
+      });
+    }).observe({type:'longtask', buffered:true});
+    window.__getTBT = function(){ return Math.round(tbt); };
+  }catch(e){}
+  // Rapport à l'onglet DevTools (dev uniquement)
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var L = window.__getLCP?__getLCP():-1;
+      var C = window.__getCLS?__getCLS():-1;
+      var T = window.__getTBT?__getTBT():-1;
+      if (L>-1||C>-1||T>-1) {
+        console.log('[A33] Budgets perf → LCP:%sms CLS:%s TBT:%sms (budgets %s/%s/%s)',
+          L, C, T, B.LCP, B.CLS, B.TBT);
+      }
+      if ((L>0 && L>B.LCP) || (C>0 && C>B.CLS) || (T>0 && T>B.TBT)) {
+        console.warn('[A33] ⚠️ Budgets dépassés. Voir optimisations (lazy, preconnect, defers).');
+      }
+    }, 1500);
+  });
+})();
+</script>
+
+
+
+
   <style>
     :root{
       --green:#2e7d32; --orange:#F5C147; --blue:#001D85;
@@ -177,6 +232,12 @@
 #compare-history button:hover {
   background: rgba(0,29,133,.06);
 }
+
+/* A33 — limiter les reflows : évite changements de taille inattendus */
+#compare-history button, #compare-export button {
+  will-change: background-color, color, border-color;
+}
+
 
 @media (prefers-color-scheme: dark) {
   #compare-history button:hover {
@@ -590,6 +651,47 @@
 .skip-link{ position:absolute; left:-9999px; top:8px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000; }
 .skip-link:focus{ left:8px; }
 
+/* A32 — Accessibilité : focus visibles + skip-link */
+:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
+.skip-link{
+  position:absolute; left:-9999px; top:8px;
+  background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000;
+}
+.skip-link:focus-visible{ left:8px; }
+
+/* A32 — classe utilitaire pour contenu accessible mais invisible visuellement */
+.visually-hidden {
+  position:absolute!important; width:1px!important; height:1px!important;
+  padding:0!important; margin:-1px!important; overflow:hidden!important;
+  clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important;
+}
+
+
+
+
+/* A33 — micro-optims : éviter le coût des sections hors-écran */
+#leaderboard { 
+  content-visibility: auto; 
+  contain-intrinsic-size: 600px 800px; /* réserve un gabarit pour éviter CLS à l'apparition */
+}
+
+/* Respecte les utilisateurs sensibles au mouvement (↓ coûte GPU/CPU) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* A33 — fallback police système pour éviter FOIT */
+:root {
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+}
+body { font-family: var(--font-stack); }
+
+/* A33 — limiter recalculs/reflows sur interactions */
+button, [role="button"] {
+  will-change: background-color, color, border-color;
+}
+
+
 
 </style>
 
@@ -811,77 +913,134 @@
   <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
   <!-- A24+ — Classements mensuels -->
-<section id="leaderboard" style="margin-top:18px">
-  <h3 style="margin:0 0 8px">Classements mensuels</h3>
+<section id="leaderboard" style="margin-top:18px" aria-labelledby="lb-title">
+  <h3 id="lb-title" style="margin:0 0 8px">Classements mensuels</h3>
+
   <div style="display:flex;gap:8px;align-items:center">
-    <select id="lb-scope">
+    <label for="lb-scope" class="visually-hidden">Portée du classement</label>
+    <select id="lb-scope" name="lb-scope" aria-describedby="lb-hint-scope">
       <option value="country">National</option>
       <option value="region">Régional</option>
     </select>
-    <input id="lb-month" type="month"/>
-    <button id="lb-refresh">Voir</button>
-    <span id="lb-status" style="opacity:.7"></span>
+    <span id="lb-hint-scope" class="visually-hidden">Choisissez national ou régional</span>
+
+    <label for="lb-month" class="visually-hidden">Mois</label>
+    <input id="lb-month" name="lb-month" type="month" inputmode="numeric" aria-describedby="lb-hint-month"/>
+
+    <button id="lb-refresh" type="button" aria-describedby="lb-hint-refresh">Voir</button>
+    <span id="lb-hint-month" class="visually-hidden">Format AAAA-MM</span>
+    <span id="lb-hint-refresh" class="visually-hidden">Mettre à jour le tableau</span>
+
+    <span id="lb-status" role="status" aria-live="polite" style="opacity:.7"></span>
   </div>
+
   <div id="lb-table" style="margin-top:10px"></div>
 </section>
+
+
+
+
 <script>
 (function(){
   const $ = s=>document.querySelector(s);
   const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
   const $status=$("#lb-status"), $table=$("#lb-table");
-  // init mois courant
-  const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const $section = document.getElementById('leaderboard');
+
+  function throttle(fn, wait){ let t=0; return (...a)=>{ const n=Date.now(); if(n-t>=wait){ t=n; fn(...a); } }; }
+
+  // A32 — Étape 2 : navigation clavier & focus
+// 1) Activer "Voir" au clavier (Enter/Espace)
+$btn.setAttribute('type','button');
+$btn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $btn.click(); }
+});
+
+// 2) Auto-refresh accessible sur changement (sélecteur + mois)
+$scope.addEventListener('change', ()=> $btn.click());
+$month.addEventListener('change', ()=> $btn.click());
+
+// 3) Enter dans le champ month déclenche la mise à jour
+$month.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); $btn.click(); }
+});
+
+// 4) Raccourci clavier global Alt+R pour "Voir"
+document.addEventListener('keydown', (e)=>{
+  if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    $btn.focus();
+    $btn.click();
+  }
+});
+
+
+
+
 
   async function fetchLeaderboard(scope, month){
-  const token = sessionStorage.getItem('honoua_token'); // A19
-  const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
-    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-  });
-  if (!res.ok) throw new Error('Leaderboard fetch failed');
-  return await res.json(); // -> [{rank,pseudo,score,n}, ...]
+    const token = sessionStorage.getItem('honoua_token');
+    const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (!res.ok) throw new Error('Leaderboard fetch failed');
+    return await res.json();
+  }
+
+ function renderRows(rows){
+  if(!rows.length){ 
+    $table.innerHTML = "<p>Aucun participant ce mois.</p>";
+    return;
+  }
+
+  // A33 — micro-optims : build en une passe + assignation unique
+  const chunks = [
+    '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+    '<caption class="visually-hidden">Classement mensuel</caption>',
+    '<thead><tr>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+    '</tr></thead><tbody>'
+  ];
+
+  for (const r of rows){
+    chunks.push(
+      '<tr>',
+        `<td style="padding:6px">${r.rank}</td>`,
+        `<td style="padding:6px">${r.pseudo}</td>`,
+        `<td style="padding:6px;text-align:right">${r.score}</td>`,
+        `<td style="padding:6px;text-align:right">${r.n}</td>`,
+      '</tr>'
+    );
+  }
+  chunks.push('</tbody></table>');
+
+  // Une seule écriture dans le DOM → moins de reflows
+  $table.innerHTML = chunks.join('');
 }
 
-  function renderRows(rows){
-    if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
-    const html = [
-      '<table style="width:100%;border-collapse:collapse">',
-      '<thead><tr>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
-      '</tr></thead><tbody>'
-    ];
-    rows.forEach(r=>{
-      html.push(
-        `<tr>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.rank}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.pseudo}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.score.toLocaleString('fr-FR')}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.n}</td>
-        </tr>`
-      );
-    });
-    html.push('</tbody></table>');
-    $table.innerHTML = html.join('');
-  }
   async function refresh(){
     const scope=$scope.value, month=$month.value;
-    $status.textContent="Chargement…";
-    try{
-      const rows=await fetchLeaderboard(scope, month);
-      renderRows(rows);
-      $status.textContent = `${rows.length} entrées`;
+  $status.textContent="Chargement…";
+/* A33 — micro-optims : éviter un saut de mise en page */
+$table.style.minHeight = '240px';  // ~10 lignes × hauteur moyenne
+try{
+  const rows = await fetchLeaderboard(scope, month);
+  renderRows(rows);
+  $status.textContent = `${rows.length} entrées`;
+  $table.style.minHeight = '';     // retire la contrainte après rendu
     }catch(e){
       console.warn(e); $status.textContent="Erreur de chargement.";
     }
   }
+}
+ 
   $btn.addEventListener('click', refresh);
   document.addEventListener('DOMContentLoaded', refresh);
 })();
 </script>
-
-
 
 
 
@@ -1378,14 +1537,35 @@ return el;
     const image = data.image_url || data.image || data.thumbnail || null;
     $t('[data-role="title"]').textContent = title;
     $t('[data-role="brand"]').textContent = brand;
-    if(image){
-      const img = new Image();
-      img.alt = title; img.loading = "lazy";
-      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
-      img.src = image; th.replaceWith(img);
-    }else{
-      th.textContent = "Pas d’image";
-    }
+    if (image) {
+  const img = new Image();
+  img.alt = title;
+
+  // A33 — anti-CLS + perf
+  img.loading  = "lazy";
+  img.decoding = "async";
+  // Réserve un gabarit pour éviter les sauts de mise en page
+  img.width  = 300;   // adapte à ton layout si besoin
+  img.height = 120;   // idem
+
+  // Booster LCP uniquement pour la toute première image rendue
+  if (!document.querySelector('[data-lcp-mark]')) {
+    img.setAttribute('fetchpriority','high');
+    img.setAttribute('data-lcp-mark','1');
+  }
+
+  // Styles existants
+  img.style.width = "100%";
+  img.style.height = "120px";
+  img.style.objectFit = "contain";
+  img.style.borderRadius = "10px";
+
+  img.src = image;
+  th.replaceWith(img);
+} else {
+  th.textContent = "Pas d’image";
+}
+
 
     // re-appliquer le filtre/surbrillance après hydratation des textes
     applyFilter();
@@ -4577,153 +4757,18 @@ if (window.honouaGetRanking) {
 }
 </script>
 
-<!-- A34 — Onboarding & tutoriels -->
-<style>
-/* Backdrop général */
-#tour-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:9998; }
-
-/* Panneau (dialog) */
-#tour-dialog{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-  background:#fff; color:#111; width:min(520px, 92vw); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
-  padding:16px; display:none; z-index:9999; }
-#tour-dialog header{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-#tour-dialog h2{ font-size:1.1rem; margin:0; }
-#tour-dialog .tour-body{ min-height:80px; }
-#tour-dialog .tour-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
-
-/* Coachmark (bulle) attaché à un élément */
-.tour-mark{ position:absolute; background:#111; color:#fff; padding:8px 10px; border-radius:8px; font-size:.95rem; line-height:1.35; max-width:280px; z-index:10000; }
-.tour-mark:after{ content:""; position:absolute; width:0; height:0; border:8px solid transparent; border-top-color:#111; bottom:-16px; left:16px; }
-
-/* Accessibilité */
-#tour-dialog:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
-</style>
-
-<div id="tour-backdrop" aria-hidden="true"></div>
-<div id="tour-dialog" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-desc">
-  <header>
-    <h2 id="tour-title">Bienvenue !</h2>
-    <span id="tour-desc" class="visually-hidden">Tutoriel guidé de l’interface Honoua</span>
-  </header>
-  <div class="tour-body">
-    <p>Découvre l’essentiel : ajouter des produits, filtrer, voir les classements.</p>
-  </div>
-  <div class="tour-actions">
-    <button type="button" id="tour-skip" class="btn-ghost">Ignorer</button>
-    <button type="button" id="tour-prev" class="btn-ghost" disabled>Précédent</button>
-    <button type="button" id="tour-next" class="btn-ghost">Suivant</button>
-    <button type="button" id="tour-done" class="btn-ghost" style="display:none">Terminer</button>
-  </div>
-</div>
-
 <script>
-/* A34 — Onboarding & tutoriels (coachmarks + dialog) */
-(function(){
-  const $ = s=>document.querySelector(s);
-  const dlg = $("#tour-dialog"), bg = $("#tour-backdrop");
-  const btnHelp = $("#helpBtn"), btnNext = $("#tour-next"), btnPrev = $("#tour-prev");
-  const btnSkip = $("#tour-skip"), btnDone = $("#tour-done");
-  let step = 0, mark=null, lastFocus=null;
-
-  // Définition des étapes (selector + message)
-  const STEPS = [
-    { sel: "#searchInput", msg: "Saisis un EAN ou un mot-clé pour ajouter des produits à comparer." },
-    { sel: "#track",       msg: "Ici s’affichent tes cartes produits. Utilise les actions sur chaque carte." },
-    { sel: "#leaderboard", msg: "Consulte les <strong>classements mensuels</strong> (national/régional) et filtre par mois." }
-  ];
-
-  // Mémo (localStorage ou honouaPrefs si présent)
-  async function setSeen(val){
-    try{
-      if (window.honouaPrefs) { await window.honouaPrefs.set("tour.seen", !!val); }
-      localStorage.setItem("tour.seen", JSON.stringify(!!val));
-    }catch{}
+// A33 — ajournement non-critique
+(function(run){
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    setTimeout(run, 350);
   }
-  async function getSeen(){
-    try{
-      if (window.honouaPrefs) { const v = await window.honouaPrefs.get("tour.seen", null); if (v!=null) return !!v; }
-      const raw = localStorage.getItem("tour.seen"); return raw? JSON.parse(raw) : false;
-    }catch{ return false; }
-  }
-
-  function showBackdrop(show){ bg.style.display = show? "block":"none"; bg.setAttribute("aria-hidden", show? "false":"true"); }
-  function showDialog(show){ dlg.style.display = show? "block":"none"; if (show) dlg.focus(); }
-
-  function placeMark(target, html){
-    removeMark();
-    const r = target.getBoundingClientRect();
-    mark = document.createElement("div");
-    mark.className = "tour-mark";
-    mark.innerHTML = html;
-    document.body.appendChild(mark);
-    // position au-dessus à gauche
-    const top = Math.max(8, window.scrollY + r.top - mark.offsetHeight - 16);
-    const left = Math.max(8, window.scrollX + r.left);
-    mark.style.top = top + "px";
-    mark.style.left = left + "px";
-  }
-  function removeMark(){ if(mark){ mark.remove(); mark=null; } }
-
-  function scrollIntoViewIfNeeded(el){
-    const rect = el.getBoundingClientRect();
-    if (rect.top<0 || rect.bottom>window.innerHeight){
-      el.scrollIntoView({behavior:"smooth", block:"center"});
-    }
-  }
-
-  function updateButtons(){
-    btnPrev.disabled = (step===0);
-    btnNext.style.display = (step < STEPS.length-1) ? "inline-block" : "none";
-    btnDone.style.display = (step === STEPS.length-1) ? "inline-block" : "none";
-  }
-
-  function gotoStep(i){
-    step = Math.max(0, Math.min(i, STEPS.length-1));
-    updateButtons();
-    const s = STEPS[step];
-    const target = document.querySelector(s.sel);
-    if (target){
-      scrollIntoViewIfNeeded(target);
-      placeMark(target, s.msg);
-      target.setAttribute("tabindex","-1");
-      target.focus({preventScroll:true});
-    }else{
-      removeMark();
-    }
-  }
-
-  function openTour(){
-    lastFocus = document.activeElement;
-    showBackdrop(true); showDialog(true);
-    step = 0; gotoStep(step);
-  }
-  function closeTour(){
-    removeMark(); showBackdrop(false); showDialog(false); setSeen(true);
-    if (lastFocus && lastFocus.focus) lastFocus.focus();
-  }
-
-  // Événements
-  btnHelp?.addEventListener("click", ()=> openTour());
-  btnNext?.addEventListener("click", ()=> gotoStep(step+1));
-  btnPrev?.addEventListener("click", ()=> gotoStep(step-1));
-  btnSkip?.addEventListener("click", closeTour);
-  btnDone?.addEventListener("click", closeTour);
-
-  // Échappement clavier
-  document.addEventListener("keydown", (e)=>{
-    if (dlg.style.display==="block" && e.key==="Escape"){ e.preventDefault(); closeTour(); }
-  });
-
-  // Lancer automatiquement au premier passage (si non vu)
-  (async function autoLaunch(){
-    if (!await getSeen()){
-      // On diffère un peu pour laisser le reste se peindre
-      setTimeout(()=> openTour(), 800);
-    }
-  })();
-})();
+})(function initNonCritical(){
+  // … init des stats/graphes ici …
+});
 </script>
-
 
 
 
