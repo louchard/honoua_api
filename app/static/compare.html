@@ -669,6 +669,30 @@
 
 
 
+/* A33 — micro-optims : éviter le coût des sections hors-écran */
+#leaderboard { 
+  content-visibility: auto; 
+  contain-intrinsic-size: 600px 800px; /* réserve un gabarit pour éviter CLS à l'apparition */
+}
+
+/* Respecte les utilisateurs sensibles au mouvement (↓ coûte GPU/CPU) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* A33 — fallback police système pour éviter FOIT */
+:root {
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+}
+body { font-family: var(--font-stack); }
+
+/* A33 — limiter recalculs/reflows sur interactions */
+button, [role="button"] {
+  will-change: background-color, color, border-color;
+}
+
+
+
 </style>
 
 </head>
@@ -959,52 +983,53 @@ document.addEventListener('keydown', (e)=>{
     return await res.json();
   }
 
-  function renderRows(rows){
-    if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
-   const html = [
-  '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
-  '<caption class="visually-hidden">Classement mensuel</caption>',
-  '<thead><tr>',
-  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-  '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-  '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
-  '</tr></thead><tbody>'
-];
-
-    rows.forEach(r=>{
-      html.push(
-        `<tr>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.rank}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.pseudo}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.score.toLocaleString('fr-FR')}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.n}</td>
-        </tr>`
-      );
-    });
-    html.push('</tbody></table>');
-    $table.innerHTML = html.join('');
+ function renderRows(rows){
+  if(!rows.length){ 
+    $table.innerHTML = "<p>Aucun participant ce mois.</p>";
+    return;
   }
 
+  // A33 — micro-optims : build en une passe + assignation unique
+  const chunks = [
+    '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+    '<caption class="visually-hidden">Classement mensuel</caption>',
+    '<thead><tr>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+    '</tr></thead><tbody>'
+  ];
+
+  for (const r of rows){
+    chunks.push(
+      '<tr>',
+        `<td style="padding:6px">${r.rank}</td>`,
+        `<td style="padding:6px">${r.pseudo}</td>`,
+        `<td style="padding:6px;text-align:right">${r.score}</td>`,
+        `<td style="padding:6px;text-align:right">${r.n}</td>`,
+      '</tr>'
+    );
+  }
+  chunks.push('</tbody></table>');
+
+  // Une seule écriture dans le DOM → moins de reflows
+  $table.innerHTML = chunks.join('');
+}
+
   async function refresh(){
-  const scope=$scope.value, month=$month.value;
+    const scope=$scope.value, month=$month.value;
   $status.textContent="Chargement…";
-  try{
-    const rows=await fetchLeaderboard(scope, month);
-    renderRows(rows);
-    $status.textContent = `${rows.length} entrées`;
-
-    // A32 — Focus management : envoyer le focus sur le tableau
-    // (tabindex -1 => focus programmatique sans polluer l'ordre naturel)
-    if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
-    $table.focus({ preventScroll:false });
-
-  }catch(e){
-    console.warn(e);
-    $status.textContent="Erreur de chargement.";
-    // Option : annoncer une erreur plus "forte"
-    // const toast = document.getElementById('toast');
-    // if (toast) { toast.setAttribute('role','alert'); setTimeout(()=>toast.setAttribute('role','status'), 1000); }
+/* A33 — micro-optims : éviter un saut de mise en page */
+$table.style.minHeight = '240px';  // ~10 lignes × hauteur moyenne
+try{
+  const rows = await fetchLeaderboard(scope, month);
+  renderRows(rows);
+  $status.textContent = `${rows.length} entrées`;
+  $table.style.minHeight = '';     // retire la contrainte après rendu
+    }catch(e){
+      console.warn(e); $status.textContent="Erreur de chargement.";
+    }
   }
 }
  
@@ -1012,6 +1037,7 @@ document.addEventListener('keydown', (e)=>{
   document.addEventListener('DOMContentLoaded', refresh);
 })();
 </script>
+
 
 
   <script>
@@ -1507,35 +1533,35 @@ return el;
     const image = data.image_url || data.image || data.thumbnail || null;
     $t('[data-role="title"]').textContent = title;
     $t('[data-role="brand"]').textContent = brand;
-    if(image){
-      const img = new Image();
-      img.alt = title; img.loading = "lazy";
-      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
-      img.src = image; th.replaceWith(img);
+    if (image) {
   const img = new Image();
-img.alt = title;
-img.loading = "lazy";
-img.decoding = "async";
-// Anti-CLS : fixe dimensions réelles connues ou ratio approximé
-img.width = 300;  // adapte à ton layout
-img.height = 120; // idem
-img.style.width="100%";
-img.style.height="120px";
-img.style.objectFit="contain";
-img.style.borderRadius="10px";
-// Boost LCP sur la toute 1ʳᵉ image visible si applicable
-if (!document.querySelector('[data-lcp-mark]')) {
-  img.setAttribute('fetchpriority','high');
-  img.setAttribute('data-lcp-mark','1');
+  img.alt = title;
+
+  // A33 — anti-CLS + perf
+  img.loading  = "lazy";
+  img.decoding = "async";
+  // Réserve un gabarit pour éviter les sauts de mise en page
+  img.width  = 300;   // adapte à ton layout si besoin
+  img.height = 120;   // idem
+
+  // Booster LCP uniquement pour la toute première image rendue
+  if (!document.querySelector('[data-lcp-mark]')) {
+    img.setAttribute('fetchpriority','high');
+    img.setAttribute('data-lcp-mark','1');
+  }
+
+  // Styles existants
+  img.style.width = "100%";
+  img.style.height = "120px";
+  img.style.objectFit = "contain";
+  img.style.borderRadius = "10px";
+
+  img.src = image;
+  th.replaceWith(img);
+} else {
+  th.textContent = "Pas d’image";
 }
-img.src = image;
-th.replaceWith(img);
 
-
-
-    }else{
-      th.textContent = "Pas d’image";
-    }
 
     // re-appliquer le filtre/surbrillance après hydratation des textes
     applyFilter();
