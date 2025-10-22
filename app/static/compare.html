@@ -830,19 +830,15 @@
   const $status=$("#lb-status"), $table=$("#lb-table");
   const $section = document.getElementById('leaderboard');
 
-  // -- Petit utilitaire anti-spam (throttle 400ms)
-  function throttle(fn, wait){
-    let t=0; return (...a)=>{ const now=Date.now(); if (now-t>=wait){ t=now; fn(...a); } };
-  }
+  function throttle(fn, wait){ let t=0; return (...a)=>{ const n=Date.now(); if(n-t>=wait){ t=n; fn(...a); } }; }
 
-  // -- Fonctions “métier” (inchangées)
   async function fetchLeaderboard(scope, month){
-    const token = sessionStorage.getItem('honoua_token'); // A19
+    const token = sessionStorage.getItem('honoua_token');
     const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
       headers: token ? { 'Authorization': 'Bearer ' + token } : {}
     });
     if (!res.ok) throw new Error('Leaderboard fetch failed');
-    return await res.json(); // -> [{rank,pseudo,score,n}, ...]
+    return await res.json();
   }
 
   function renderRows(rows){
@@ -857,7 +853,6 @@
       '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
       '</tr></thead><tbody>'
     ];
-    // … push rows …
     $table.innerHTML = html.join('');
   }
 
@@ -868,8 +863,6 @@
       const rows=await fetchLeaderboard(scope, month);
       renderRows(rows);
       $status.textContent = `${rows.length} entrées`;
-
-      // AA (A32 Étape 2) : focus programmatique sur la table
       if (!$table.hasAttribute('tabindex')) $table.setAttribute('tabindex','-1');
       $table.focus({ preventScroll:false });
     }catch(e){
@@ -878,17 +871,12 @@
   }
   const refreshThrottled = throttle(refresh, 400);
 
-  // -- Initialisation paresseuse uniquement quand la section devient visible
   let initialized = false;
   function initOnce(){
     if (initialized) return;
     initialized = true;
-
-    // Init mois courant (maintenu mais retardé à l'init réelle)
     const now=new Date();
     $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-
-    // Bind événements (clavier + change)
     $btn.setAttribute('type','button');
     $btn.addEventListener('keydown', (e)=>{
       if (e.key==='Enter' || e.key===' ') { e.preventDefault(); $btn.click(); }
@@ -896,26 +884,19 @@
     $scope.addEventListener('change', ()=> $btn.click());
     $month.addEventListener('change', ()=> $btn.click());
     $month.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ e.preventDefault(); $btn.click(); } });
-
-    // Premier chargement réel
     requestAnimationFrame(()=> refreshThrottled());
   }
 
-  // IO : charge seulement si visible ≥ 1px
   if ('IntersectionObserver' in window && $section){
     const io = new IntersectionObserver((entries)=>{
-      entries.forEach(e=>{
-        if (e.isIntersecting){ initOnce(); io.disconnect(); }
-      });
-    }, { root:null, rootMargin:'0px', threshold:0.01 });
+      entries.forEach(e=>{ if (e.isIntersecting){ initOnce(); io.disconnect(); } });
+    }, { threshold:0.01 });
     io.observe($section);
   } else {
-    // Fallback : init après load (comportement proche d’un defer)
     window.addEventListener('load', initOnce);
   }
 })();
 </script>
-
 
 
   <script>
@@ -4608,6 +4589,15 @@ if (window.honouaGetRanking) {
   }
   // Exemple : __devTestRanking('region','latest');
 }
+</script>
+<script>
+/* A33 — init non-critique en idle */
+(function(run){
+  if ('requestIdleCallback' in window) { requestIdleCallback(run,{timeout:1200}); }
+  else { setTimeout(run,350); }
+})(function initNonCritical(){
+  // … initialisations non essentielles …
+});
 </script>
 
 
