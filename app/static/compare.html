@@ -889,9 +889,13 @@ button, [role="button"] {
 
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
-      <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
-      <!-- A7 START: Recherche locale -->
-      <input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
+<button id="helpBtn" class="btn-ghost" type="button" aria-describedby="helpBtnHint">Aide ?</button>
+<span id="helpBtnHint" class="visually-hidden">Ouvrir le tutoriel guidé</span>
+
+<button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
+<input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
       <button id="clearFilterBtn" class="btn-ghost" aria-label="Effacer le filtre">Effacer filtre</button>
 <!-- A7 END -->
 
