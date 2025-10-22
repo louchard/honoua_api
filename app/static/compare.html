@@ -787,9 +787,13 @@
 
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
-      <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
-      <!-- A7 START: Recherche locale -->
-      <input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
+<button id="helpBtn" class="btn-ghost" type="button" aria-describedby="helpBtnHint">Aide ?</button>
+<span id="helpBtnHint" class="visually-hidden">Ouvrir le tutoriel guidé</span>
+
+<button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
+<input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
       <button id="clearFilterBtn" class="btn-ghost" aria-label="Effacer le filtre">Effacer filtre</button>
 <!-- A7 END -->
 
@@ -4571,6 +4575,153 @@ if (window.honouaGetRanking) {
   }
   // Exemple : __devTestRanking('region','latest');
 }
+</script>
+
+<!-- A34 — Onboarding & tutoriels -->
+<style>
+/* Backdrop général */
+#tour-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:9998; }
+
+/* Panneau (dialog) */
+#tour-dialog{ position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  background:#fff; color:#111; width:min(520px, 92vw); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  padding:16px; display:none; z-index:9999; }
+#tour-dialog header{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+#tour-dialog h2{ font-size:1.1rem; margin:0; }
+#tour-dialog .tour-body{ min-height:80px; }
+#tour-dialog .tour-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+
+/* Coachmark (bulle) attaché à un élément */
+.tour-mark{ position:absolute; background:#111; color:#fff; padding:8px 10px; border-radius:8px; font-size:.95rem; line-height:1.35; max-width:280px; z-index:10000; }
+.tour-mark:after{ content:""; position:absolute; width:0; height:0; border:8px solid transparent; border-top-color:#111; bottom:-16px; left:16px; }
+
+/* Accessibilité */
+#tour-dialog:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
+</style>
+
+<div id="tour-backdrop" aria-hidden="true"></div>
+<div id="tour-dialog" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-desc">
+  <header>
+    <h2 id="tour-title">Bienvenue !</h2>
+    <span id="tour-desc" class="visually-hidden">Tutoriel guidé de l’interface Honoua</span>
+  </header>
+  <div class="tour-body">
+    <p>Découvre l’essentiel : ajouter des produits, filtrer, voir les classements.</p>
+  </div>
+  <div class="tour-actions">
+    <button type="button" id="tour-skip" class="btn-ghost">Ignorer</button>
+    <button type="button" id="tour-prev" class="btn-ghost" disabled>Précédent</button>
+    <button type="button" id="tour-next" class="btn-ghost">Suivant</button>
+    <button type="button" id="tour-done" class="btn-ghost" style="display:none">Terminer</button>
+  </div>
+</div>
+
+<script>
+/* A34 — Onboarding & tutoriels (coachmarks + dialog) */
+(function(){
+  const $ = s=>document.querySelector(s);
+  const dlg = $("#tour-dialog"), bg = $("#tour-backdrop");
+  const btnHelp = $("#helpBtn"), btnNext = $("#tour-next"), btnPrev = $("#tour-prev");
+  const btnSkip = $("#tour-skip"), btnDone = $("#tour-done");
+  let step = 0, mark=null, lastFocus=null;
+
+  // Définition des étapes (selector + message)
+  const STEPS = [
+    { sel: "#searchInput", msg: "Saisis un EAN ou un mot-clé pour ajouter des produits à comparer." },
+    { sel: "#track",       msg: "Ici s’affichent tes cartes produits. Utilise les actions sur chaque carte." },
+    { sel: "#leaderboard", msg: "Consulte les <strong>classements mensuels</strong> (national/régional) et filtre par mois." }
+  ];
+
+  // Mémo (localStorage ou honouaPrefs si présent)
+  async function setSeen(val){
+    try{
+      if (window.honouaPrefs) { await window.honouaPrefs.set("tour.seen", !!val); }
+      localStorage.setItem("tour.seen", JSON.stringify(!!val));
+    }catch{}
+  }
+  async function getSeen(){
+    try{
+      if (window.honouaPrefs) { const v = await window.honouaPrefs.get("tour.seen", null); if (v!=null) return !!v; }
+      const raw = localStorage.getItem("tour.seen"); return raw? JSON.parse(raw) : false;
+    }catch{ return false; }
+  }
+
+  function showBackdrop(show){ bg.style.display = show? "block":"none"; bg.setAttribute("aria-hidden", show? "false":"true"); }
+  function showDialog(show){ dlg.style.display = show? "block":"none"; if (show) dlg.focus(); }
+
+  function placeMark(target, html){
+    removeMark();
+    const r = target.getBoundingClientRect();
+    mark = document.createElement("div");
+    mark.className = "tour-mark";
+    mark.innerHTML = html;
+    document.body.appendChild(mark);
+    // position au-dessus à gauche
+    const top = Math.max(8, window.scrollY + r.top - mark.offsetHeight - 16);
+    const left = Math.max(8, window.scrollX + r.left);
+    mark.style.top = top + "px";
+    mark.style.left = left + "px";
+  }
+  function removeMark(){ if(mark){ mark.remove(); mark=null; } }
+
+  function scrollIntoViewIfNeeded(el){
+    const rect = el.getBoundingClientRect();
+    if (rect.top<0 || rect.bottom>window.innerHeight){
+      el.scrollIntoView({behavior:"smooth", block:"center"});
+    }
+  }
+
+  function updateButtons(){
+    btnPrev.disabled = (step===0);
+    btnNext.style.display = (step < STEPS.length-1) ? "inline-block" : "none";
+    btnDone.style.display = (step === STEPS.length-1) ? "inline-block" : "none";
+  }
+
+  function gotoStep(i){
+    step = Math.max(0, Math.min(i, STEPS.length-1));
+    updateButtons();
+    const s = STEPS[step];
+    const target = document.querySelector(s.sel);
+    if (target){
+      scrollIntoViewIfNeeded(target);
+      placeMark(target, s.msg);
+      target.setAttribute("tabindex","-1");
+      target.focus({preventScroll:true});
+    }else{
+      removeMark();
+    }
+  }
+
+  function openTour(){
+    lastFocus = document.activeElement;
+    showBackdrop(true); showDialog(true);
+    step = 0; gotoStep(step);
+  }
+  function closeTour(){
+    removeMark(); showBackdrop(false); showDialog(false); setSeen(true);
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  // Événements
+  btnHelp?.addEventListener("click", ()=> openTour());
+  btnNext?.addEventListener("click", ()=> gotoStep(step+1));
+  btnPrev?.addEventListener("click", ()=> gotoStep(step-1));
+  btnSkip?.addEventListener("click", closeTour);
+  btnDone?.addEventListener("click", closeTour);
+
+  // Échappement clavier
+  document.addEventListener("keydown", (e)=>{
+    if (dlg.style.display==="block" && e.key==="Escape"){ e.preventDefault(); closeTour(); }
+  });
+
+  // Lancer automatiquement au premier passage (si non vu)
+  (async function autoLaunch(){
+    if (!await getSeen()){
+      // On diffère un peu pour laisser le reste se peindre
+      setTimeout(()=> openTour(), 800);
+    }
+  })();
+})();
 </script>
 
 
