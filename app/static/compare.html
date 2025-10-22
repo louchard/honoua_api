@@ -4398,6 +4398,180 @@ document.addEventListener('DOMContentLoaded', ()=>{
   window.__t = t;
 })();
 </script>
+<!-- ===========================================================
+     A31 — Mode hors-ligne enrichi (Étape 1: infra cache + lecture)
+     - IndexedDB 'honoua-db' : products, rankings, sessions, prefs
+     - Wrappers cache-first avec TTL
+     =========================================================== -->
+<script>
+(function(){
+  // ===== A31 — DB Schema =====
+  const DB_NAME = 'honoua-db';
+  const DB_VER  = 1;
+  const STORES  = {
+    products:  { keyPath: 'key' },      // key = EAN
+    rankings:  { keyPath: 'key' },      // key = `${scope}|${period}`
+    sessions:  { keyPath: 'key' },      // key = timestamp or uid
+    prefs:     { keyPath: 'key' }       // key = pref name
+  };
+
+  // Small IndexedDB helper (no external deps)
+  function openDB(){
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, DB_VER);
+      req.onupgradeneeded = (ev)=>{
+        const db = req.result;
+        Object.keys(STORES).forEach(name=>{
+          if (!db.objectStoreNames.contains(name)){
+            db.createObjectStore(name, { keyPath: STORES[name].keyPath });
+          }
+        });
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror   = ()=> reject(req.error);
+    });
+  }
+
+  async function withStore(storeName, mode, fn){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx  = db.transaction(storeName, mode);
+      const st  = tx.objectStore(storeName);
+      const out = fn(st);
+      tx.oncomplete = ()=> resolve(out);
+      tx.onerror    = ()=> reject(tx.error);
+    });
+  }
+
+  // ===== A31 — Cache API =====
+  const now = ()=> Date.now();
+  const wrap = (key, value, ttlMs)=>({ key, value, ts: now(), ttl: ttlMs||0 });
+
+  async function cachePut(store, key, value, ttlMs){
+    return withStore(store, 'readwrite', st => st.put( wrap(key, value, ttlMs) ));
+  }
+
+  async function cacheGet(store, key, maxAgeMs){
+    const rec = await withStore(store, 'readonly', st => new Promise((res,rej)=>{
+      const rq = st.get(key);
+      rq.onsuccess = ()=> res(rq.result || null);
+      rq.onerror   = ()=> rej(rq.error);
+    }));
+    if (!rec) return null;
+    if (maxAgeMs && rec.ts && (now()-rec.ts)>maxAgeMs) return null; // stale
+    return rec.value;
+  }
+
+  // Helpers TTL (par défaut prudents)
+  const TTL = {
+    product: 30*24*3600*1000,  // 30 jours
+    ranking: 7*24*3600*1000,   // 7 jours (classements mensuels → suffisant)
+    prefs:   365*24*3600*1000, // 1 an
+    session: 30*24*3600*1000   // 30 jours
+  };
+
+  // ===== A31 — Wrappers métier (cache-first) =====
+  // (Ajuste les URLs selon ton backend actuel ; les endpoints finaux seront stabilisés en A35–A37) :contentReference[oaicite:3]{index=3}
+
+  async function fetchJSON(url){
+    const r = await fetch(url, { headers: { 'Accept':'application/json' }});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // Produits par EAN
+  window.honouaGetProduct = async function(ean){
+    const key = String(ean||'').trim();
+    if (!key) return null;
+    // 1) Cache
+    const cached = await cacheGet('products', key, TTL.product);
+    if (cached) return cached;
+    // 2) Réseau → cache
+    const data = await fetchJSON(`/api/products?ean=${encodeURIComponent(key)}`);
+    if (data) await cachePut('products', key, data, TTL.product);
+    return data;
+  };
+
+  // Classements (ex: scope='region|national', period='2025-10' ou 'latest')
+  window.honouaGetRanking = async function(scope, period){
+    const key = `${scope}|${period}`;
+    const cached = await cacheGet('rankings', key, TTL.ranking);
+    if (cached) return cached;
+    const data = await fetchJSON(`/api/rankings?scope=${encodeURIComponent(scope)}&period=${encodeURIComponent(period)}`);
+    if (data) await cachePut('rankings', key, data, TTL.ranking);
+    return data;
+  };
+
+  // Préférences : mirroir localStorage → IDB (lecture depuis IDB en priorité)
+  window.honouaPrefs = {
+    async get(name, fallback){
+      const v = await cacheGet('prefs', name, TTL.prefs);
+      if (v!==undefined && v!==null) return v;
+      try {
+        const ls = localStorage.getItem(name);
+        if (ls!=null){
+          const parsed = JSON.parse(ls);
+          await cachePut('prefs', name, parsed, TTL.prefs);
+          return parsed;
+        }
+      } catch {}
+      return fallback;
+    },
+    async set(name, value){
+      try { localStorage.setItem(name, JSON.stringify(value)); } catch{}
+      await cachePut('prefs', name, value, TTL.prefs);
+    }
+  };
+
+  // Sessions : snapshot minimal (liste EANs + options de tri/filtres)
+  window.honouaSessions = {
+    async save(snapshot){
+      const key = String(snapshot && snapshot.id || Date.now());
+      await cachePut('sessions', key, snapshot, TTL.session);
+      return key;
+    },
+    async get(key){ return cacheGet('sessions', key, TTL.session); }
+  };
+
+  
+
+  // ===== A31 — Bootstrap doux =====
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // Rien d’intrusif ici : on expose juste les APIs ci-dessus.
+    // Les appels existants (comparateur, pages classements) peuvent progressivement
+    // migrer vers ces wrappers sans casser l’existant (principe acté A31). :contentReference[oaicite:4]{index=4}
+  });
+})();
+</script>
+<script>
+if (window.honouaGetProduct) {
+  // DEV ONLY — Test produit
+  async function __devTestProduct(ean){
+    try {
+      const p = await window.honouaGetProduct(ean);
+      console.debug('[DEV A31] cache product', ean, p);
+    } catch(e){
+      console.warn('[DEV A31] product fetch failed', e);
+    }
+  }
+  // Exemple : __devTestProduct('3274080005003');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
 
 
 
