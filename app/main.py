@@ -29,7 +29,6 @@ _FAKE_PRODUCTS: List[Product] = [
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
 # ==========================
 #      SQLAlchemy (DB)
 # ==========================
