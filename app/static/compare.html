@@ -4,6 +4,61 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Honoua — Comparateur</title>
+
+  <!-- A33 — Resource Hints -->
+<link rel="preconnect" href="/" crossorigin> <!-- API même origine -->
+<link rel="dns-prefetch" href="//cdn.jsdelivr.net"> <!-- adapte si tu utilises un autre CDN -->
+<link rel="dns-prefetch" href="//unpkg.com">
+
+<!-- A33 — Performance budgets (LCP/CLS/TBT guard) -->
+<script>
+/* Mesure LCP, CLS, TBT et log si budget dépassé */
+(function(){
+  var B = { LCP:2500, CLS:0.1, TBT:200 }; // ms
+  // CLS via PerformanceObserver
+  try{
+    var cls=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){ if (!e.hadRecentInput) cls += e.value; });
+    }).observe({type:'layout-shift', buffered:true});
+    window.__getCLS = function(){ return cls; };
+  }catch(e){}
+  // LCP via PO
+  try{
+    var lcp=0; new PerformanceObserver(function(list){
+      var last = list.getEntries().pop(); if (last) lcp = last.renderTime || last.loadTime || 0;
+    }).observe({type:'largest-contentful-paint', buffered:true});
+    window.__getLCP = function(){ return Math.round(lcp); };
+  }catch(e){}
+  // TBT approx via Long Tasks
+  try{
+    var tbt=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){
+        var block = e.duration - 50; if (block>0) tbt += block;
+      });
+    }).observe({type:'longtask', buffered:true});
+    window.__getTBT = function(){ return Math.round(tbt); };
+  }catch(e){}
+  // Rapport à l'onglet DevTools (dev uniquement)
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var L = window.__getLCP?__getLCP():-1;
+      var C = window.__getCLS?__getCLS():-1;
+      var T = window.__getTBT?__getTBT():-1;
+      if (L>-1||C>-1||T>-1) {
+        console.log('[A33] Budgets perf → LCP:%sms CLS:%s TBT:%sms (budgets %s/%s/%s)',
+          L, C, T, B.LCP, B.CLS, B.TBT);
+      }
+      if ((L>0 && L>B.LCP) || (C>0 && C>B.CLS) || (T>0 && T>B.TBT)) {
+        console.warn('[A33] ⚠️ Budgets dépassés. Voir optimisations (lazy, preconnect, defers).');
+      }
+    }, 1500);
+  });
+})();
+</script>
+
+
+
+
   <style>
     :root{
       --green:#2e7d32; --orange:#F5C147; --blue:#001D85;
@@ -177,6 +232,12 @@
 #compare-history button:hover {
   background: rgba(0,29,133,.06);
 }
+
+/* A33 — limiter les reflows : évite changements de taille inattendus */
+#compare-history button, #compare-export button {
+  will-change: background-color, color, border-color;
+}
+
 
 @media (prefers-color-scheme: dark) {
   #compare-history button:hover {
@@ -590,6 +651,47 @@
 .skip-link{ position:absolute; left:-9999px; top:8px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000; }
 .skip-link:focus{ left:8px; }
 
+/* A32 — Accessibilité : focus visibles + skip-link */
+:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
+.skip-link{
+  position:absolute; left:-9999px; top:8px;
+  background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000;
+}
+.skip-link:focus-visible{ left:8px; }
+
+/* A32 — classe utilitaire pour contenu accessible mais invisible visuellement */
+.visually-hidden {
+  position:absolute!important; width:1px!important; height:1px!important;
+  padding:0!important; margin:-1px!important; overflow:hidden!important;
+  clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important;
+}
+
+
+
+
+/* A33 — micro-optims : éviter le coût des sections hors-écran */
+#leaderboard { 
+  content-visibility: auto; 
+  contain-intrinsic-size: 600px 800px; /* réserve un gabarit pour éviter CLS à l'apparition */
+}
+
+/* Respecte les utilisateurs sensibles au mouvement (↓ coûte GPU/CPU) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* A33 — fallback police système pour éviter FOIT */
+:root {
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+}
+body { font-family: var(--font-stack); }
+
+/* A33 — limiter recalculs/reflows sur interactions */
+button, [role="button"] {
+  will-change: background-color, color, border-color;
+}
+
+
 
 </style>
 
@@ -787,9 +889,13 @@
 
       <!-- A6 : Compteur + Retirer tout -->
       <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
-      <button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
-      <!-- A7 START: Recherche locale -->
-      <input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
+<button id="helpBtn" class="btn-ghost" type="button" aria-describedby="helpBtnHint">Aide ?</button>
+<span id="helpBtnHint" class="visually-hidden">Ouvrir le tutoriel guidé</span>
+
+<button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
+<input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
       <button id="clearFilterBtn" class="btn-ghost" aria-label="Effacer le filtre">Effacer filtre</button>
 <!-- A7 END -->
 
@@ -807,77 +913,134 @@
   <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
 
   <!-- A24+ — Classements mensuels -->
-<section id="leaderboard" style="margin-top:18px">
-  <h3 style="margin:0 0 8px">Classements mensuels</h3>
+<section id="leaderboard" style="margin-top:18px" aria-labelledby="lb-title">
+  <h3 id="lb-title" style="margin:0 0 8px">Classements mensuels</h3>
+
   <div style="display:flex;gap:8px;align-items:center">
-    <select id="lb-scope">
+    <label for="lb-scope" class="visually-hidden">Portée du classement</label>
+    <select id="lb-scope" name="lb-scope" aria-describedby="lb-hint-scope">
       <option value="country">National</option>
       <option value="region">Régional</option>
     </select>
-    <input id="lb-month" type="month"/>
-    <button id="lb-refresh">Voir</button>
-    <span id="lb-status" style="opacity:.7"></span>
+    <span id="lb-hint-scope" class="visually-hidden">Choisissez national ou régional</span>
+
+    <label for="lb-month" class="visually-hidden">Mois</label>
+    <input id="lb-month" name="lb-month" type="month" inputmode="numeric" aria-describedby="lb-hint-month"/>
+
+    <button id="lb-refresh" type="button" aria-describedby="lb-hint-refresh">Voir</button>
+    <span id="lb-hint-month" class="visually-hidden">Format AAAA-MM</span>
+    <span id="lb-hint-refresh" class="visually-hidden">Mettre à jour le tableau</span>
+
+    <span id="lb-status" role="status" aria-live="polite" style="opacity:.7"></span>
   </div>
+
   <div id="lb-table" style="margin-top:10px"></div>
 </section>
+
+
+
+
 <script>
 (function(){
   const $ = s=>document.querySelector(s);
   const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
   const $status=$("#lb-status"), $table=$("#lb-table");
-  // init mois courant
-  const now=new Date(); $month.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const $section = document.getElementById('leaderboard');
+
+  function throttle(fn, wait){ let t=0; return (...a)=>{ const n=Date.now(); if(n-t>=wait){ t=n; fn(...a); } }; }
+
+  // A32 — Étape 2 : navigation clavier & focus
+// 1) Activer "Voir" au clavier (Enter/Espace)
+$btn.setAttribute('type','button');
+$btn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $btn.click(); }
+});
+
+// 2) Auto-refresh accessible sur changement (sélecteur + mois)
+$scope.addEventListener('change', ()=> $btn.click());
+$month.addEventListener('change', ()=> $btn.click());
+
+// 3) Enter dans le champ month déclenche la mise à jour
+$month.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); $btn.click(); }
+});
+
+// 4) Raccourci clavier global Alt+R pour "Voir"
+document.addEventListener('keydown', (e)=>{
+  if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    $btn.focus();
+    $btn.click();
+  }
+});
+
+
+
+
 
   async function fetchLeaderboard(scope, month){
-  const token = sessionStorage.getItem('honoua_token'); // A19
-  const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
-    headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-  });
-  if (!res.ok) throw new Error('Leaderboard fetch failed');
-  return await res.json(); // -> [{rank,pseudo,score,n}, ...]
+    const token = sessionStorage.getItem('honoua_token');
+    const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (!res.ok) throw new Error('Leaderboard fetch failed');
+    return await res.json();
+  }
+
+ function renderRows(rows){
+  if(!rows.length){ 
+    $table.innerHTML = "<p>Aucun participant ce mois.</p>";
+    return;
+  }
+
+  // A33 — micro-optims : build en une passe + assignation unique
+  const chunks = [
+    '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+    '<caption class="visually-hidden">Classement mensuel</caption>',
+    '<thead><tr>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+    '</tr></thead><tbody>'
+  ];
+
+  for (const r of rows){
+    chunks.push(
+      '<tr>',
+        `<td style="padding:6px">${r.rank}</td>`,
+        `<td style="padding:6px">${r.pseudo}</td>`,
+        `<td style="padding:6px;text-align:right">${r.score}</td>`,
+        `<td style="padding:6px;text-align:right">${r.n}</td>`,
+      '</tr>'
+    );
+  }
+  chunks.push('</tbody></table>');
+
+  // Une seule écriture dans le DOM → moins de reflows
+  $table.innerHTML = chunks.join('');
 }
 
-  function renderRows(rows){
-    if(!rows.length){ $table.innerHTML="<p>Aucun participant ce mois.</p>"; return; }
-    const html = [
-      '<table style="width:100%;border-collapse:collapse">',
-      '<thead><tr>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
-      '<th style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
-      '<th style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
-      '</tr></thead><tbody>'
-    ];
-    rows.forEach(r=>{
-      html.push(
-        `<tr>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.rank}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee">${r.pseudo}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.score.toLocaleString('fr-FR')}</td>
-          <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${r.n}</td>
-        </tr>`
-      );
-    });
-    html.push('</tbody></table>');
-    $table.innerHTML = html.join('');
-  }
   async function refresh(){
     const scope=$scope.value, month=$month.value;
-    $status.textContent="Chargement…";
-    try{
-      const rows=await fetchLeaderboard(scope, month);
-      renderRows(rows);
-      $status.textContent = `${rows.length} entrées`;
+  $status.textContent="Chargement…";
+/* A33 — micro-optims : éviter un saut de mise en page */
+$table.style.minHeight = '240px';  // ~10 lignes × hauteur moyenne
+try{
+  const rows = await fetchLeaderboard(scope, month);
+  renderRows(rows);
+  $status.textContent = `${rows.length} entrées`;
+  $table.style.minHeight = '';     // retire la contrainte après rendu
     }catch(e){
       console.warn(e); $status.textContent="Erreur de chargement.";
     }
   }
+}
+ 
   $btn.addEventListener('click', refresh);
   document.addEventListener('DOMContentLoaded', refresh);
 })();
 </script>
-
-
 
 
 
@@ -1374,14 +1537,35 @@ return el;
     const image = data.image_url || data.image || data.thumbnail || null;
     $t('[data-role="title"]').textContent = title;
     $t('[data-role="brand"]').textContent = brand;
-    if(image){
-      const img = new Image();
-      img.alt = title; img.loading = "lazy";
-      img.style.width="100%"; img.style.height="120px"; img.style.objectFit="contain"; img.style.borderRadius="10px";
-      img.src = image; th.replaceWith(img);
-    }else{
-      th.textContent = "Pas d’image";
-    }
+    if (image) {
+  const img = new Image();
+  img.alt = title;
+
+  // A33 — anti-CLS + perf
+  img.loading  = "lazy";
+  img.decoding = "async";
+  // Réserve un gabarit pour éviter les sauts de mise en page
+  img.width  = 300;   // adapte à ton layout si besoin
+  img.height = 120;   // idem
+
+  // Booster LCP uniquement pour la toute première image rendue
+  if (!document.querySelector('[data-lcp-mark]')) {
+    img.setAttribute('fetchpriority','high');
+    img.setAttribute('data-lcp-mark','1');
+  }
+
+  // Styles existants
+  img.style.width = "100%";
+  img.style.height = "120px";
+  img.style.objectFit = "contain";
+  img.style.borderRadius = "10px";
+
+  img.src = image;
+  th.replaceWith(img);
+} else {
+  th.textContent = "Pas d’image";
+}
+
 
     // re-appliquer le filtre/surbrillance après hydratation des textes
     applyFilter();
@@ -4573,6 +4757,48 @@ if (window.honouaGetRanking) {
 }
 </script>
 
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+// A33 — ajournement non-critique
+(function(run){
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    setTimeout(run, 350);
+  }
+})(function initNonCritical(){
+  // … init des stats/graphes ici …
+});
+</script>
 
 
 
