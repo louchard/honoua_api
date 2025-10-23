@@ -22,10 +22,12 @@ _FAKE_PRODUCTS: List[Product] = [
 ]
 
 # ====== Health ======
+from fastapi import FastAPI
+app = FastAPI()
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
 # ==========================
 #      SQLAlchemy (DB)
 # ==========================
