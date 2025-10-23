@@ -1,9 +1,13 @@
 ﻿from fastapi import FastAPI, HTTPException, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
+
+# Router prefixé /api pour compat front
+api = APIRouter(prefix="/api")
 
 # ====== Modèles Pydantic (API) ======
 class Product(BaseModel):
@@ -21,7 +25,7 @@ _FAKE_PRODUCTS: List[Product] = [
     Product(ean="3274080005003", name="Yaourt nature 4x125g", category="Produits laitiers"),
 ]
 
-# ====== Health ======
+# ====== Health (racine) ======
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -30,12 +34,11 @@ def health():
 #      SQLAlchemy (DB)
 # ==========================
 import os
-from sqlalchemy import String
+from sqlalchemy import String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
-from sqlalchemy import create_engine
 
-# URL DB via variable d’environnement, sinon SQLite local
-DB_URL = os.getenv("HONOUA_DB_URL", "sqlite:///./honoua.db")
+# URL DB via .env (compose) sinon fallback SQLite local
+DB_URL = os.getenv("DATABASE_URL", "sqlite:///./honoua.db")
 
 # Pour SQLite, besoin de ce connect_args
 connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
@@ -66,12 +69,12 @@ def get_db() -> Session:
 # ==========================
 #        Products
 # ==========================
-@app.get("/products", response_model=List[Product])
+@api.get("/products", response_model=List[Product])
 def list_products():
     """Retourne la liste statique (smoke test)."""
     return _FAKE_PRODUCTS
 
-@app.get("/products/{ean}", response_model=Product)
+@api.get("/products/{ean}", response_model=Product)
 def get_product(ean: str, db: Session = Depends(get_db)):
     """
     Lecture en BDD (si présente), sinon fallback mémoire.
@@ -91,10 +94,10 @@ def get_product(ean: str, db: Session = Depends(get_db)):
             return p
     raise HTTPException(status_code=404, detail="Product not found")
 
-@app.post("/products/search", response_model=List[Product])
+@api.post("/products/search", response_model=List[Product])
 def search_products(query: ProductSearchQuery, db: Session = Depends(get_db)):
     """
-    Recherche très simple par nom. On tente la BDD d'abord (contains LIKE),
+    Recherche très simple par nom. On tente la BDD d'abord (full scan),
     sinon on revient au fallback mémoire.
     """
     q = (query.q or "").strip().lower()
@@ -104,22 +107,18 @@ def search_products(query: ProductSearchQuery, db: Session = Depends(get_db)):
     results: List[Product] = []
     # 1) Essayer la BDD (si table existe)
     try:
-        # SQLAlchemy 2.0: requête simple avec contains (insensible casse via lower côté Python)
-        stmt_results = db.query(ProductDB).all()  # simple (pas d'index texte ici)
-        for row in stmt_results:
+        rows = db.query(ProductDB).all()
+        for row in rows:
             if row.name and q in row.name.lower():
                 results.append(Product(ean=row.ean, name=row.name, category=row.category))
-        # Si on trouve en BDD, on retourne (même si liste vide, on continue fallback pour enrichir)
     except Exception:
         # Si erreur DB, on ignore
         pass
 
     # 2) Fallback mémoire (compléter les résultats)
-    mem_matches = [p for p in _FAKE_PRODUCTS if p.name and q in p.name.lower()]
-    # Éviter doublons si même EAN
     seen = {r.ean for r in results}
-    for p in mem_matches:
-        if p.ean not in seen:
+    for p in _FAKE_PRODUCTS:
+        if p.name and q in p.name.lower() and p.ean not in seen:
             results.append(p)
 
     return results
@@ -137,10 +136,13 @@ class CompareItemResult(BaseModel):
 class CompareResponse(BaseModel):
     results: list[CompareItemResult]
 
-@app.post("/compare", response_model=CompareResponse)
+@api.post("/compare", response_model=CompareResponse)
 def compare_products(payload: CompareRequest):
     """
     Endpoint de comparaison carbone minimal (valeurs null pour préparer le front).
     """
     results = [CompareItemResult(ean=ean, carbon_kgCO2e=None) for ean in payload.eans]
     return CompareResponse(results=results)
+
+# Monter le router /api
+app.include_router(api)
