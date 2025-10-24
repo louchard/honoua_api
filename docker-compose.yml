@@ -30,25 +30,6 @@ services:
     environment:
       APP_MODULE: ${APP_MODULE:-app.main:app}
       HONOUA_ENV: development
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-honou}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-honoua}}
-    volumes:
-      - .:/app:cached
-    ports:
-      - "8000:8000"
-    # prod: gunicorn (le Dockerfile a déjà le CMD)
-    profiles: ["prod"]
-
-  api-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: honoua_api_dev
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      APP_MODULE: ${APP_MODULE:-app.main:app}
-      HONOUA_ENV: development
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-honou}:${POSTGRES_PASSWORD:-Honou2035Lg!}@postgres:5432/${POSTGRES_DB:-honoua}}
     volumes:
       - .:/app:cached
