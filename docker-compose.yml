@@ -30,11 +30,11 @@ services:
     environment:
       APP_MODULE: ${APP_MODULE:-app.main:app}
       HONOUA_ENV: development
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-honou}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-honoua}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-honou}:${POSTGRES_PASSWORD:-Honou2035Lg!}@postgres:5432/${POSTGRES_DB:-honoua}}
     volumes:
       - .:/app:cached
     ports:
-      - "8000:8000"
+      - "8000:8000"   # si 8000 pris, mets "8001:8000"
     command: >
       sh -c "pip install --no-cache-dir uvicorn &&
              uvicorn ${APP_MODULE:-app.main:app} --host 0.0.0.0 --port 8000 --reload"

@@ -4803,6 +4803,21 @@ if (window.honouaGetRanking) {
 </script>
 
 <script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
 // A33 — ajournement non-critique
 (function(run){
   if ('requestIdleCallback' in window) {
