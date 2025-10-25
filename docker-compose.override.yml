@@ -1,0 +1,6 @@
+﻿services:
+  api-dev:
+    environment:
+      HONOUA_DB_URL: "postgresql+psycopg://honou:Honou2025Lg!@honoua_db:5432/honoua"
+
+
