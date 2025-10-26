@@ -2,12 +2,17 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
+from app.routers import tokens  # ⬅️ AJOUT
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
 # Router prefixé /api pour compat front
 api = APIRouter(prefix="/api")
+
+app = FastAPI(title="Honoua API")
+
+app.include_router(tokens.router)  # ⬅️ AJOUT
 
 # ====== Modèles Pydantic (API) ======
 class Product(BaseModel):
@@ -488,3 +493,15 @@ async def compare_products(payload: CompareIn):
         # Les tests attendent la clé 'carbon_kgCO2e'
         items.append({"ean": p["ean"], "carbon_kgCO2e": 0.0, "meta": p})
     return {"results": items}
+from app.routers import emissions_history
+app.include_router(emissions_history.router)
+
+from app.routers import emissions_history
+app.include_router(emissions_history.router)
+
+from app.middleware.blacklist_guard import blacklist_guard
+
+@app.middleware("http")
+async def _blacklist_guard_mw(request, call_next):
+    return await blacklist_guard(request, call_next)
+
