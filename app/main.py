@@ -505,3 +505,11 @@ from app.middleware.blacklist_guard import blacklist_guard
 async def _blacklist_guard_mw(request, call_next):
     return await blacklist_guard(request, call_next)
 
+
+from app.routers import products
+
+from app.routers import compare
+
+app.include_router(products.router)
+
+app.include_router(compare.router)
