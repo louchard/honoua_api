@@ -513,3 +513,15 @@ from app.routers import compare
 app.include_router(products.router)
 
 app.include_router(compare.router)
+
+from app.routers.products import router as products_router
+
+from app.routers.compare import router as compare_router
+
+from app.routers.tokens import router as tokens_router
+
+app.include_router(products_router)
+
+app.include_router(compare_router)
+
+app.include_router(tokens_router)
