@@ -1,0 +1,21 @@
+"""A39b rename audit_event -> audit_events
+
+Revision ID: e3cd3948e3be
+Revises: bee001d0c28f
+Create Date: 2025-10-27 17:55:48.881822
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = 'e3cd3948e3be'
+down_revision = 'bee001d0c28f'
+branch_labels = 'None'
+depends_on = 'None'
+
+def upgrade():
+    pass
+
+def downgrade():
+    pass
