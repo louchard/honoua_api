@@ -11,7 +11,10 @@ from app.models.user_notification_preferences import (
     UserNotificationPreferences,
     NotificationFrequency as SA_NotificationFrequency,  # ENUM SQLAlchemy si besoin
 )
-from app.core.logger import logger
+try:
+    from app.core.logger import logger
+except ModuleNotFoundError:
+    from ..core.logger import logger
 from app.schemas.user_notification_preferences import (
     UserNotificationPreferencesRead,
     UserNotificationPreferencesUpdate,
