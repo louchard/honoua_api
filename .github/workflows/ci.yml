@@ -58,6 +58,7 @@ jobs:
           echo "Postgres not ready in time" >&2
           exit 1
 
-        - name: tests
-        run:
-        pytest -q
+      - name: Run tests
+        run: pytest -q
+ 
+      
