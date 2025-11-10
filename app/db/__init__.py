@@ -51,3 +51,5 @@ def smoke() -> bool:
 
 
 __all__ = ["ENGINE", "engine", "async_session", "db_conn", "db_url", "smoke"]
+
+from .base import Base as Base

@@ -3,7 +3,11 @@ from __future__ import annotations
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from app.db.base_class import Base
+try:
+    from app.db.base_class import Base
+except ModuleNotFoundError:
+    from app.db.base import Base  # fallback CI
+
 
 # Doit correspondre exactement au type cr?? par la migration a41_0001:
 # name='notification_frequency' avec les 4 valeurs ci-dessous.
