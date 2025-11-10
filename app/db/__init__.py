@@ -1,4 +1,5 @@
 import os
+from sqlalchemy import text
 from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 
@@ -24,7 +25,12 @@ def db_conn():
     with eng.connect() as conn:
         yield conn
 
-def smoke() -> int:
-    eng = get_engine()
-    with eng.connect() as conn:
-        return int(conn.execute(text("SELECT 1")).scalar_one())
+def smoke() -> bool:
+    """Retourne True si la DB répond à SELECT 1, False sinon."""
+    try:
+        eng = get_engine()
+        with eng.connect() as conn:
+            val = conn.execute(text("SELECT 1")).scalar_one()
+        return val == 1          # <-- bool attendu par le test
+    except Exception:
+        return False
