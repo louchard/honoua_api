@@ -1,14 +1,24 @@
-﻿from .base import Base  # re-export
-__all__ = ["Base"]
-# --- Compatibility helper for legacy imports ---
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncConnection
-async def db_conn() -> AsyncConnection:
-    # Provides an async SQLAlchemy connection (used by legacy routers expecting db_conn)
-    from .session import engine
-    return await engine.connect()
-# --- Backward-compat alias for legacy imports ---
-try:
-    from .session import async_session as db_conn
-except Exception:
-    db_conn = None  # allows module import even if session init fails in CI
+import os
+from sqlalchemy import create_engine, text
+
+__all__ = ["db_url", "get_engine", "smoke"]
+
+def db_url() -> str:
+    """Retourne l'URL de la BD: HONOUA_DB_URL si d?fini, sinon SQLite local."""
+    return os.getenv("HONOUA_DB_URL") or "sqlite:///./local.db"
+
+_engine = None
+
+def get_engine():
+    """Engine SQLAlchemy (lazy singleton)."""
+    global _engine
+    if _engine is None:
+        _engine = create_engine(db_url(), future=True)
+    return _engine
+
+def smoke() -> int:
+    """Ex?cute SELECT 1 et retourne 1 si OK (utilis? par les tests CI)."""
+    eng = get_engine()
+    with eng.connect() as conn:
+        val = conn.execute(text("SELECT 1")).scalar_one()
+        return int(val)
