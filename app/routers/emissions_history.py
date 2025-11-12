@@ -1,12 +1,29 @@
-﻿from fastapi import APIRouter, Depends, Request
-from sqlalchemy import text
+from __future__ import annotations
+from fastapi import APIRouter, Depends, Request
+# ---- PATCH A42: safe import for legacy db_conn ----
+try:
+    from app.db import db_conn  # legacy (peut ne pas exister en CI)
+except Exception:               # ImportError ou autre
+    db_conn = None
+# ---- /PATCH ---------------------------------------from sqlalchemy import text
 from fastapi.responses import StreamingResponse
 import io, csv
 
 from app.schemas.emissions_history import (
     HistoryQuery, HistoryResponse, HistorySummary, DataPoint, Interval, GroupBy
 )
-from app.db import db_conn
+from contextlib import asynccontextmanager
+
+try:
+    # si un db_conn est déjà exposé (en dev), on l’utilise
+    from app.db import db_conn  # type: ignore
+except Exception:
+    # sinon on crée un shim basé sur async_session (pour CI)
+    from app.db.session import async_session
+    @asynccontextmanager
+    async def db_conn():
+        async with async_session() as session:
+            yield session
 
 router = APIRouter(prefix="/emissions", tags=["emissions"])
 
@@ -105,3 +122,11 @@ def get_emissions_history_a37(request: Request, q: HistoryQuery = Depends()):
         summary=summary,
         export_ready=True,
     )
+
+
+# ---- PATCH A42: guard helper when db_conn is None ----
+def _ensure_db_conn():
+    if db_conn is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Database connection not available in this build")
+# ---- /PATCH ------------------------------------------

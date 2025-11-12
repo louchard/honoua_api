@@ -1,20 +1,21 @@
-# app/db/session.py
+from __future__ import annotations
 import os
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# URL de connexion lue depuis l'env (définie dans docker-compose.override.yml)
-DATABASE_URL = os.getenv("HONOUA_DB_URL")
+DB_URL = os.getenv('HONOUA_DB_URL', 'sqlite:///./local.db')
+engine = create_engine(DB_URL, pool_pre_ping=True, echo=False, future=True)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
+Base = declarative_base()
 
-# Moteur asynchrone (SQLAlchemy 2.x + psycopg v3)
-engine: AsyncEngine = create_async_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    future=True,
-)
 
-# Fabrique de sessions async
-async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+# --- compatibility alias for legacy imports ---
+async_session = None
+
+
+# --- compatibility shim for legacy imports ---
+def async_session():
+    # Delayed import to avoid circular deps
+    from app.deps.db import get_db
+    return get_db()
+

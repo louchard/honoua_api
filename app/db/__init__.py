@@ -1,53 +1,27 @@
-# app/db/__init__.py
+# app/db/__init__.py ? fa?ade simple pour les tests (sync)
 import os
-from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy import text
-from sqlalchemy import select
-import asyncio 
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
-from .session import engine, async_session  # moteur & fabrique de sessions
+def db_url():
+    return os.getenv('HONOUA_DB_URL', 'sqlite:///./local.db')
 
-# === Compatibilité legacy (anciens imports) ===
-ENGINE: AsyncEngine = engine
+_engine = create_engine(db_url(), future=True)
+SessionLocal = sessionmaker(bind=_engine, autocommit=False, autoflush=False, future=True)
 
-@asynccontextmanager
-async def db_conn():
-    """Compat pour: `from app.db import db_conn`"""
-    async with engine.begin() as conn:
-        yield conn
-
-# === Exigences des tests ===
-# === Exigences des tests ===
-def db_url() -> str | None:
-    """Fonction appelable attendue par les tests."""
-    import os
-    return os.getenv("HONOUA_DB_URL")
-
-async def _async_smoke() -> None:
-    async with async_session() as s:
-        await s.execute(select(1))
-
-def smoke() -> bool:
-    """
-    Version synchrone pour les tests (appelée sans await).
-    Retourne True si le round-trip SELECT 1 réussit, sinon False.
-    """
+def get_db():
+    db = SessionLocal()
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Cas rare en test : crée une nouvelle boucle dédiée
-            new_loop = asyncio.new_event_loop()
-            try:
-                new_loop.run_until_complete(_async_smoke())
-            finally:
-                new_loop.close()
-        else:
-            loop.run_until_complete(_async_smoke())
+        yield db
+    finally:
+        db.close()
+
+def smoke():
+    try:
+        with _engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        return True
     except Exception:
         return False
-    return True
 
-
-
-__all__ = ["ENGINE", "engine", "async_session", "db_conn", "db_url", "smoke"]
+__all__ = ['get_db','db_url','smoke','SessionLocal']

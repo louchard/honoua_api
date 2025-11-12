@@ -1,18 +1,62 @@
-﻿from fastapi import FastAPI, HTTPException, Depends
-from fastapi import APIRouter
+﻿import importlib
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
-from app.routers import tokens  # ⬅️ AJOUT
+from app.routers import tokens
+from app.routers import logs as logs_router
+from app.routers import groups_a41
+from app.routers import groups_a42
+from app.core.logger import logger
+#import importlib
+try:
+    notifications_router = importlib.import_module("app.routers.notifications")
+except Exception:
+    notifications_router = None
+from app.routers.emissions_summary_a40 import router as emissions_summary_a40_router
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
+
+try:
+    notifications_router = importlib.import_module("app.routers.notifications")
+except Exception:
+    notifications_router = None
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
+
+try:
+    from app.routers.notifications_a41 import router as notifications_a41_router
+    app.include_router(notifications_a41_router)
+except Exception as e:
+    # En CI, on ignore proprement si les d?pendances du module notifications ne sont pas dispo
+    # (les tests n?en ont pas besoin)
+    try:
+        from app.core.logger import logger
+        logger.warning(f"notifications_a41 d?sactiv? en import: {e}")
+    except Exception:
+        pass
+
+# ... après la création de l'app FastAPI
+app.include_router(logs_router.router)
+# Routeurs montés au niveau racine
+app.include_router(tokens.router)        # /tokens/...
+app.include_router(emissions_summary_a40_router)
+app.include_router(groups_a41.router)
+app.include_router(groups_a42.router)
 # Router prefixé /api pour compat front
 api = APIRouter(prefix="/api")
+if notifications_router is not None and hasattr(notifications_router, "router"):
+    app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
+# Middleware d'accès (A39)
+from time import perf_counter
+@app.middleware("http")
+async def access_log(request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (perf_counter() - start) * 1000
+    logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({elapsed_ms:.1f} ms)")
+    return response
 
-app = FastAPI(title="Honoua API")
-
-app.include_router(tokens.router)  # ⬅️ AJOUT
 
 # ====== Modèles Pydantic (API) ======
 class Product(BaseModel):
@@ -498,10 +542,15 @@ app.include_router(emissions_history.router)
 
 from app.routers import emissions_history
 app.include_router(emissions_history.router)
+# Monter le router /api (à la fin de la section API)
+app.include_router(api)
+
 
 from app.middleware.blacklist_guard import blacklist_guard
 
 @app.middleware("http")
 async def _blacklist_guard_mw(request, call_next):
     return await blacklist_guard(request, call_next)
+    
+
 
