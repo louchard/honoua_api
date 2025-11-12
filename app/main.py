@@ -1,4 +1,5 @@
-﻿from fastapi import FastAPI, HTTPException, Depends, APIRouter
+﻿import importlib
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from pydantic import BaseModel
 from typing import List, Optional
 from app.routers import tokens
@@ -6,9 +7,14 @@ from app.routers import logs as logs_router
 from app.routers import groups_a41
 from app.routers import groups_a42
 from app.core.logger import logger
-from app.routers import notifications as notifications_router
+#from app.routers import notifications as notifications_router
 from app.routers.emissions_summary_a40 import router as emissions_summary_a40_router
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
+
+try:
+    notifications_router = importlib.import_module("app.routers.notifications")
+except Exception:
+    notifications_router = None
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
@@ -36,6 +42,14 @@ app.include_router(groups_a42.router)
 # Router prefixé /api pour compat front
 api = APIRouter(prefix="/api")
 app.include_router(notifications_router.router)
+
+if notifications_router and hasattr(notifications_router, "router"):
+    app.include_router(
+        notifications_router.router,
+        prefix="/notifications",
+        tags=["notifications"]
+    )
+
 
 # Middleware d'accès (A39)
 from time import perf_counter
