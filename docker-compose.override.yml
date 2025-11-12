@@ -1,6 +1,10 @@
-﻿services:
+﻿# docker-compose.override.yml
+services:
   api-dev:
     environment:
-      HONOUA_DB_URL: "postgresql+psycopg://honou:Honou2025Lg!@honoua_db:5432/honoua"
+      HONOUA_DB_URL: 'postgresql+psycopg://honou:Honou2025Lg!@honoua_db:5432/honoua'
+    volumes:
+      - ./app/logs:/app/logs
+
 
 
