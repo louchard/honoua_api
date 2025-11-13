@@ -1,0 +1,7 @@
+group_id,interval,low_co2_rank,bucket_start,total_emission,avg_emission
+1,week,2,2024-12-30,300.0,150.0
+1,week,2,2025-01-06,90.0,90.0
+
+group_id,low_co2_rank,period_total,period_avg,trend_slope,diff_abs_total,diff_rel_total(%)
+2,1,0.0,0.0,0.0,0.0,0.0
+1,2,390.0,120.0,-210.0,390.0,0.0
