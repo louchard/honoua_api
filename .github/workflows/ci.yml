@@ -58,6 +58,21 @@ jobs:
           done
           echo "Postgres not ready in time" >&2
           exit 1
+          name: tests
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Dépendances de test si besoin
+          pip install pytest httpx fastapi uvicorn sqlalchemy pydantic
+
+      - name: Make repo importable (PYTHONPATH)
+        run: echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
 
       - name: Run tests
         run: pytest -q
+
+    
+ 
+      

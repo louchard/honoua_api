@@ -25,6 +25,17 @@ except Exception:
 app = FastAPI(title="Honoua API")
 
 api = APIRouter(prefix="/api")
+if notifications_router is not None and hasattr(notifications_router, "router"):
+    app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
+# Middleware d'accès (A39)
+from time import perf_counter
+@app.middleware("http")
+async def access_log(request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (perf_counter() - start) * 1000
+    logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({elapsed_ms:.1f} ms)")
+    return response
 
 
 
