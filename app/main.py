@@ -1,5 +1,6 @@
 ﻿import importlib
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
+from fastapi import Response
 from pydantic import BaseModel
 from typing import List, Optional
 from app.routers import tokens
@@ -8,6 +9,8 @@ from app.routers import groups_a41
 from app.routers import groups_a42
 from app.routers import notifications as notifications_router  # 👈 IMPORTANT
 from app.core.logger import logger
+from app.telemetry.metrics import get_metrics_snapshot, record_request
+from app.telemetry.metrics import get_prometheus_metrics
 #import importlib
 try:
     notifications_router = importlib.import_module("app.routers.notifications")
@@ -87,6 +90,27 @@ _FAKE_PRODUCTS: List[Product] = [
 @app.get("/health")
 def health():
     return {"status": "ok"}
+    
+# code pour la télémetry
+@app.get("/metrics", tags=["metrics"])
+async def read_metrics():
+    """
+    Endpoint A43.4 : expose un snapshot des métriques backend.
+    On incrémente le compteur à chaque appel pour les tests.
+    """
+    # On enregistre une "fausse" requête de 0 ms, succès
+    record_request(0.0, is_error=False)
+    return get_metrics_snapshot()
+
+# code prometheus 
+@app.get("/metrics/prometheus", tags=["metrics"])
+async def read_metrics_prometheus():
+    return Response(
+        content=get_prometheus_metrics(),
+        media_type="text/plain; version=0.0.4"
+    )
+
+
 # ==========================
 #      SQLAlchemy (DB)
 # ==========================
