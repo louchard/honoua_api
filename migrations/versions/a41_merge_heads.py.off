@@ -1,0 +1,19 @@
+"""A41 merge heads — unifie les branches avant ajout des tables groupes"""
+
+from alembic import op
+
+# Identifiants Alembic
+revision = "a41_merge_heads"
+down_revision = ("a38base_0001", "2f1c3a4b5d6e", "70eaaff91264", "b5e37f4effe0", "bee001d0c28f")
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Révision de merge : pas d'opération, elle sert uniquement à unifier les heads
+    pass
+
+
+def downgrade() -> None:
+    # Annule le merge (optionnel) — on ne remet pas le cycle en place
+    pass

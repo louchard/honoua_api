@@ -1,12 +1,16 @@
 ﻿import importlib
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
+from fastapi import Response
 from pydantic import BaseModel
 from typing import List, Optional
 from app.routers import tokens
 from app.routers import logs as logs_router
 from app.routers import groups_a41
 from app.routers import groups_a42
+from app.routers import notifications as notifications_router  # 👈 IMPORTANT
 from app.core.logger import logger
+from app.telemetry.metrics import get_metrics_snapshot, record_request
+from app.telemetry.metrics import get_prometheus_metrics
 #import importlib
 try:
     notifications_router = importlib.import_module("app.routers.notifications")
@@ -23,18 +27,20 @@ except Exception:
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
+api = APIRouter(prefix="/api")
+if notifications_router is not None and hasattr(notifications_router, "router"):
+    app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
+# Middleware d'accès (A39)
+from time import perf_counter
+@app.middleware("http")
+async def access_log(request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (perf_counter() - start) * 1000
+    logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({elapsed_ms:.1f} ms)")
+    return response
 
-try:
-    from app.routers.notifications_a41 import router as notifications_a41_router
-    app.include_router(notifications_a41_router)
-except Exception as e:
-    # En CI, on ignore proprement si les d?pendances du module notifications ne sont pas dispo
-    # (les tests n?en ont pas besoin)
-    try:
-        from app.core.logger import logger
-        logger.warning(f"notifications_a41 d?sactiv? en import: {e}")
-    except Exception:
-        pass
+
 
 # ... après la création de l'app FastAPI
 app.include_router(logs_router.router)
@@ -43,10 +49,16 @@ app.include_router(tokens.router)        # /tokens/...
 app.include_router(emissions_summary_a40_router)
 app.include_router(groups_a41.router)
 app.include_router(groups_a42.router)
+
 # Router prefixé /api pour compat front
-api = APIRouter(prefix="/api")
 if notifications_router is not None and hasattr(notifications_router, "router"):
-    app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
+    app.include_router(
+        notifications_router.router,
+        prefix="/notifications",
+        tags=["notifications"],
+    )
+
+
 # Middleware d'accès (A39)
 from time import perf_counter
 @app.middleware("http")
@@ -78,6 +90,27 @@ _FAKE_PRODUCTS: List[Product] = [
 @app.get("/health")
 def health():
     return {"status": "ok"}
+    
+# code pour la télémetry
+@app.get("/metrics", tags=["metrics"])
+async def read_metrics():
+    """
+    Endpoint A43.4 : expose un snapshot des métriques backend.
+    On incrémente le compteur à chaque appel pour les tests.
+    """
+    # On enregistre une "fausse" requête de 0 ms, succès
+    record_request(0.0, is_error=False)
+    return get_metrics_snapshot()
+
+# code prometheus 
+@app.get("/metrics/prometheus", tags=["metrics"])
+async def read_metrics_prometheus():
+    return Response(
+        content=get_prometheus_metrics(),
+        media_type="text/plain; version=0.0.4"
+    )
+
+
 # ==========================
 #      SQLAlchemy (DB)
 # ==========================
@@ -552,5 +585,20 @@ from app.middleware.blacklist_guard import blacklist_guard
 async def _blacklist_guard_mw(request, call_next):
     return await blacklist_guard(request, call_next)
     
+# 🔹 Notifications — montées sur l’app principale
+if notifications_router is not None and hasattr(notifications_router, "router"):
+    app.include_router(
+        notifications_router.router,
+        prefix="/notifications",
+        tags=["notifications"],
+    )
+    # Optionnel : si tu veux aussi /api/notifications/...
+    api.include_router(
+        notifications_router.router,
+        prefix="/notifications",
+        tags=["notifications"],
+    )
 
+# Si tu utilises api comme façade
+app.include_router(api)
 
