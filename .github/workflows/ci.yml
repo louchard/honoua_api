@@ -74,9 +74,9 @@ jobs:
         run: |
           alembic upgrade head
 
-      - name: Run tests
+      - name: Run unit tests
         run: pytest -q
-
+      
       - name: Run E2E tests
         run: pytest tests/e2e -q
 
