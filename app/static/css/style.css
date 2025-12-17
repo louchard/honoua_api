@@ -1,0 +1,2781 @@
+.eco-item-dup {
+  animation: eco-dup-pulse 0.8s ease-out;
+  border: 2px solid var(--green);
+  border-radius: 12px;
+}
+
+@keyframes eco-dup-pulse {
+  0%   { box-shadow: 0 0 0px rgba(6, 41, 9, 0.4); }
+  50%  { box-shadow: 0 0 15px rgba(6, 41, 9, 0.7); }
+  100% { box-shadow: 0 0 0px rgba(6, 41, 9, 0.4); }
+}
+
+.eco-item-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.eco-item {
+  background: #fff;
+  /* les autres styles que tu veux pour la ligne */
+}
+
+.eco-item-delete {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  min-width: 72px;
+  border: none;
+  background: #C62828;
+  color: #fff;
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.eco-item-open .eco-item {
+  /* quand ouvert, l’item est déjà translaté par JS, on peut
+     éventuellement renforcer le style ici si besoin */
+}
+
+
+/* === Bloc comparateur EcoSELECT === */
+
+.eco-select {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  font-size: 13px;
+}
+
+.eco-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.eco-select-header h2 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--green);
+}
+
+.eco-select-sort {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.eco-sort-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.eco-sort-btn-active {
+  border-color: var(--green);
+  background: #E8F5E9;
+  color: var(--green);
+}
+
+/* Messages EcoSELECT */
+.eco-select-message {
+  min-height: 18px;
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: #555;
+}
+
+.eco-select-message-info {
+  color: #1B5E20;
+}
+
+.eco-select-message-warning {
+  color: #7A4F0B;
+}
+
+.eco-select-message-error {
+  color: #7A1A1A;
+}
+
+/* Liste & items */
+.eco-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* wrapper + eco-item + bouton delete existent déjà chez toi,
+   on complète simplement un peu le style de la ligne */
+
+.eco-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #eee;
+  font-size: 12px;
+}
+
+/* Meilleur produit */
+.eco-item-best {
+  border-color: var(--green);
+}
+
+/* Partie gauche */
+.eco-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.eco-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #222;
+  margin-bottom: 2px;
+}
+
+.eco-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: #555;
+}
+
+.eco-item-co2,
+.eco-item-distance,
+.eco-item-origin {
+  white-space: nowrap;
+}
+
+/* Partie droite : badge */
+.eco-item-score {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.eco-item-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid #ddd;
+}
+
+/* Variantes de badge CO₂ */
+.eco-item-badge-green {
+  background: #E8F5E9;
+  color: #1B5E20;
+  border-color: #C8E6C9;
+}
+
+.eco-item-badge-medium {
+  background: #FFF8E1;
+  color: #7A4F0B;
+  border-color: #FFE082;
+}
+
+.eco-item-badge-high {
+  background: #FFEBEE;
+  color: #B71C1C;
+  border-color: #FFCDD2;
+}
+
+.eco-item-badge-unknown {
+  background: #ECEFF1;
+  color: #455A64;
+  border-color: #CFD8DC;
+}
+
+/* === A51.10 – Styles Panier CO₂ (MVP mobile) === */
+
+.co2-cart-section {
+  margin-top: 16px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+
+
+.co2-cart-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #062909; /* vert Honoua */
+}
+
+.co2-cart-sub {
+  margin: 2px 0 8px;
+  font-size: 0.78rem;
+  color: #555;
+}
+
+/* Liste */
+
+.co2-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.co2-cart-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+/* === Cercles Panier CO2 (totaux + moyennes) === */
+
+/* === Cercles Panier CO2 (totaux + moyennes) === */
+
+/* Conteneur global : grille 2 x 2 */
+.co2-cart-circles-row {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Les "row" ne servent qu'à structurer le HTML,
+   mais en mise en page on les rend transparents */
+.co2-cart-circles-row {
+  display: contents;
+}
+
+.co2-circle {
+  flex: 1;
+  max-width: 135px;              /* cercle plus petit */
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 4px solid #062909;     /* contour plus épais + vert Honoua */
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;                  /* un peu moins de padding */
+  text-align: center;
+  position: relative;            /* nécessaire pour l’animation (::before) */
+  overflow: hidden;              /* masque l’anneau animé qui dépasse */
+}
+
+/* Animation du contour des cercles Panier CO2 */
+.co2-circle--animate::before {
+  content: "";
+  position: absolute;
+  inset: -4px;                     /* légèrement plus large que le cercle */
+  border-radius: 50%;
+  border: 4px solid #F5C147;       /* orange Honoua qui fait le tour */
+  animation: scanRing 0.6s ease-out;
+}
+
+
+.co2-circle-label {
+  font-size: 0.72rem;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.co2-circle-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #062909;
+}
+
+/* Petite variante couleur (optionnel, déjà prêt pour plus tard) */
+/* Tous les cercles même style */
+.co2-circle-total-co2,
+.co2-circle-total-distance,
+.co2-circle-avg-co2,
+.co2-circle-avg-distance {
+  border-color: #062909;
+  border-style: solid;
+}
+
+
+.co2-cart-circles-row:last-child {
+  background: rgba(0, 255, 0, 0.05);
+}
+
+/* === Cercles Panier CO2 (totaux + moyennes) === */
+
+/* Conteneur global : grille 2 x 2 */
+.co2-cart-circles {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Les "row" restent dans le HTML,
+   mais en layout on les rend transparents */
+.co2-cart-circles-row {
+  display: contents;
+}
+
+
+/* Ligne produit */
+
+/* Ligne produit – version compacte 2 lignes max */
+
+.co2-cart-item {
+  display: flex;
+  flex-direction: column;   /* colonne, pas deux blocs gauche/droite */
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8f9fb;
+}
+
+/* Ligne 1 : nom + (quantité + X) */
+.co2-cart-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.co2-cart-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.co2-cart-item-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;   /* empêche x1 et X de passer à la ligne */
+}
+
+.co2-cart-qty-badge {
+  background: #06290915;
+  border: 1px solid #06290955;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  color: #062909;
+}
+
+/* Petit X */
+.co2-cart-remove-x {
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  color: #b02424;
+}
+
+/* Ligne 2 : CO₂ + distance */
+.co2-cart-item-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #444;
+  flex-wrap: nowrap;
+}
+
+.co2-cart-info {
+  white-space: nowrap;
+}
+
+
+
+/* Résumé du panier */
+
+/* Résumé du panier */
+.co2-cart-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #e3e6ef;
+  padding-top: 8px;
+}
+
+/* Ligne de chips : 🛒 | 📦 | 🌿 */
+.co2-cart-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: #222;
+}
+
+/* Chaque chip */
+.co2-cart-totals .co2-cart-line {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f8f9fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* Bouton "Vider le panier" */
+
+.btn-clear-cart {
+  margin-top: 4px;
+  align-self: flex-start;
+  border-radius: 999px;
+  border: none;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  background: #001D85;      /* bleu Honoua */
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* A53 – Historique CO2 */
+.co2-history-card {
+  background: #ffffff;
+  padding: 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.co2-history-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.co2-history-date {
+  font-size: 0.85em;
+  color: #666;
+}
+
+.co2-history-card-content p {
+  margin: 4px 0;
+  font-size: 0.92em;
+}
+
+
+/* === Rapport CO2 du panier === */
+
+.co2-cart-report {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8f9fb;
+  border: 1px solid #e3e6ef;
+
+}
+
+.co2-report-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #062909;
+}
+
+.co2-report-period {
+  font-size: 0.78rem;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.co2-report-section {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #e3e6ef;
+}
+
+.co2-report-section h4 {
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+  color: #222;
+}
+
+.co2-report-section p {
+  font-size: 0.78rem;
+  margin: 2px 0;
+  color: #444;
+}
+
+/* Liste des reco */
+.co2-report-reco-list {
+  list-style: disc;
+  padding-left: 16px;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+/
+
+
+/* ==== Défis CO2 - Section ==== */
+
+.co2-challenges-section {
+  margin-top: 16px;
+  padding: 12px 12px 16px;
+  background: #f8f9fb;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.co2-challenges-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #062909; /* vert Honoua */
+  margin: 0 0 8px;
+}
+
+/* Liste de cartes */
+
+.co2-challenges-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* État vide */
+
+.co2-challenge-empty {
+  font-size: 0.85rem;
+  color: #555;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px dashed #ccd2dd;
+}
+
+/* Carte de défi */
+
+.co2-challenge-card {
+  position: relative;            /* pour positionner le badge */
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e6f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Variantes de carte selon le statut */
+.co2-challenge-card-active {
+  /* neutre, on peut laisser le style par défaut */
+}
+
+.co2-challenge-card-success {
+  background: #f0f8f2;           /* vert très léger */
+  border-color: #6bbf6b;
+}
+
+.co2-challenge-card-failed {
+  background: #fdf3f3;           /* rouge très léger */
+  border-color: #e29b9b;
+}
+
+.co2-challenge-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: #062909;           /* vert Honoua */
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* En-tête */
+
+.co2-challenge-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.co2-challenge-icon {
+  font-size: 1.1rem;
+}
+
+.co2-challenge-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #001d85; /* bleu Honoua */
+}
+
+/* Statut */
+
+.co2-challenge-status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+/* Couleurs de statut */
+
+.status-en-cours {
+  background: rgba(245, 193, 71, 0.15); /* orange léger */
+  color: #946100;
+}
+
+.status-reussi {
+  background: rgba(6, 41, 9, 0.12); /* vert léger */
+  color: #062909;
+}
+
+.status-echoue,
+.status-expire {
+  background: rgba(180, 26, 26, 0.12);
+  color: #8b1a1a;
+}
+
+/* Barre de progression */
+
+.co2-challenge-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.co2-challenge-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #e6e9f2;
+  overflow: hidden;
+}
+
+.co2-challenge-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #062909, #f5c147);
+  transition: width 0.3s ease-out;
+}
+
+.co2-challenge-progress-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Message */
+
+.co2-challenge-message {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #444;
+  line-height: 1.3;
+}
+
+/* Bouton de mise à jour des défis */
+.co2-challenges-refresh-btn {
+  width: 100%;
+  background: #001d85; /* bleu Honoua */
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out;
+}
+
+.co2-challenges-refresh-btn:hover {
+  background: #062909; /* vert Honoua */
+}
+
+/* ============================= */
+/*        ALERTES HONOUA         */
+/* ============================= */
+
+.honoua-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-width: 1px;
+  border-style: solid;
+
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 8px 0;
+
+  /* Pour mobile : largeur fluide */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Icône dans les alertes */
+.honoua-alert-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  margin-top: 1px;
+}
+
+/* Texte de l’alerte */
+.honoua-alert-text {
+  flex: 1;
+}
+
+/* ---------- Variantes de type ---------- */
+
+/* INFO */
+.honoua-alert-info {
+  background-color: #E8EDFF;   /* bleu clair */
+  border-color: #001D85;       /* bleu Honoua */
+  color: #001D85;
+}
+
+/* SUCCÈS */
+.honoua-alert-success {
+  background-color: #E7F4E8;   /* vert clair */
+  border-color: #062909;       /* vert foncé Honoua */
+  color: #062909;
+}
+
+/* AVERTISSEMENT */
+.honoua-alert-warning {
+  background-color: #FFF4D9;   /* orange clair */
+  border-color: #F5C147;       /* orange Honoua */
+  color: #9A6A00;              /* texte dérivé */
+}
+
+/* ERREUR */
+.honoua-alert-error {
+  background-color: #FDE7E7;   /* rouge clair */
+  border-color: #D9534F;       /* rouge doux */
+  color: #D9534F;
+}
+
+/* Optionnel : petites animations d’apparition/disparition */
+.honoua-alert--enter {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.honoua-alert--enter.honoua-alert--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* code de la page d'accueil d'honoua */
+
+/* ===========================
+   Variables & base globale
+   =========================== */
+
+:root {
+  --honoua-orange: #F5C147;
+  --honoua-green: #062909;
+  --honoua-blue:  #001D85;
+  --honoua-bg:    #F7F7F7;
+  --honoua-text:  #1F1F1F;
+  --honoua-muted: #8A8A8A;
+  --nav-bg:       #FFFFFF;
+  --shadow-soft:  0 0 15px rgba(0, 0, 0, 0.06);
+  --radius-lg:    16px;
+  --radius-xl:    24px;
+  --transition-fast: 0.18s ease-out;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
+  background: var(--honoua-bg);
+  color: var(--honoua-text);
+}
+
+/* Conteneur global app mobile-first */
+.honoua-app {
+  min-height: 100vh;
+  max-width: 480px;        /* pour un rendu “app” */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  position: relative;
+}
+
+/* ============
+   HEADER HONOUA
+   ============ */
+
+.honoua-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, var(--honoua-orange) 0%, #ffffff 35%, #ffffff 100%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  font-family: "Inter", sans-serif;
+}
+
+.honoua-header__logo-wrap {
+  flex-shrink: 0;
+}
+
+.honoua-header__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.honoua-header__text {
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+}
+
+.honoua-header__tagline-top {
+  margin: 0;
+  font-size: 13px;
+  color: var(--honoua-green);
+  font-weight: 400;
+}
+
+.honoua-header__tagline-main {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--honoua-green);
+}
+
+/* =========================
+   SECTION 2 : BANDEAU DE TRANSITION
+   ========================= */
+
+.honoua-banner {
+  width: 90%;
+  margin: 8px auto; /* ajoute ça */
+  padding: 10px 14px 12px;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.honoua-banner__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--honoua-green);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+
+.honoua-banner__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.honoua-banner__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--honoua-green);
+}
+
+.honoua-banner__subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #555555;
+  line-height: 1.4;
+}
+
+/* ===============================
+   SECTION 3 : BANDEAU D'ICÔNES
+   =============================== */
+
+.honoua-icons-banner {
+  width: 100%;
+  background: rgb(228, 233, 224);             /* bandeau clair */
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;   /* icônes espacées sur la ligne */
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.honoua-icons-banner__item {
+  font-size: 28px;                /* icônes bien visibles */
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* Code de la fonctionnalité EcoSelec */
+
+/* =======================================
+   SECTION 4 : CARTE FONCTIONNALITÉ ECOSELECT
+   ======================================= */
+
+.honoua-feature {
+  width: 92%;
+  margin: 18px auto;
+  padding: 18px 14px 20px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  text-align: center;
+}
+
+.honoua-feature__header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.honoua-feature__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--honoua-blue);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.honoua-feature__image {
+  width: 60%;
+  max-width: 320px;
+  display: block;
+  margin: 0 auto 12px;
+}
+
+.honoua-feature__text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #262626;
+}
+
+.honoua-feature__cta {
+  border: none;
+  border-radius: 999px;
+  padding: 11px 26px;
+  background: var(--honoua-green);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+.honoua-feature__cta:hover,
+.honoua-feature__cta:active {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(1, 76, 2, 0.18);
+    background: #F5C147;
+}
+/* Code annexe pour distance EcoSelect et Scan Impact */
+/* Variante couleur pour ScanImpact */
+.honoua-feature--scanimpact .honoua-feature__pill {
+  background: var(--honoua-orange);
+}
+
+
+/* ===============================
+   FOOTER / MENU PRINCIPAL
+   =============================== */
+
+.honoua-footer-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px; /* effet "app" centrée */
+  padding: 6px 10px 10px;
+  background: #ffffff;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  z-index: 30;
+}
+
+.honoua-footer-nav__item {
+  flex: 1;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: #555555;
+  cursor: pointer;
+}
+
+.honoua-footer-nav__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.honoua-footer-nav__label {
+  font-size: 11px;
+}
+
+/* Onglet actif */
+.honoua-footer-nav__item.is-active {
+  background: var(--honoua-green);
+  color: #ffffff;
+}
+
+
+/* ============================
+   PAGE SCANIMPACT
+   ============================ */
+
+.scanimpact-page {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.scanimpact-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 90px; /* 90px ~ hauteur du footer fixed */
+}
+
+/* SECTION 1 : Environnement scanner (dominant) */
+.scanimpact-scanner {
+  flex: 0 0 55%;
+  padding: 4px 0 8px;
+}
+
+.scanimpact-scanner__frame {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 2px solid #dddddd;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scanimpact-video {
+  flex: 1;
+  border-radius: 10px;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanimpact-video__placeholder {
+  font-size: 14px;
+  color: #777;
+  text-align: center;
+}
+
+/* Boutons scanner */
+.scanimpact-scanner__controls {
+  display: flex;
+  gap: 8px;
+}
+
+.scanimpact-btn {
+  flex: 1;
+  border-radius: 10px;
+  border: none;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #062909;
+  color: #ffffff;
+}
+
+.scanimpact-btn--ghost {
+  background: #ffffff;
+  color: #062909;
+  border: 1px solid #cccccc;
+}
+
+/* SECTION 2 : Titre & transition */
+.scanimpact-transition {
+  padding: 4px 2px 6px;
+}
+
+.scanimpact-transition__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #062909;
+}
+
+.scanimpact-transition__subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #555;
+}
+
+/* SECTION 3 : Résultats (produits + cercles) */
+.scanimpact-results {
+  flex: 0 0 30%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Liste des produits */
+.scanimpact-products {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #dddddd;
+  padding: 8px 10px;
+  max-height: 45%;
+  overflow-y: auto;
+}
+
+.scanimpact-products__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #062909;
+}
+
+.scanimpact-products__list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+}
+
+/* Cercles de métriques */
+.scanimpact-metrics {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1;
+}
+
+.metric-circle {
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 3px solid #dddddd;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  text-align: center;
+  padding: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-circle__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #062909;
+}
+
+.metric-circle__label {
+  font-size: 11px;
+  color: #555555;
+}
+
+/* ANIMATION lors d'un nouveau scan */
+.metric-circle--animate::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid #F5C147; /* orange qui fait le tour */
+  animation: scanRing 0.6s ease-out;
+}
+
+@keyframes scanRing {
+  0% {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    transform: rotate(320deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0;
+  }
+}
+
+
+.scanimpact-actions {
+  margin-top: 6px;
+}
+
+.scanimpact-validate-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: #062909; /* vert Honoua */
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.scanimpact-recos {
+  margin-top: 6px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #dddddd;
+  padding: 8px 10px;
+  font-size: 13px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+
+
+
+/* ==================================
+   PAGE ECOSELECT
+   ================================== */
+
+.ecoselect-page {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.ecoselect-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 90px; /* 90px ≈ hauteur footer, à ajuster */
+}
+
+/* 1) ENVIRONNEMENT SCANNER – partie haute (majoritaire) */
+.ecoselect-scanner {
+  flex: 0 0 60%;
+  padding-bottom: 6px;
+}
+
+.ecoselect-scanner__frame {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 2px solid #dddddd;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Zone vidéo */
+.ecoselect-video {
+  flex: 1;
+  border-radius: 10px;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ecoselect-video__placeholder {
+  font-size: 14px;
+  color: #777;
+  text-align: center;
+}
+
+/* Boutons scanner / caméra */
+.ecoselect-scanner__controls {
+  display: flex;
+  gap: 8px;
+}
+
+.eco-btn {
+  flex: 1;
+  border-radius: 10px;
+  border: none;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: #062909;
+  color: #ffffff;
+}
+
+.eco-btn--ghost {
+  background: #ffffff;
+  color: #062909;
+  border: 1px solid #cccccc;
+}
+
+/* 2) TITRE DE TRANSITION */
+.ecoselect-transition {
+  padding: 4px 2px;
+}
+
+.ecoselect-transition__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #062909;
+}
+
+/* 3) ESPACE RÉSULTATS – partie basse */
+.ecoselect-results {
+  flex: 0 0 25%;
+  padding-top: 4px;
+}
+
+.ecoselect-results__box {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #dddddd;
+  padding: 10px;
+  font-size: 14px;
+  overflow-y: auto;
+}
+
+/* =============================
+   BLOC EMPREINTE CO2 PRODUIT
+   ============================= */
+
+.co2-product-section {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #dddddd;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  font-size: 0.85rem;
+}
+
+/* Header : titre + badge statut sur une seule ligne */
+.co2-product-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.co2-product-header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--honoua-green);
+}
+
+/* Badge de statut (en attente / trouvé / indisponible) */
+.co2-product-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* En attente de scan */
+.co2-product-status--pending {
+  background: #eeeeee;
+  color: #555555;
+  border-color: #e0e0e0;
+}
+
+/* Données CO2 trouvées */
+.co2-product-status--found {
+  background: #E7F4E8;
+  color: #062909;
+  border-color: #B6E0BB;
+}
+
+/* Données indisponibles */
+.co2-product-status--missing {
+  background: #FDE7E7;
+  color: #D9534F;
+  border-color: #F5C2C0;
+}
+
+/* =============================
+   LIGNE RESUME PRODUIT
+   ============================= */
+
+.co2-product-summary {
+  margin-top: 4px;
+}
+
+/* Ligne principale (flex) */
+.co2-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+/* Zone gauche : nom du produit */
+.co2-summary-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.co2-summary-name {
+  font-weight: 500;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Zone centre : total CO2 */
+.co2-summary-center {
+  margin-left: 4px;
+}
+
+.co2-summary-total {
+  font-weight: 600;
+  color: var(--honoua-green);
+  white-space: nowrap;
+}
+
+/* Zone droite : origine + emballage + icône info */
+.co2-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.co2-summary-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: #555;
+  text-align: right;
+}
+
+.co2-summary-origin,
+.co2-summary-package {
+  white-space: nowrap;
+}
+
+/* Bouton info (icône) */
+.co2-summary-info-btn {
+  border: none;
+  background: #f3f4f8;
+  color: #001D85;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Etat "caché" si pas de produit */
+.co2-product-summary--hidden {
+  display: none;
+}
+
+/* Message "données indisponibles" */
+.co2-product-empty {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: #777;
+}
+
+/* Adaptation mobile très étroite */
+@media (max-width: 380px) {
+  .co2-summary-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .co2-summary-center {
+    order: 2;
+  }
+
+  .co2-summary-right {
+    order: 3;
+  }
+}
+
+
+
+
+/* ============================
+   PAGE SUIVI CO2
+   ============================ */
+
+.suivi-page {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.suivi-main {
+  flex: 1;
+  padding: 10px 12px 90px; /* place pour footer fixed */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Titre + intro */
+.suivi-header-block {
+  margin-bottom: 4px;
+}
+
+.suivi-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #062909;
+}
+
+.suivi-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+}
+
+/* Résumé */
+.suivi-summary {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #dddddd;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suivi-summary__line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.suivi-summary__label {
+  color: #555;
+}
+
+.suivi-summary__value {
+  font-weight: 600;
+  color: #062909;
+}
+
+/* Statut global */
+.suivi-status {
+  margin-top: 6px;
+}
+
+.suivi-status__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.suivi-status__badge--neutral {
+  background: #eeeeee;
+  color: #555555;
+}
+
+.suivi-status__badge--good {
+  background: #e1f7e5;
+  color: #145c2c;
+}
+
+.suivi-status__badge--ok {
+  background: #fff5d6;
+  color: #8a5b00;
+}
+
+.suivi-status__badge--high {
+  background: #ffe0df;
+  color: #9b1c1c;
+}
+
+/* Sélecteur de période */
+.suivi-period__switch {
+  display: flex;
+  gap: 6px;
+}
+
+.suivi-period__btn {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid #cccccc;
+  background: #ffffff;
+  font-size: 13px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.suivi-period__btn.is-active {
+  background: #062909;
+  color: #ffffff;
+  border-color: #062909;
+}
+
+/* Historique */
+.suivi-history {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #dddddd;
+  padding: 10px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.suivi-history__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #062909;
+}
+
+.suivi-history__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+/* Ligne d’historique */
+.suivi-history__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+
+.suivi-history__period {
+  font-weight: 500;
+}
+
+.suivi-history__co2 {
+  font-weight: 600;
+}
+
+.suivi-history__status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.suivi-history__status--good {
+  background: #e1f7e5;
+  color: #145c2c;
+}
+
+.suivi-history__status--ok {
+  background: #fff5d6;
+  color: #8a5b00;
+}
+
+.suivi-history__status--high {
+  background: #ffe0df;
+  color: #9b1c1c;
+}
+
+/* Légende */
+.suivi-legend {
+  font-size: 12px;
+}
+
+.suivi-legend__title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: #555;
+}
+
+.suivi-legend__list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.suivi-legend__list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.suivi-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.suivi-dot--good {
+  background: #23a45a;
+}
+
+.suivi-dot--ok {
+  background: #f3b431;
+}
+
+.suivi-dot--high {
+  background: #e84118;
+}
+
+.suivi-household {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #eeeeee;
+}
+
+.suivi-household__label {
+  display: block;
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.suivi-household__controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.suivi-household__input {
+  width: 60px;
+  padding: 4px;
+  font-size: 13px;
+}
+
+.suivi-household__btn {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid #cccccc;
+  background: #ffffff;
+  font-size: 13px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.suivi-household__btn:hover {
+  background: #f3f3f3;
+}
+/*
+
+Mise à jour du code Eco Select 
+
+*/
+
+/* === EcoSELECT v2 – Bloc comparateur CO₂ === */
+
+/* Carte comparateur */
+.eco-select {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  font-size: 13px;
+}
+
+/* En-tête : titre + boutons CO₂ / Distance */
+.eco-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.eco-select-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* Boutons de tri CO₂ / Distance */
+.eco-select-sort {
+  display: flex;
+  gap: 6px;
+}
+
+.eco-sort-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--green);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--green);
+  cursor: pointer;
+}
+
+.eco-sort-btn-active {
+  background: var(--green);
+  color: #ffffff;
+}
+
+/* Messages (info / warning / error) */
+.eco-select-message {
+  min-height: 16px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #555;
+}
+
+.eco-select-message-info {
+  color: #234e24;
+}
+
+.eco-select-message-warning {
+  color: #7a5a1a;
+}
+
+.eco-select-message-error {
+  color: #7a1a1a;
+}
+
+/* Liste des produits */
+.eco-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Ligne produit */
+.eco-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e6e6e6;
+  border-radius: 8px;
+  border: 1px solid transparent; /* pour .eco-item-best */
+  background: transparent;
+}
+
+.eco-item-row:last-child {
+  border-bottom: none;
+}
+
+/* Meilleur produit (CO2– ou DIST–) */
+.eco-item-best {
+  border-color: var(--green);
+  background: #f2f8f3;
+}
+
+/* Colonne gauche : nom + origine + distance (comme sur ton image) */
+.eco-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.eco-item-label {
+  font-weight: 500;
+  font-size: 13px;
+  color: #111;
+  margin-bottom: 3px;
+}
+
+.eco-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: #555;
+}
+
+/* Origine (texte simple) */
+.eco-item-origin {
+  white-space: nowrap;
+}
+
+/* Distance (style “pilule” vert clair comme sur la capture) */
+.eco-item-distance {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #B6E0BB;
+  background: #E7F4E8;
+  color: #062909;
+  white-space: nowrap;
+}
+
+/* Colonne score CO₂ + indicateur CO2– / DIST– */
+.eco-item-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.eco-item-co2-value {
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+}
+
+/* Indicateur CO2– ou DIST– (remplace les anciens badges Bas/Moyen/Élevé) */
+.eco-item-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #B6E0BB;
+  background: #E7F4E8;
+  color: #062909;
+  white-space: nowrap;
+}
+
+/* On neutralise les anciennes variantes, elles auront le même style */
+.eco-item-badge-green,
+.eco-item-badge-medium,
+.eco-item-badge-high,
+.eco-item-badge-unknown {
+  border-color: #B6E0BB;
+  background: #E7F4E8;
+  color: #062909;
+}
+
+/* Bouton supprimer (×) */
+.eco-item-remove {
+  border: 1px solid #dddddd;
+  background: #ffffff;
+  border-radius: 999px;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 4px;
+  color: #555;
+  cursor: pointer;
+}
+
+.eco-item-remove:hover {
+  background: #f5f5f5;
+}
+
+/* Mobile très étroit : on autorise le retour à la ligne proprement */
+@media (max-width: 380px) {
+  .eco-item-row {
+    align-items: flex-start;
+  }
+
+  .eco-item-score {
+    align-items: flex-start;
+  }
+}
+
+/* Mise en avant lorsque tri = CO2 */
+.eco-item-co2-active {
+  font-size: 14px;
+  font-weight: 700;
+  color: #062909; /* Vert Honoua */
+}
+
+/* Mise en avant lorsque tri = Distance */
+.eco-item-distance-active {
+  background: none !important;
+  border: none !important;
+  color: #062909; /* Vert Honoua */
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* === Panier CO₂ – présentation compacte par produit === */
+
+/* Carte compacte du panier */
+.co2-cart-item-compact {
+  background: #fafafa;
+  border: 1px solid #e3e3e3;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* réduit pour éviter l’effet “multi-lignes” */
+}
+
+/* LIGNE 1 : nom + (quantité + X) sur UNE SEULE ligne */
+.co2-cart-line1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+/* Nom = prend tout l’espace disponible, puis coupe avec "..." */
+.co2-cart-prod-name {
+  flex: 1;
+  min-width: 0;             /* très important pour que l’ellipsis marche */
+  font-size: 13px;
+  font-weight: 600;
+  color: #222;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Groupe à droite : x1 + X, toujours sur une seule ligne */
+.co2-cart-line1-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;           /* ne se casse pas sous le nom */
+  white-space: nowrap;      /* empêche le retour à la ligne entre x1 et X */
+}
+
+/* Badge quantité */
+.co2-cart-qty-badge {
+  background: #06290915;
+  border: 1px solid #06290955;
+  padding: 1px 6px;
+  font-size: 11px;
+  border-radius: 999px;
+  color: #062909;
+}
+
+/* Petit X simple (sans gros carré) */
+.co2-cart-remove-x {
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  color: #b71c1c;
+}
+
+/* LIGNE 2 : CO₂ + distance (une seule ligne si possible) */
+.co2-cart-line2 {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: #666;
+  flex-wrap: nowrap;        /* essaye de tenir sur une ligne */
+}
+
+.co2-cart-info {
+  white-space: nowrap;
+}
+
+
+* ===== Graphique Répartition par catégories ===== */
+
+.co2-category-graph {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 4px solid #e3e6ef;
+}
+
+/* Conteneur du camembert */
+.co2-category-pie-container {
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Bandeau : catégorie dominante */
+.co2-category-dominant {
+  margin-top: 10px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 8px;
+  background: #f8f9fb;
+  border: 1px solid #e3e6ef;
+  color: #062909;
+}
+
+/* Légende du graphique */
+.co2-category-legend {
+  margin-top: 10px;
+  list-style: none;
+  padding: 0;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.co2-category-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Pastille de couleur */
+.co2-category-legend .legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+
+/* Historique */
+.co2-report-history-list {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.co2-report-history-card {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e3e6ef;
+  font-size: 0.76rem;
+}
+
+.co2-report-reco-intro {
+  font-size: 0.78rem;
+  color: #444;
+  margin: 0 0 4px 0;
+  font-style: italic;
+}
+
+/* === Graphique répartition par catégories – Panier CO₂ === */
+
+#co2-cart-report-categories {
+  margin-top: 8px;
+}
+
+/* Conteneur global du graphique + textes (si le JS crée une div autour) */
+.co2-category-graph {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Zone qui contient le canvas du camembert */
+.co2-category-pie-container {
+  width: 130px;
+  height: 130px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Le canvas lui-même : on force une taille visible */
+#co2-category-pie {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Zone texte à côté du camembert (résumé + catégorie dominante + légende) */
+.co2-category-text {
+  flex: 1;
+  font-size: 13px;
+}
+
+/* Optionnel : légende plus propre si ton JS crée une liste */
+.co2-category-legend {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.co2-category-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.co2-category-legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.co2-category-legend {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.co2-category-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.co2-category-legend li.active {
+  font-weight: 600;
+}
+
+.co2-category-legend .legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* Code pour présentation de l'indicateur journée de captation */
+
+.co2-tree-summary {
+  margin: 6px 0 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.co2-tree-number {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #062909; /* vert Honoua */
+}
+
+.co2-tree-label {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+
+/*Code arbre équivalent */
+
+.tree-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: #eaf7e5;        /* vert très clair */
+  border: 1px solid #8cc68a;  /* vert forêt */
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.tree-icons {
+  font-size: 1.3rem;
+  line-height: 1.2;
+  color: #056016; /* vert foncé Honoua */
+}
+
+.tree-number-badge {
+  font-size: 0.82rem;
+  color: #062909;
+  opacity: 0.85;
+  margin-top: 3px;
+}
+
+/* ===== Statut produit ScanImpact (disponible / non disponible) ===== */
+
+.scanimpact-status {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  text-align: left;
+  font-size: 13px;
+}
+
+.scanimpact-status-message {
+  margin: 0 0 2px;
+  font-weight: 600;
+}
+
+.scanimpact-status-name {
+  margin: 0;
+  font-size: 12px;
+  color: #555;
+}
+
+/* Variantes de couleur pour le message */
+.scanimpact-status--ok .scanimpact-status-message {
+  color: #0a7a1f; /* vert "ok" */
+}
+
+.scanimpact-status--error .scanimpact-status-message {
+  color: #b60000; /* rouge "erreur" */
+}
+
+/* === BLOC 1 : Budget carbone annuel (Suivi CO₂) === */
+
+.suivi-budget {
+  margin-top: 12px;
+}
+
+/* En-tête du bloc */
+.suivi-budget-header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--green);
+}
+
+.suivi-budget-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+  background: linear-gradient(90deg, #00000008, #00000000);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+/* Corps du bloc */
+.suivi-budget-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Lignes chiffre + label */
+.suivi-budget-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.suivi-budget-line .label {
+  color: #555;
+}
+
+.suivi-budget-line .value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #111;
+}
+
+/* Jauge de progression */
+.suivi-budget-progress {
+  margin-top: 10px;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e5e5;
+  overflow: hidden;
+}
+
+.suivi-budget-progress .progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+  transition: width 0.35s ease-out, background-color 0.25s ease-out;
+}
+
+/* Statut (badge bas de carte) */
+.suivi-budget-status {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* Variantes de statut (couleurs) */
+.suivi-budget-status.status-green {
+  background: #E8F5E9;
+  color: #1B5E20;
+  border: 1px solid #C8E6C9;
+}
+
+.suivi-budget-status.status-orange {
+  background: #FFF8E1;
+  color: #E65100;
+  border: 1px solid #FFE0B2;
+}
+
+.suivi-budget-status.status-red {
+  background: #FFF3F3;
+  color: #7A1A1A;
+  border: 1px solid #FFD6D6;
+}
+
+
+/* === BLOC 2 : Évolution des émissions (Suivi CO₂) === */
+
+.suivi-evolution {
+  margin-top: 12px;
+}
+
+/* En-tête */
+.suivi-evolution-header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--green);
+}
+
+.suivi-evolution-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+  background: linear-gradient(90deg, #00000008, #00000000);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+/* Boutons de sélection de période */
+.suivi-evolution-period-toggle {
+  margin-top: 10px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f2f2f2;
+}
+
+.evo-period-btn {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+}
+
+.evo-period-btn-active {
+  background: #ffffff;
+  color: #111;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #ddd;
+}
+
+/* Corps */
+.suivi-evolution-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Graphique */
+.suivi-evolution-chart {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.suivi-evolution-chart canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Résumé sous le graphique */
+.suivi-evolution-summary {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.suivi-evolution-summary .summary-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.suivi-evolution-summary .label {
+  color: #555;
+}
+
+.suivi-evolution-summary .value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #111;
+}
+
+/* Code du scanner de l'application  */
+
+/* --- SCANNER : cadrage identique à scanner.html --- */
+
+.video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 480px;         /* optionnel : limite largeur */
+  margin: 0 auto;
+  aspect-ratio: 3 / 4;      /* format vertical propre pour la caméra */
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+
+#preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;        /* remplit l'espace correctement */
+  transform: scale(1.05);   /* léger zoom pour éviter les bandes au bord */
+}
+
+.reticle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.reticle .box {
+  width: 65%;
+  height: 35%;
+  border: 2px solid #00ff55;
+  border-radius: 8px;
+  box-shadow: 0 0 12px #00ff55;
+}
+
+/* =========================
+   SUIVI CO2 — NAV INTERNE
+   ========================= */
+
+#suivi-co2-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 10px;
+  margin: 10px 0 12px;
+  border-radius: 14px;
+}
+
+#suivi-co2-nav::-webkit-scrollbar {
+  height: 6px;
+}
+
+#suivi-co2-nav .suivi-co2-nav__link {
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 8px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+
+  /* neutre et compatible charte existante */
+  background: rgba(0,0,0,0.06);
+  color: inherit;
+}
+
+#suivi-co2-nav .suivi-co2-nav__link:active {
+  transform: scale(0.98);
+}
+
+/* Optionnel (si tu veux un peu plus d’air au-dessus des ancres) */
+#suivi-budget,
+#suivi-evolution,
+#co2-cart-history-section,
+#co2-challenges-section,
+#co2-challenges-collective-section {
+  scroll-margin-top: 12px;
+}
+
+/* =========================
+   SUIVI CO2 — NAV INTERNE (Option C)
+   Chips + indicateur visuel
+   ========================= */
+
+#suivi-co2-nav {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px;
+  margin: 8px 0 12px;
+  border-radius: 14px;
+}
+
+#suivi-co2-nav::-webkit-scrollbar {
+  height: 6px;
+}
+
+#suivi-co2-nav .suivi-co2-nav__link {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 8px 12px 8px 28px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: inherit;
+}
+
+#suivi-co2-nav .suivi-co2-nav__link::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+#suivi-co2-nav .suivi-co2-nav__link:active {
+  transform: scale(0.98);
+}
+
+/* Confort scroll vers ancres */
+#suivi-budget,
+#suivi-evolution,
+#co2-cart-history-section,
+#co2-challenges-section,
+#co2-challenges-collective-section {
+  scroll-margin-top: 12px;
+}
+
+
+/* SUIVI CO2 — NAV INTERNE : état actif */
+#suivi-co2-nav .suivi-co2-nav__link.is-active {
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+#suivi-co2-nav .suivi-co2-nav__link.is-active::before {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* SUIVI CO2 — EVOLUTION : toggle métrique + légende */
+.suivi-evolution-metric-toggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.evo-metric-btn {
+  flex: 1 1 auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(0,0,0,.03);
+  font-size: 13px;
+}
+
+.evo-metric-btn-active {
+  background: rgba(0,0,0,.10);
+  border-color: rgba(0,0,0,.15);
+}
+
+.suivi-evolution-legend {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+
+

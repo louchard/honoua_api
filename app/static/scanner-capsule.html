@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Honoua – Capsule Scanner CO₂</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    :root {
+      --honoua-green: #0a7a4b;
+      --honoua-orange: #f5c147;
+      --honoua-blue: #001d85;
+      --bg-soft: #f7f7fb;
+      --border-soft: #e0e0ee;
+      --text-main: #222;
+      --text-muted: #666;
+      --danger: #d93025;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg-soft);
+      color: var(--text-main);
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0 0 4px;
+    }
+
+    p {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* === Capsule scanner === */
+    .scanner-capsule {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+    }
+
+    .scanner-capsule-header {
+      margin-bottom: 12px;
+    }
+
+    .scanner-capsule-header span.badge {
+      display: inline-block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(10, 122, 75, 0.08);
+      color: var(--honoua-green);
+      margin-bottom: 6px;
+    }
+
+    /* Message système */
+    .scanner-message {
+      margin-bottom: 8px;
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      line-height: 1.4;
+    }
+
+    .scanner-message--hidden {
+      display: none;
+    }
+
+    .scanner-message--info {
+      display: block;
+      background: #f0f7ff;
+      border-color: #c6ddff;
+      color: #17446b;
+    }
+
+    .scanner-message--error {
+      display: block;
+      background: #fff2f0;
+      border-color: #f4c7c3;
+      color: var(--danger);
+    }
+
+    /* Zone vidéo + réticule */
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-soft);
+    }
+
+    .video-wrap video {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #000;
+    }
+
+    .reticle {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .reticle .box {
+      width: 70%;
+      max-width: 280px;
+      height: 36%;
+      border-radius: 14px;
+      border: 2px solid rgba(245, 193, 71, 0.9);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+    }
+
+    /* Lignes de contrôles */
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .row:last-of-type {
+      margin-bottom: 0;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--text-muted);
+      min-width: 80px;
+    }
+
+    select {
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border-soft);
+      font-size: 13px;
+      flex: 1;
+      min-width: 120px;
+      background: #fafafa;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      min-width: 140px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border-soft);
+      font-size: 13px;
+    }
+
+    /* Boutons */
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--honoua-green);
+      color: #fff;
+    }
+
+    .btn-ghost {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      color: var(--text-main);
+    }
+
+    .btn-warn {
+      background: rgba(245, 193, 71, 0.16);
+      color: #8d5c00;
+      border: 1px solid rgba(245, 193, 71, 0.6);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    /* Petit texte en bas de page */
+    .helper {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <section id="scanner-capsule" class="scanner-capsule">
+    <div class="scanner-capsule-header">
+      <span class="badge">Scanner CO₂</span>
+      <h1>Scanner un produit</h1>
+      <p>Autorise la caméra puis place le code-barres dans le cadre pour lancer le scan.</p>
+    </div>
+
+    <!-- Message système -->
+    <div id="scannerCapsuleMessage" class="scanner-message scanner-message--hidden"></div>
+
+    <!-- Aperçu caméra -->
+    <div class="video-wrap">
+      <video id="scannerCapsuleVideo" playsinline autoplay muted></video>
+      <div class="reticle" aria-hidden="true">
+        <div class="box"></div>
+      </div>
+    </div>
+
+    <!-- Contrôles caméra -->
+    <div class="row">
+      <span class="status">Caméra :</span>
+      <select id="scannerCapsuleCameras" aria-label="Sélectionner la caméra"></select>
+      <button id="scannerCapsuleStart" class="btn btn-primary">🎥 Autoriser</button>
+      <button id="scannerCapsuleStop" class="btn btn-ghost">⏹ Stop</button>
+      <button id="scannerCapsuleTorch" class="btn btn-warn" disabled>🔦</button>
+    </div>
+
+    <!-- Test manuel EAN -->
+    <div class="row">
+      <span class="status">Test EAN :</span>
+      <input
+        id="scannerCapsuleEan"
+        type="text"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        placeholder="Ex : 3017620422003" />
+      <button id="scannerCapsuleTest" class="btn btn-ghost">Tester</button>
+    </div>
+  </section>
+
+  <p class="helper">
+    Pour que la caméra fonctionne, ouvre ce fichier via <strong>http://localhost</strong> ou en <strong>HTTPS</strong>
+    (et pas en <code>file://</code>).
+  </p>
+
+   <!-- 1) Client API global Honoua -->
+  <script src="./honoua-api.js"></script>
+
+  <!-- 2) Module scanner réutilisable -->
+  <script src="./scanner-capsule.js"></script>
+
+  <!-- 3) Initialisation de la capsule pour cette page de test -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // 🔍 Vérifier que l'API est bien chargée
+      console.log('HonouaApi =', window.HonouaApi);
+
+      const capsule = window.HonouaScannerCapsule.createScannerCapsule({
+        videoEl:        document.getElementById('scannerCapsuleVideo'),
+        messageEl:      document.getElementById('scannerCapsuleMessage'),
+        camerasSelectEl:document.getElementById('scannerCapsuleCameras'),
+        startBtn:       document.getElementById('scannerCapsuleStart'),
+        stopBtn:        document.getElementById('scannerCapsuleStop'),
+        torchBtn:       document.getElementById('scannerCapsuleTorch'),
+        eanInput:       document.getElementById('scannerCapsuleEan'),
+        testBtn:        document.getElementById('scannerCapsuleTest'),
+
+        onEanDetected: async (ean) => {
+          const m = document.getElementById('scannerCapsuleMessage');
+
+          if (m) {
+            m.className = 'scanner-message scanner-message--info';
+            m.textContent = 'EAN détecté : ' + ean + ' — recherche du produit…';
+          }
+
+          console.log('[Capsule Demo] EAN détecté :', ean);
+
+          // 👉 Appel à l’API standardisée
+          if (!window.HonouaApi || !window.HonouaApi.fetchProductByEan) {
+            console.error('[Capsule Demo] HonouaApi.fetchProductByEan indisponible');
+            if (m) {
+              m.className = 'scanner-message scanner-message--error';
+              m.textContent = 'Client API Honoua non disponible (honoua-api.js non chargé).';
+            }
+            return;
+          }
+
+          const result = await window.HonouaApi.fetchProductByEan(ean);
+
+          if (!m) return;
+
+          if (!result.ok) {
+            m.className = 'scanner-message scanner-message--error';
+            m.textContent = 'Erreur ou produit introuvable : ' + (result.error || 'Inconnu');
+            console.warn('[Capsule Demo] Erreur API :', result.error);
+            return;
+          }
+
+          const product = result.data;
+          console.log('[Capsule Demo] Produit reçu :', product);
+
+          m.className = 'scanner-message scanner-message--info';
+          m.textContent = 'Produit trouvé : ' + JSON.stringify(product);
+        },
+      });
+
+      capsule.init();
+      window.honouaScannerCapsule = capsule;
+    });
+  </script>
+</body>
+</html>
+

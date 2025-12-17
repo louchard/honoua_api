@@ -171,7 +171,7 @@ Base = declarative_base()
 
 class ProductDB(Base):
     __tablename__ = "products"
-    __table_args__ = {"schema": "honou"}
+   
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ean13_clean: Mapped[str] = mapped_column(String, index=True)

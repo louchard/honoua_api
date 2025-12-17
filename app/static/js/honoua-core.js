@@ -1,789 +1,4 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Honoua — Scanner</title>
-  <link rel="stylesheet" href="css/style.css">
-
-
-  <style>
-    :root{ --green:#062909; --orange:#F5C147; --blue:#001D85; --bg:#f7f7f7; --red:#C62828; }
-    html,body{ margin:0;padding:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial }
-    .wrap{ max-width:640px;margin:0 auto;padding:16px }
-    .card{ background:#fff;border-radius:16px;padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08);border:1px solid #eee }
-    .header{ display:flex;align-items:center;gap:12px;margin-bottom:12px }
-    .logo{ width:40px;height:40px;border-radius:8px;background:var(--green) }
-    h1{ font-size:20px;margin:0;color:var(--green) }
-    .sub{ font-size:13px;color:#333;background:linear-gradient(90deg,#00000008,#00000000);padding:6px 8px;border-radius:8px }
-
-    .video-wrap{ position:relative }
-    video{ width:100%;aspect-ratio:3/4;background:#000;border-radius:16px;object-fit:cover;border:2px solid var(--green) }
-
-    /* Cadre de visée responsive */
-    .reticle{ pointer-events:none; position:absolute; inset:0; display:flex; align-items:center; justify-content:center }
-    .reticle .box{
-      width:70%; max-width:400px; height:35%; max-height:220px;
-      border:3px solid var(--green); border-radius:12px;
-      box-shadow:0 0 0 200vmax rgba(0,0,0,.25) inset;
-      transition:transform .25s ease, border-color .25s ease;
-    }
-    .reticle.active .box{ border-color:var(--orange); transform:scale(1.02) }
-
-    .row{ display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap }
-    select,button{ padding:10px 12px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:14px }
-    button.primary{ background:var(--green);color:#fff;border:1px solid var(--green) }
-    button.ghost{ background:#fff;color:var(--green);border:1px solid var(--green) }
-    button.warn{ background:#fff;color:#111;border:1px solid #ccc;opacity:.6 }
-    button.torch-on{ background:var(--orange);color:#111;border:1px solid var(--orange) }
-    .status{ font-size:13px;color:#222;display:flex;align-items:center;gap:8px }
-    .badge{ font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px }
-    .badge.ok{ background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9 }
-    .badge.off{ background:#FFF3F3;color:#7A1A1A;border:1px solid #FFD6D6 }
-        /* Message système du scanner (A55.8) */
-    .scanner-message {
-      margin: 4px 0 10px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      background: #f5f5f5;
-      font-size: 13px;
-      color: #222;
-    }
-
-    .scanner-message--hidden {
-      display: none;
-    }
-
-    /* Variante info (scan réussi, ajout panier, chargement, etc.) */
-    .scanner-message--info {
-      border-color: #C8E6C9;
-      background: #E8F5E9;
-      color: #1B5E20;
-    }
-
-    /* Variante erreur (produit introuvable, problème réseau, etc.) */
-    .scanner-message--error {
-      border-color: #FFD6D6;
-      background: #FFF3F3;
-      color: #7A1A1A;
-    }
-
-    .pill{ display:inline-block;padding:4px 8px;border-radius:999px;background:var(--orange);color:#111;font-weight:600 }
-    .hint{ font-size:12px;color:#555 }
-    .footer{ margin-top:10px;font-size:12px;color:#666;display:flex;justify-content:space-between }
-
-    /* Encart CO2 */
-    .co2-card{
-      margin-top:12px;
-      padding:12px 14px;
-      border-radius:14px;
-      border:1px solid #e0e0e0;
-      background:#fafafa;
-      font-size:13px;
-    }
-    .co2-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-bottom:6px;
-      font-weight:600;
-      color:#062909;
-    }
-    .co2-badge{
-      padding:2px 8px;
-      border-radius:999px;
-      border:1px solid #C8E6C9;
-      background:#E8F5E9;
-      font-size:11px;
-      font-weight:600;
-    }
-    .co2-empty{
-      font-size:12px;
-      color:#555;
-    }
-    .co2-main{
-      font-size:16px;
-      font-weight:700;
-      margin:4px 0 2px;
-    }
-    .co2-main span.co2-total{
-      font-variant-numeric:tabular-nums;
-    }
-    .co2-sub{
-      font-size:11px;
-      color:#666;
-      margin-bottom:4px;
-    }
-    .co2-list{
-      list-style:none;
-      padding:0;
-      margin:6px 0 0;
-      font-size:12px;
-      color:#333;
-    }
-    .co2-list li{
-      display:flex;
-      justify-content:space-between;
-      gap:6px;
-    }
-    .co2-label{
-      opacity:.8;
-    }
-    .co2-value{
-      font-variant-numeric:tabular-nums;
-      font-weight:600;
-    }
-    .hidden{
-      display:none !important;
-    }
-
-    /* ==== code test ==== */
-   .co2-cart-item-header{
-    display: flex;
-   }
-   .co2-cart-item-header-right{
-    padding: 1px;
-   }
-      .co2-cart-qty-badge {
-            padding: 4px 8px;
-          }
-
-     .co2-cart-remove-x {
-            padding: 2px 8px;
-            font-size: 14px;     /* beau X */
-            line-height: 1;
-          }
-
-           .co2-cart-name{
-            width: 200px;
-           }
-      
-/* =========================
-   PANIER CO₂ – CONTAINER
-   ========================= */
-
-#co2-cart {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 16px;
-  margin-top: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-}
-
-/* =========================
-   CERcles – RÉSUMÉ CO₂
-   ========================= */
-
-.co2-circles {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-/*
-.co2-circle {
-  background: #f7f9fb;
-  border-radius: 14px; 
-  padding: 14px 10px;
-  text-align: center;
-  border: 1px solid #eef1f4;
-}
-*/
-.co2-circle-title {
-  font-size: 12px;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.co2-circle-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: #062909; /* vert Honoua */
-}
-
-
-/* =========================
-   LISTE PRODUITS PANIER
-   ========================= */
-
-#co2-cart-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.co2-cart-item {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 12px 14px;
-  border: 1px solid #eef1f4;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.15s ease;
-}
-
-.co2-cart-item:hover {
-  background: #f9fafb;
-  transform: translateY(-1px);
-}
-
-
-/* =========================
-   Ligne titre + quantité + bouton X
-   ========================= */
-
-.co2-cart-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.co2-cart-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.co2-cart-item-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.co2-cart-qty-badge {
-  background: #eef1f4;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: #374151;
-}
-
-.co2-cart-remove-x {
-  background: none;
-  border: none;
-  font-size: 18px;
-  line-height: 1;
-  color: #9ca3af;
-  cursor: pointer;
-}
-
-.co2-cart-remove-x:hover {
-  color: #dc2626;
-}
-
-/* =========================
-   Ligne CO₂ + distance
-   ========================= */
-
-.co2-cart-item-meta {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-  color: #4b5563;
-}
-
-.co2-cart-info {
-  white-space: nowrap;
-}
-
-/* =========================
-   RÉSUMÉ TEXTE PANIER
-   ========================= */
-
-#co2-cart-total-items,
-#co2-cart-distinct-products,
-#co2-cart-total-co2 {
-  font-size: 13px;
-  color: #374151;
-  margin-top: 6px;
-}
-
-/* =========================
-   Animation légère du cercle CO₂ total
-   ========================= */
-
-.co2-circle--animate {
-  animation: pulseCo2 0.6s ease-out;
-}
-
-@keyframes pulseCo2 {
-  from {
-    transform: scale(1.96);
-    background-color: #e6f4ea;
-  }
-  to {
-    transform: scale(1);
-    background-color: #f7f9fb;
-  }
-}
-
-
-
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <div class="header">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>Scanner un produit</h1>
-          <div class="sub">Autorisez la caméra. Sur mobile, l’app sélectionnera l’objectif arrière.</div>
-        </div>
-      </div>
-
-      <div id="scanner-message" class="scanner-message scanner-message--hidden">
-        <!-- Message système affiché ici par JavaScript -->
-      </div>
-
-      <div class="video-wrap">
-        <video id="preview" playsinline autoplay muted></video>
-        <div class="reticle" aria-hidden="true"><div class="box"></div></div>
-      </div>
-
-      <div class="row">
-        <label for="cameras" class="status">Caméra :</label>
-        <select id="cameras" aria-label="Sélectionner la caméra"></select>
-        <button id="btnStart" class="primary">Autoriser caméra</button>
-        <button id="btnReset" class="ghost">Reset</button>
-        <button id="btnTorch" class="warn" disabled>Lampe</button>
-      </div>
-
-      <div class="row">
-        <label for="eanInput" class="status">Test manuel :</label>
-        <input id="eanInput" type="text" inputmode="numeric" pattern="[0-9]*"
-               placeholder="Entrer un EAN (ex : 3017620422003)"
-               style="flex:1;min-width:160px;padding:10px 12px;border-radius:12px;border:1px solid #ddd;font-size:14px" />
-        <button id="btnTestEan" class="ghost">Tester l’EAN</button>
-      </div>
-
-      <div class="row status">
-        <span id="stateBadge" class="badge off">Arrêté</span>
-        <span id="state">En attente d’autorisation…</span>
-        <span id="secure" class="pill" title="getUserMedia fonctionne sur localhost ou HTTPS">HTTPS/localhost</span>
-      </div>
-
-      <!-- Encart CO2 -->
-      <div id="co2Card" class="co2-card" aria-live="polite">
-        <div class="co2-header">
-          <span>Empreinte CO₂ du produit</span>
-          <span id="co2Badge" class="co2-badge">En attente de scan</span>
-        </div>
-
-        <!-- État vide / avant scan -->
-        <div id="co2Empty" class="co2-empty">
-          Scannez un code-barres pour afficher l’empreinte CO₂ (production, emballage, transport).
-        </div>
-
-        <!-- Contenu quand le produit est trouvé -->
-        <div id="co2Content" class="hidden">
-          <!-- Ligne de résumé sur une seule ligne -->
-          <div class="co2-product-summary">
-            <div class="co2-summary-row">
-              <!-- Nom du produit -->
-              <div class="co2-summary-left">
-                <span id="co2ProductLabel" class="co2-summary-name">
-                  Nom du produit
-                </span>
-              </div>
-
-              <!-- Total CO2 -->
-              <div class="co2-summary-center">
-                <span id="co2Total" class="co2-summary-total">
-                  0.0 kg CO₂
-                </span>
-              </div>
-
-              <!-- Origine + Emballage + icône info -->
-              <div class="co2-summary-right">
-                <div class="co2-summary-meta">
-                  <span id="co2Origin" class="co2-summary-origin">
-                    Origine – distance
-                  </span>
-                  <span id="co2PackageLabel" class="co2-summary-package">
-                    Type d’emballage
-                  </span>
-                </div>
-                <button id="co2SummaryInfoBtn"
-                        class="co2-summary-info-btn"
-                        type="button"
-                        aria-label="Voir la fiche détaillée du produit">
-                  ⓘ
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Détails (cachés par défaut) -->
-          <div id="co2Details" class="co2-details hidden">
-            <!-- A. En-tête fiche produit -->
-            <div class="co2-details-header">
-              <div id="co2DetailsProductName" class="co2-details-name">
-                Nom du produit
-              </div>
-
-              <div class="co2-details-total-line">
-                <span class="co2-details-total-label">Émission totale</span>
-                <span id="co2DetailsTotal" class="co2-details-total-value">
-                  0.0 kg CO₂
-                </span>
-              </div>
-
-              <div class="co2-details-reliability">
-                <span id="co2ReliabilityIcon" class="co2-reliability-icon">⚪</span>
-                <span id="co2ReliabilityLabel" class="co2-reliability-label">
-                  Fiabilité inconnue
-                </span>
-              </div>
-            </div>
-
-            <!-- B. Détail CO2 : production / emballage / transport -->
-            <div class="co2-details-co2breakdown">
-              <ul class="co2-list">
-                <li>
-                  <span class="co2-label">Production</span>
-                  <span id="co2Prod" class="co2-value">0.0</span>
-                </li>
-                <li>
-                  <span class="co2-label">Emballage</span>
-                  <span id="co2Pack" class="co2-value">0.0</span>
-                </li>
-                <li>
-                  <span class="co2-label">Transport</span>
-                  <span id="co2Trans" class="co2-value">0.0</span>
-                </li>
-              </ul>
-            </div>
-
-            <!-- C. Infos logistiques : distance, origine, emballage -->
-            <div class="co2-details-meta">
-              <div id="co2DetailsDistance" class="co2-details-meta-item">
-                Distance : 0 km
-              </div>
-
-              <div id="co2DetailsOrigin" class="co2-details-meta-item">
-                Origine : -
-              </div>
-
-              <div id="co2DetailsPackage" class="co2-details-meta-item">
-                Type d’emballage : -
-              </div>
-            </div>
-
-            <!-- D. Indication "jours d'arbre" -->
-            <div id="co2TreeCapture" class="co2-sub">
-              Un arbre mettrait environ XX jours pour capter les émissions de ce produit.
-            </div>
-
-            <!-- E. Remarque du fabricant -->
-            <div id="co2ManufacturerNote" class="co2-manufacturer-note">
-              Remarque du fabricant : fonctionnalité en construction.
-            </div>
-          </div><!-- /#co2Details -->
-        </div><!-- /#co2Content -->
-      </div><!-- /#co2Card -->
-
-      <!-- SECTION COMPARATEUR CO₂ (EcoSELECT) -->
-      <section id="eco-select" class="eco-select">
-        <div class="eco-select-header">
-          <h2>Comparer les produits</h2>
-
-          <div class="eco-select-sort">
-            <button id="sort-by-co2" class="eco-sort-btn eco-sort-btn-active">
-              CO₂
-            </button>
-            <button id="sort-by-distance" class="eco-sort-btn">
-              Distance
-            </button>
-          </div>
-        </div>
-
-        <!-- Messages dynamiques (erreurs, info, limite 10, etc.) -->
-        <div id="eco-select-message" class="eco-select-message"></div>
-
-        <!-- Liste des produits scannés -->
-        <div id="eco-select-list" class="eco-select-list">
-          <!-- Les lignes produits seront insérées ici par eco-select.js -->
-        </div>
-      </section>
-
-      <!-- SECTION PANIER CO₂ -->
-      <section id="co2-cart-section" class="co2-cart-section">
-        <div class="co2-cart-header">
-          <h2>Panier CO₂</h2>
-          <p class="co2-cart-sub">
-            Vos produits scannés en mode Panier.
-          </p>
-        </div>
-
-        <div id="co2-cart-list" class="co2-cart-list">
-          <p class="co2-cart-empty">
-            Le panier est vide. Scannez des produits en mode Panier pour les ajouter ici.
-          </p>
-        </div>
-
-        <div id="co2-cart-circles" class="co2-cart-circles">
-          <div class="co2-cart-circles-row">
-            <div class="co2-circle co2-circle-total-co2">
-              <div class="co2-circle-label">CO₂ total</div>
-              <div id="co2-circle-total-co2-value" class="co2-circle-value">
-                0 kg CO₂e
-              </div>
-            </div>
-
-            <div class="co2-circle co2-circle-total-distance">
-              <div class="co2-circle-label">Distance totale</div>
-              <div id="co2-circle-total-distance-value" class="co2-circle-value">
-                0 km
-              </div>
-            </div>
-          </div>
-
-          <div class="co2-cart-circles-row">
-            <div class="co2-circle co2-circle-avg-co2">
-              <div class="co2-circle-label">CO₂ moyen / produit</div>
-              <div id="co2-circle-avg-co2-value" class="co2-circle-value">
-                0 kg CO₂e
-              </div>
-            </div>
-
-            <div class="co2-circle co2-circle-avg-distance">
-              <div class="co2-circle-label">Distance moyenne</div>
-              <div id="co2-circle-avg-distance-value" class="co2-circle-value">
-                0 km
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="co2-cart-summary" class="co2-cart-summary">
-          <div id="co2-cart-totals" class="co2-cart-totals">
-            <div class="co2-cart-line" id="co2-cart-total-items">
-              0 article scanné
-            </div>
-            <div class="co2-cart-line" id="co2-cart-distinct-products">
-              0 produit distinct
-            </div>
-            <div class="co2-cart-line" id="co2-cart-total-co2">
-              Total : 0 g CO₂e
-            </div>
-          </div>
-
-          <button id="co2-cart-clear-btn" type="button" class="btn-clear-cart">
-            Vider le panier
-          </button>
-
-          <button id="co2-cart-validate-btn" type="button" class="btn-clear-cart">
-            Valider le panier
-          </button>
-        </div>
-      </section>
-
-      <!-- Rapport Panier CO₂ (affiché après validation du panier) -->
-      <section id="co2-cart-report" class="co2-cart-report hidden">
-        <h3 class="co2-report-title">Rapport CO₂ de votre panier</h3>
-        <p id="co2-report-period" class="co2-report-period">
-          Panier du —
-        </p>
-
-        <div class="co2-cart-report-block">
-          <h4>Équivalence CO₂ → arbre</h4>
-
-          <div class="tree-badge">
-            <div id="co2-tree-icons" class="tree-icons">—</div>
-            <div id="co2-tree-number-badge" class="tree-number-badge">(—)</div>
-          </div>
-
-          <div class="co2-tree-summary">
-            <div id="co2-tree-number" class="co2-tree-number">—</div>
-            <div class="co2-tree-label">arbres (30 jours de captation)</div>
-          </div>
-
-          <p id="co2-cart-report-tree">
-            Ce panier représente environ — arbres captant pendant — jours.
-          </p>
-        </div>
-
-        <div class="co2-report-section">
-          <h4>Émissions de CO₂</h4>
-          <p id="co2-report-emissions-total">Émissions totales : —.</p>
-          <p id="co2-report-emissions-avg">Émissions moyennes par produit : —.</p>
-        </div>
-
-        <div class="co2-report-section">
-          <h4>Distances parcourues</h4>
-          <p id="co2-report-distance-total">Distance totale parcourue : —.</p>
-          <p id="co2-report-distance-avg">Distance moyenne par produit : —.</p>
-          <p id="co2-report-distance-comment">
-            Votre panier est plutôt — (analyse en fonction de la distance moyenne).
-          </p>
-        </div>
-
-        <div class="co2-report-section">
-          <h4>Recommandations</h4>
-          <p id="co2-report-reco-intro" class="co2-report-reco-intro"></p>
-          <ul id="co2-report-reco-list" class="co2-report-reco-list"></ul>
-        </div>
-
-        <div class="co2-cart-report-block">
-          <h4>Répartition par catégories</h4>
-          <div id="co2-cart-report-categories"></div>
-        </div>
-
-        <div id="co2-category-graph" class="co2-category-graph">
-          <div class="co2-category-pie-container">
-            <canvas id="co2-category-pie" width="180" height="180"></canvas>
-          </div>
-
-          <div id="co2-category-dominant" class="co2-category-dominant"></div>
-
-          <ul id="co2-category-legend" class="co2-category-legend"></ul>
-        </div>
-
-        <div class="co2-report-section">
-          <h4>Historique de vos paniers CO₂</h4>
-          <p id="co2-report-history-intro">
-            Retrouvez vos derniers paniers validés et leur impact carbone.
-          </p>
-          <div id="co2-report-history-list" class="co2-report-history-list"></div>
-        </div>
-      </section>
-
-      <!-- Suivi CO₂ – Bloc 1 : Budget carbone annuel -->
-      <section id="suivi-budget" class="card suivi-budget">
-        <div class="suivi-budget-header">
-          <h2>Budget carbone annuel</h2>
-          <p class="suivi-budget-sub">
-            Objectif GIEC : 2 t CO₂ / personne / an
-          </p>
-        </div>
-
-        <div class="suivi-budget-body">
-          <div class="suivi-budget-line">
-            <span class="label">Budget annuel du foyer</span>
-            <span id="budget-total" class="value">— kg</span>
-          </div>
-
-          <div class="suivi-budget-line">
-            <span class="label">CO₂ consommé (depuis le 1er janvier)</span>
-            <span id="co2-consomme" class="value">— kg</span>
-          </div>
-
-          <div class="suivi-budget-line">
-            <span class="label">Budget utilisé</span>
-            <span id="budget-used" class="value">— %</span>
-          </div>
-
-          <div class="suivi-budget-line">
-            <span class="label">Budget restant</span>
-            <span id="budget-left" class="value">— kg (— %)</span>
-          </div>
-
-          <div class="suivi-budget-progress">
-            <div id="budget-progress-bar" class="progress-bar"></div>
-          </div>
-
-          <div id="budget-status" class="suivi-budget-status status-green"></div>
-        </div>
-      </section>
-
-      <!-- A53 – Historique des paniers CO₂ -->
-      <section id="co2-cart-history-section" class="card co2-cart-history">
-        <div class="header">
-          <div class="title-block">
-            <h2 class="title">Historique de vos paniers CO₂</h2>
-            <p class="subtitle">
-              Retrouvez vos derniers paniers validés et leur impact carbone.
-            </p>
-          </div>
-        </div>
-
-        <div id="co2-cart-history-list" class="co2-cart-history-list">
-          <p class="co2-cart-history-empty">
-            Aucun panier validé pour le moment. Validez un panier pour voir son historique ici.
-          </p>
-        </div>
-      </section>
-
-      <!-- Suivi CO₂ – Bloc 2 : Évolution dans le temps -->
-      <section id="suivi-evolution" class="card suivi-evolution">
-        <div class="suivi-evolution-header">
-          <h2>Évolution de mes émissions</h2>
-          <p class="suivi-evolution-sub">
-            Visualisez vos émissions et distances par période.
-          </p>
-
-          <div class="suivi-evolution-period-toggle">
-            <button type="button" id="evo-period-month" class="evo-period-btn evo-period-btn-active">
-              Mois
-            </button>
-            <button type="button" id="evo-period-week" class="evo-period-btn">
-              Semaines
-            </button>
-          </div>
-        </div>
-
-        <div class="suivi-evolution-body">
-          <div class="suivi-evolution-chart">
-            <canvas id="evo-chart" width="320" height="180">
-              Votre navigateur ne supporte pas l’affichage du graphique.
-            </canvas>
-          </div>
-
-          <div class="suivi-evolution-summary">
-            <div class="summary-line">
-              <span class="label">Période actuelle</span>
-              <span id="evo-current-period" class="value">—</span>
-            </div>
-            <div class="summary-line">
-              <span class="label">CO₂ de la période</span>
-              <span id="evo-current-co2" class="value">— kg</span>
-            </div>
-            <div class="summary-line">
-              <span class="label">Distance totale</span>
-              <span id="evo-current-distance" class="value">— km</span>
-            </div>
-            <div class="summary-line">
-              <span class="label">Évolution CO₂ vs période précédente</span>
-              <span id="evo-co2-change" class="value">— %</span>
-            </div>
-            <div class="summary-line">
-              <span class="label">Évolution distance vs période précédente</span>
-              <span id="evo-distance-change" class="value">— %</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Section Défis CO₂ -->
-      <section id="co2-challenges-section" class="co2-challenges-section">
-        <h2 class="co2-challenges-title">🏆 Défis CO₂</h2>
-
-        <button id="co2-challenges-refresh" class="co2-challenges-refresh-btn">
-          🔄 Mettre à jour les défis
-        </button>
-
-        <div id="co2-challenges-list" class="co2-challenges-list">
-          <div class="co2-challenge-empty">
-            Aucun défi actif pour le moment. Active ton premier défi pour suivre ta progression.
-          </div>
-        </div>
-      </section>
-
-      <div class="suivi-kpi">
-        <div>Dernier mois (<span id="suiviLastMonthLabel">—</span>) : <strong><span id="suiviLastMonthCo2">—</span></strong></div>
-        <div>Évolution : <strong><span id="suiviDeltaMonth">—</span></strong> (<span id="suiviDeltaMonthPct">—</span>)</div>
-      </div>
-
-
-    </div><!-- /.card -->
-  </div><!-- /.wrap -->
-
-
-  
-
-  <script>
+ 
 // === API Honoua : fonction utilitaire ===
 async function fetchProductCo2ByEan(ean) {
     const url = `/api/v1/co2/product/${ean}`;
@@ -794,10 +9,7 @@ async function fetchProductCo2ByEan(ean) {
     }
     return await res.json();
 }
-</script>
 
-
-<script>
 (async () => {
   const $video = document.getElementById('preview');
   const $cams  = document.getElementById('cameras');
@@ -1557,9 +769,7 @@ if (typeof data.co2_kg_total === "number") {
    }
 
   })();
-</script>
 
-<script>
   // Fallback global pour être sûr que handleEanDetected existe
   window.handleEanDetected = function(ean){
     if (!ean) return;
@@ -1572,9 +782,7 @@ if (typeof data.co2_kg_total === "number") {
       fetchCo2ForEan(String(ean).trim());
     }
   };
-</script>
 
-<script>
 /* ============================================================================
    EcoSELECT (AUTONOME) — rendu du comparateur dans scanner.html
    Dépendances: #eco-select-list, #sort-by-co2, #sort-by-distance
@@ -1760,13 +968,7 @@ if (typeof data.co2_kg_total === "number") {
   // Initial render
   render();
 })();
-</script>
 
-
-
-<!-- 🔼 FIN DU CODE A50.26 -->
-
-<script>
   // === Panier CO2 – A51 : logique de données uniquement ===
 
 // Tableau principal du panier
@@ -2149,63 +1351,9 @@ function getCategoryColor(cat) {
  * @param {Object} totals - ex : { 'Viande': 1234, 'Végétaux': 567, ... } en g
  * @param {number} totalAll - somme de toutes les catégories en g
  */
-function drawCategoryPie(totals, totalAll) {
-  const canvas = document.getElementById('co2-category-pie');
-  if (!canvas || !canvas.getContext || !totalAll || totalAll <= 0) {
-    console.warn('[CatGraph] Pas de canvas ou pas de données, pas de dessin.');
-    return;
-  }
-
-  const ctx = canvas.getContext('2d');
-
-  // On fixe la taille interne pour éviter les surprises
-  canvas.width  = 180;
-  canvas.height = 180;
-
-  const width  = canvas.width;
-  const height = canvas.height;
-
-  // Nettoyage
-  ctx.clearRect(0, 0, width, height);
-
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const radius  = Math.min(width, height) / 2 - 6;
-
-  let startAngle = -Math.PI / 2; // départ en haut
-
-  const ordered = ['Viande', 'Végétaux', 'Épicerie', 'Boisson', 'Autres'];
-
-  ordered.forEach(cat => {
-    const valueG = totals[cat];
-    if (!valueG || valueG <= 0) {
-      return;
-    }
-
-    const sliceAngle = (valueG / totalAll) * 2 * Math.PI;
-    const endAngle   = startAngle + sliceAngle;
-
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-    ctx.closePath();
-    ctx.fillStyle = getCategoryColor(cat);
-    ctx.fill();
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    startAngle = endAngle;
-  });
-
-  console.log('[CatGraph] Camembert dessiné.');
-}
+   
 
 
-</script>
-
-<script>
 
   window.HonouaUI = window.HonouaUI || {};
 
@@ -2237,6 +1385,77 @@ if (cart.length === 0) {
     if (typeof generateCo2CartReport === 'function') {
       generateCo2CartReport();
       console.log('[Panier CO2] generateCo2CartReport OK (onclick)');
+
+      const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_v1';
+
+        function honouaGetCartHistory() {
+          try {
+            const raw = localStorage.getItem(HONOUA_CART_HISTORY_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+          } catch (e) {
+            console.warn('[History] JSON invalide, reset.', e);
+            return [];
+          }
+        }
+
+        function honouaSaveCartToHistory(cartItems, totalsSummary) {
+          const history = honouaGetCartHistory();
+
+          history.unshift({
+            ts: Date.now(),
+            items: Array.isArray(cartItems) ? cartItems : [],
+            totals: totalsSummary || null
+          });
+
+          localStorage.setItem(HONOUA_CART_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+        }
+
+        function honouaRenderLastTwoCartsInReco() {
+          const ul = document.getElementById('co2-report-reco-list');
+          if (!ul) return;
+
+          const history = honouaGetCartHistory().slice(0, 2);
+
+          // Supprime l'ancien bloc si déjà rendu
+          ul.querySelectorAll('li[data-lastcarts="1"]').forEach(n => n.remove());
+
+          const li = document.createElement('li');
+          li.setAttribute('data-lastcarts', '1');
+
+          if (history.length === 0) {
+            li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardé pour l’instant.`;
+            ul.insertAdjacentElement('afterbegin', li);
+            return;
+          }
+
+          const fmtDate = (ts) => {
+            try { return new Date(ts).toLocaleString('fr-FR'); } catch { return ''; }
+          };
+
+          const lines = history.map((h, idx) => {
+            const nb = Array.isArray(h.items) ? h.items.length : 0;
+            const co2 = h.totals?.total_co2_text ? ` — ${h.totals.total_co2_text}` : '';
+            return `• Panier ${idx + 1} (${fmtDate(h.ts)}) — ${nb} produits${co2}`;
+          }).join('<br>');
+
+          li.innerHTML = `<strong>Derniers paniers</strong><br>${lines}`;
+          ul.insertAdjacentElement('afterbegin', li);
+        }
+
+      // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
+        try {
+          // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
+          const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
+          const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
+
+          honouaSaveCartToHistory(cart, totalsSummary);
+          honouaRenderLastTwoCartsInReco();
+          console.log('[History] 2 derniers paniers rendus dans Recos');
+        } catch (e) {
+          console.warn('[History] save/render failed', e);
+        }
+
     } else {
       console.warn('[Panier CO2] generateCo2CartReport non défini (onclick)');
     }
@@ -2513,6 +1732,19 @@ document.addEventListener('DOMContentLoaded', function () {
       // Génération du rapport local
       generateCo2CartReport();
 
+      // Sauvegarde + affichage des 2 derniers paniers (dans Recos)
+      try {
+        const totalsSummary = (typeof window.getCo2CartTotals === 'function')
+          ? window.getCo2CartTotals()
+          : null;
+
+        honouaSaveCartToHistory(cart, totalsSummary);
+        honouaRenderLastTwoCartsInReco();
+      } catch (e) {
+        console.warn('[History] save/render failed', e);
+      }
+
+
       // Enregistrement backend + rechargement de l’historique
      if (typeof saveCartHistoryFromCart === 'function') saveCartHistoryFromCart();
      if (typeof loadCo2CartHistory === 'function') loadCo2CartHistory();
@@ -2599,6 +1831,45 @@ function saveCartHistoryFromCart() {
   }
 }
 
+  
+  // =========================
+// Honoua — Historique paniers (storage)
+// =========================
+if (!window.honouaAppendCartToHistory) {
+  window.honouaAppendCartToHistory = function ({ co2Kg, distanceKm, itemsCount }) {
+    const key = "honoua_cart_history_v1";
+    const arr = JSON.parse(localStorage.getItem(key) || "[]");
+
+    arr.push({
+      timestamp: Date.now(),
+      co2_kg: Number(co2Kg) || 0,
+      distance_km: Number(distanceKm) || 0,
+      items_count: Number(itemsCount) || 0
+    });
+
+    localStorage.setItem(key, JSON.stringify(arr));
+  };
+}
+
+  // =========================
+// Honoua — Historique paniers (localStorage)
+// =========================
+        if (!window.honouaAppendCartToHistory) {
+          window.honouaAppendCartToHistory = function ({ co2Kg, distanceKm, itemsCount }) {
+            const key = "honoua_cart_history_v1";
+            const arr = JSON.parse(localStorage.getItem(key) || "[]");
+
+            arr.push({
+              timestamp: Date.now(),
+              co2_kg: Number(co2Kg) || 0,
+              distance_km: Number(distanceKm) || 0,
+              items_count: Number(itemsCount) || 0
+            });
+
+            localStorage.setItem(key, JSON.stringify(arr));
+          };
+        }
+
 
 
     /**
@@ -2663,6 +1934,15 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     const totalItems = totals.total_items || 0;
 
     const totalCo2Kg = totalCo2G / 1000;
+    // =========================
+// Suivi CO2 — sauvegarde du panier (MVP)
+// =========================
+    window.honouaAppendCartToHistory({
+      co2Kg: totalCo2Kg,
+      distanceKm: 0, // distance non gérée dans getCartTotals() pour l’instant
+      itemsCount: totals.distinct_products || co2Cart.length || 0
+    });
+
 
     if ($reportEmissionsTotal) {
       if (totalCo2G < 1000) {
@@ -2717,9 +1997,6 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
             };
           }
         })();
-
-
-
 
 
     if ($reportTree) {
@@ -2908,9 +2185,10 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
          // 6) Répartition par catégories – calcul à partir du panier
     if ($catBox) {
-    
-
-        const c = rawCategory.toLowerCase();
+       
+             // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
+      function mapCategoryForGraph(rawCategory) {
+        const c = String(rawCategory || '').toLowerCase();
 
         // Viande
         if (
@@ -2928,47 +2206,30 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
         // Végétaux
         if (
-          c.includes('légume') ||
           c.includes('legume') ||
-          c.includes('légumes') ||
-          c.includes('legumes') ||
+          c.includes('légume') ||
           c.includes('fruit') ||
-          c.includes('fruits') ||
+          c.includes('cereal') ||
           c.includes('céréale') ||
-          c.includes('cereale') ||
-          c.includes('céréales') ||
-          c.includes('cereales') ||
-          c.includes('végétal') ||
-          c.includes('vegetal') ||
-          c.includes('végétaux') ||
-          c.includes('vegetaux') ||
-          c.includes('légumineuse') ||
-          c.includes('legumineuse') ||
-          c.includes('légumineuses') ||
-          c.includes('legumineuses')
+          c.includes('riz') ||
+          c.includes('pate') ||
+          c.includes('pâte') ||
+          c.includes('lentille') ||
+          c.includes('haricot')
         ) {
           return 'Végétaux';
         }
 
         // Épicerie
         if (
-          c.includes('épicerie') ||
           c.includes('epicerie') ||
-          c.includes('sucré') ||
-          c.includes('sucre') ||
-          c.includes('sucrerie') ||
-          c.includes('chocolat') ||
+          c.includes('épicerie') ||
+          c.includes('sauce') ||
+          c.includes('condiment') ||
           c.includes('biscuit') ||
-          c.includes('biscuits') ||
-          c.includes('gâteau') ||
-          c.includes('gateau') ||
-          c.includes('gâteaux') ||
-          c.includes('gateaux') ||
-          c.includes('pâtisserie') ||
-          c.includes('patisserie') ||
-          c.includes('snack') ||
-          c.includes('barre') ||
-          c.includes('barres')
+          c.includes('chocolat') ||
+          c.includes('sucre') ||
+          c.includes('confiture')
         ) {
           return 'Épicerie';
         }
@@ -2976,18 +2237,20 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
         // Boisson
         if (
           c.includes('boisson') ||
-          c.includes('boissons') ||
-          c.includes('soda') ||
-          c.includes('limonade') ||
           c.includes('jus') ||
+          c.includes('soda') ||
+          c.includes('biere') ||
+          c.includes('bière') ||
+          c.includes('vin') ||
           c.includes('eau') ||
           c.includes('sirop')
         ) {
           return 'Boisson';
         }
 
-        // Par défaut
         return 'Autres';
+      }
+
       }
 
       // 6.2 – Initialisation des totaux CO₂ par catégorie (en g)
@@ -3053,11 +2316,188 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
         $catBox.appendChild(ul);
 
-        // 6.5 – Rendu dans le bloc graphique (camembert + bandeau + légende)
-        const $graph    = document.getElementById('co2-category-graph');
-        const $dominant = document.getElementById('co2-category-dominant');
-        const $legend   = document.getElementById('co2-category-legend');
 
+        /* =========================================================
+   ScanImpact — Camembert catégories (version robuste)
+   Cible les IDs de scan-impact.html :
+   #co2-category-pie, #co2-category-dominant, #co2-category-legend
+   ========================================================= */
+window.HonouaReportPie = window.HonouaReportPie || (function () {
+  const ORDERED = ['Viande', 'Végétaux', 'Épicerie', 'Boisson', 'Autres'];
+
+  function safeNumber(x) {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function getColor(cat) {
+    // Réutilise ta fonction si elle existe, sinon fallback
+    if (typeof window.getCategoryColor === 'function') {
+      const c = window.getCategoryColor(cat);
+      if (typeof c === 'string' && c.trim()) return c;
+    }
+    // Fallback neutre
+    return '#999';
+  }
+
+  function pickDominant(categoryTotalsG, totalAllG) {
+    const total = safeNumber(totalAllG);
+    if (total <= 0) return { cat: null, share: 0 };
+
+    let bestCat = null;
+    let bestVal = 0;
+
+    ORDERED.forEach(cat => {
+      const v = safeNumber(categoryTotalsG?.[cat]);
+      if (v > bestVal) {
+        bestVal = v;
+        bestCat = cat;
+      }
+    });
+
+    if (!bestCat || bestVal <= 0) return { cat: null, share: 0 };
+    return { cat: bestCat, share: Math.round((bestVal / total) * 100) };
+  }
+
+  function renderLegend($legend, $dominant, categoryTotalsG, totalAllG) {
+    if (!$legend) return;
+
+    const total = safeNumber(totalAllG);
+    $legend.innerHTML = '';
+
+    const defaultText = $dominant ? $dominant.textContent : '';
+
+    ORDERED.forEach(cat => {
+      const valueG = safeNumber(categoryTotalsG?.[cat]);
+      if (valueG <= 0 || total <= 0) return;
+
+      const share = Math.round((valueG / total) * 100);
+      const valueKg = valueG / 1000;
+
+      const li = document.createElement('li');
+
+      const colorBox = document.createElement('span');
+      colorBox.className = 'legend-color';
+      colorBox.style.backgroundColor = getColor(cat);
+
+      const textSpan = document.createElement('span');
+      // si formatNumberFr existe, on l'utilise
+      const fmt = (typeof window.formatNumberFr === 'function')
+        ? window.formatNumberFr(valueKg, 1)
+        : valueKg.toFixed(1).replace('.', ',');
+      textSpan.textContent = `${cat} – ${share} % (${fmt} kg CO₂e)`;
+
+      li.appendChild(colorBox);
+      li.appendChild(textSpan);
+
+      // Hover / click (mobile friendly)
+      li.addEventListener('mouseenter', () => {
+        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg CO₂e)`;
+        li.classList.add('active');
+      });
+      li.addEventListener('mouseleave', () => {
+        if ($dominant && defaultText) $dominant.textContent = defaultText;
+        li.classList.remove('active');
+      });
+      li.addEventListener('click', () => {
+        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg CO₂e)`;
+        Array.from($legend.querySelectorAll('li')).forEach(x => x.classList.remove('active'));
+        li.classList.add('active');
+      });
+
+      $legend.appendChild(li);
+    });
+  }
+
+  function drawPie(canvas, categoryTotalsG, totalAllG) {
+    const total = safeNumber(totalAllG);
+    if (!canvas || !canvas.getContext || total <= 0) {
+      console.warn('[CatGraph] Canvas ou total invalide.', { totalAllG });
+      return { drawn: false };
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    // Taille interne stable (indépendante du CSS)
+    canvas.width = 180;
+    canvas.height = 180;
+
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2, cy = h / 2;
+    const radius = Math.min(w, h) / 2 - 6;
+
+    let start = -Math.PI / 2;
+
+    let drewAtLeastOne = false;
+
+    ORDERED.forEach(cat => {
+      const valueG = safeNumber(categoryTotalsG?.[cat]);
+      if (valueG <= 0) return;
+
+      const slice = (valueG / total) * 2 * Math.PI;
+      if (!Number.isFinite(slice) || slice <= 0) return;
+
+      const end = start + slice;
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, start, end);
+      ctx.closePath();
+
+      ctx.fillStyle = getColor(cat);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      start = end;
+      drewAtLeastOne = true;
+    });
+
+    // Pixel test (debug fiable)
+    const px = Array.from(ctx.getImageData(90, 90, 1, 1).data);
+    console.log('[CatGraph] pie pixel@center', px, 'total=', total, 'categoryTotals=', categoryTotalsG);
+
+    return { drawn: drewAtLeastOne, px };
+  }
+
+  function render(categoryTotalsG, totalAllG) {
+    const canvas = document.getElementById('co2-category-pie');
+    const $dominant = document.getElementById('co2-category-dominant');
+    const $legend = document.getElementById('co2-category-legend');
+
+    const total = safeNumber(totalAllG);
+
+    // Bandeau catégorie dominante (ou message)
+    if ($dominant) {
+      const dom = pickDominant(categoryTotalsG, total);
+      if (dom.cat) {
+        $dominant.textContent = `Catégorie dominante : ${dom.cat} (${dom.share} %)`;
+      } else {
+        $dominant.textContent = 'Aucune catégorie dominante (données insuffisantes).';
+      }
+    }
+
+    // Légende + interactions
+    renderLegend($legend, $dominant, categoryTotalsG, total);
+
+    // Camembert
+    const res = drawPie(canvas, categoryTotalsG, total);
+    if (res.drawn) {
+      console.log('[CatGraph] Camembert dessiné.');
+    } else {
+      console.warn('[CatGraph] Aucun secteur dessiné (données catégories vides).', { categoryTotalsG, total });
+    }
+    return res;
+  }
+
+  return { render };
+})();
+
+  window.HonouaReportPie.render(categoryTotals, totalAll);
         if ($graph) {
           // Catégorie dominante
           if ($dominant) {
@@ -3065,12 +2505,13 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
             let dominantVal = 0;
 
             Object.keys(categoryTotals).forEach(cat => {
-              const v = totals[cat];
+              const v = categoryTotals[cat];   // <-- ligne indispensable
               if (v > dominantVal) {
                 dominantVal = v;
                 dominantCat = cat;
               }
             });
+
 
             if (dominantCat && dominantVal > 0) {
               const shareDom = Math.round((dominantVal / totalAll) * 100);
@@ -3093,8 +2534,12 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
             const defaultDominantText = $dominant ? $dominant.textContent : '';
 
             ordered.forEach(cat => {
-              const valueG = totals[cat];
-              if (!valueG || valueG <= 0) return;
+              const valueG = Number(totals[cat]);
+
+              if (!Number.isFinite(valueG) || valueG <= 0) {
+                return;
+              
+                }
 
               const valueKg = valueG / 1000;
               const share   = Math.round((valueG / totalAll) * 100);
@@ -3147,7 +2592,7 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
           }
 
           // Dessin du camembert (canvas)
-          drawCategoryPie(totals, totalAll);
+         //drawCategoryPie(categoryTotals, totalAll);
 
         }
       }
@@ -3161,6 +2606,79 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 // ==============================
 // A53 – Chargement de l'historique CO₂
 // ==============================
+// ================================
+// Historique : stocker + afficher 2 derniers paniers
+// ================================
+const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_v1';
+
+function honouaGetCartHistory() {
+  try {
+    const raw = localStorage.getItem(HONOUA_CART_HISTORY_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    console.warn('[History] JSON invalide, reset.', e);
+    return [];
+  }
+}
+
+function honouaSaveCartToHistory(cartItems, totalsSummary) {
+  const history = honouaGetCartHistory();
+
+  history.unshift({
+    ts: Date.now(),
+    items: Array.isArray(cartItems) ? cartItems : [],
+    totals: totalsSummary || null
+  });
+
+  // On garde un historique raisonnable
+  const trimmed = history.slice(0, 30);
+
+  localStorage.setItem(HONOUA_CART_HISTORY_KEY, JSON.stringify(trimmed));
+}
+
+function honouaRenderLastTwoCartsInReco() {
+  const ul = document.getElementById('co2-report-reco-list');
+  if (!ul) return;
+
+  const history = honouaGetCartHistory().slice(0, 2);
+
+  // On retire un ancien bloc si on rerend
+  const old = ul.querySelector('li[data-lastcarts="1"]');
+  if (old) old.remove();
+
+  const li = document.createElement('li');
+  li.setAttribute('data-lastcarts', '1');
+
+  if (history.length === 0) {
+    li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardé pour l’instant.`;
+    ul.insertAdjacentElement('afterbegin', li);
+    return;
+  }
+
+  const fmtDate = (ts) => {
+    try { return new Date(ts).toLocaleString('fr-FR'); } catch { return ''; }
+  };
+
+  const lines = history.map((h, idx) => {
+    const co2g =
+      (h.totals && (h.totals.total_co2_g ?? h.totals.totalCo2G ?? h.totals.total_all_g)) ?? null;
+    const co2kg = (co2g != null) ? (Number(co2g) / 1000) : null;
+
+    const label =
+      (h.totals && (h.totals.distinct_products ?? h.totals.distinctProducts)) ??
+      (Array.isArray(h.items) ? h.items.length : 0);
+
+    const co2Txt = (co2kg != null && Number.isFinite(co2kg))
+      ? ` — ≈ ${co2kg.toFixed(2).replace('.', ',')} kg CO₂e`
+      : '';
+
+    return `• Panier ${idx + 1} (${fmtDate(h.ts)}) — ${label} produits${co2Txt}`;
+  }).join('<br>');
+
+  li.innerHTML = `<strong>Derniers paniers</strong><br>${lines}`;
+  ul.insertAdjacentElement('afterbegin', li);
+}
 
 // ==============================
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
@@ -3268,9 +2786,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
-</script>
-    
-    <script>
+
   // ============================
   // Suivi CO₂ – Bloc 1 : Budget annuel
   // ============================
@@ -3712,9 +3228,7 @@ function aggregateHistoryByPeriod(items) {
   document.addEventListener('DOMContentLoaded', function () {
     refreshBudgetFromApi();
   });
-</script>
 
-  <script>
 /* ============================================================================
    SUIVI CO₂ — BLOC 2 : ÉVOLUTION DES ÉMISSIONS (Données + graphique)
    ============================================================================ */
@@ -3810,6 +3324,9 @@ function renderEvolutionSummary(summary) {
   const $dist    = document.getElementById("evo-current-distance");
   const $co2Chg  = document.getElementById("evo-co2-change");
   const $distChg = document.getElementById("evo-distance-change");
+
+   // ✅ Fix: si la page ne contient pas le module Evolution, on ne fait rien
+  if (!$period || !$co2 || !$dist || !$co2Chg || !$distChg) return;
 
   const fmt = (n) => (n === null || isNaN(n) ? "—" : n.toFixed(1));
 
@@ -4029,9 +3546,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEvolutionPeriodToggle();
   refreshEvolution("month");
 });
-</script>
-      
-      <script>
+
 /* ============================================================================
    SUIVI CO₂ — BLOC 4 : Défis personnels (MVP – version finale)
    ============================================================================ */
@@ -4294,9 +3809,36 @@ window.addEventListener("load", () => {
     renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
   }, 3000);
 });
-</script>
-<script src="/static/js/honoua-core.js"></script>
 
- 
-</body>
-</html>
+// =========================
+// SAFE: Honoua cart history writer (no-crash guard)
+// =========================
+(function () {
+  if (window.__HONOUA_APPEND_CART_HISTORY__) return;
+
+  window.__HONOUA_APPEND_CART_HISTORY__ = function (payload) {
+    try {
+      const key = "honoua_cart_history_v1";
+      const arr = JSON.parse(localStorage.getItem(key) || "[]");
+
+      const co2Kg = Number(payload?.co2Kg) || 0;
+      const distanceKm = Number(payload?.distanceKm) || 0;
+      const itemsCount = Number(payload?.itemsCount) || 0;
+
+      arr.push({
+        timestamp: Date.now(),
+        co2_kg: co2Kg,
+        distance_km: distanceKm,
+        items_count: itemsCount,
+      });
+
+      localStorage.setItem(key, JSON.stringify(arr));
+      return true;
+    } catch (e) {
+      console.warn("[Honoua] history write skipped:", e);
+      return false;
+    }
+  };
+})();
+
+
