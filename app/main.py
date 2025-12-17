@@ -9,7 +9,6 @@ from fastapi import Response
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
-from app.routers import challenges
 from app.routers import tokens
 from app.routers import logs as logs_router
 from app.routers import groups_a41
@@ -20,6 +19,11 @@ from app.telemetry.metrics import get_metrics_snapshot, record_request
 from app.telemetry.metrics import get_prometheus_metrics
 from fastapi.staticfiles import StaticFiles
 #import importlib
+
+try:
+    from app.routers import challenges
+except ImportError:
+    challenges = None
 
 try:
     from app.routers import cart_history
@@ -50,7 +54,9 @@ app.include_router(tokens.router)        # /tokens/...
 app.include_router(emissions_summary_a40_router)
 app.include_router(groups_a41.router)
 app.include_router(groups_a42.router)
-app.include_router(challenges.router)
+if challenges is not None:
+    app.include_router(challenges.router)
+
 # ... après la création de l'app FastAPI
 app.include_router(logs_router.router)
 if cart_history is not None:
