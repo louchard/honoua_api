@@ -29,17 +29,7 @@ Base.metadata.create_all(bind=engine)
 # Seed: un produit présent uniquement en BDD (pas dans la liste mémoire)
 with TestingSessionLocal() as s:
     if not s.get(ProductDB, "9990000000000"):
-        s.add(ProductDB(ean="9990000000000", name="Produit DB Test", category="CatTest"))
-        s.commit()
-
-
-# Préparer le schéma
-Base.metadata.create_all(bind=engine)
-
-# Seed: un produit présent uniquement en BDD (pas dans la liste mémoire)
-with TestingSessionLocal() as s:
-    if not s.get(ProductDB, "9990000000000"):
-        s.add(ProductDB(ean="9990000000000", name="Produit DB Test", category="CatTest"))
+        s.add(ProductDB(ean13_clean="9990000000000", product_name="Produit DB Test", category="CatTest"))
         s.commit()
 
 def override_get_db():
@@ -57,6 +47,6 @@ def test_get_product_reads_from_db_first():
     r = client.get("/products/9990000000000")
     assert r.status_code == 200
     data = r.json()
-    assert data["ean"] == "9990000000000"
-    assert data["name"] == "Produit DB Test"
-    assert data["category"] == "CatTest"
+        assert data["ean13_clean"] == "9990000000000"
+        assert data["product_name"] == "Produit DB Test"
+        assert data["category"] == "CatTest"
