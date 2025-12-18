@@ -5,9 +5,13 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app, Base, ProductDB, get_db
 
 # Crée une base SQLite de test sur disque (plus fiable qu'in-memory)
-TEST_DB_URL = "sqlite:///./test_products.db"
+TEST_DB_PATH = "./test_products.db"
+if os.path.exists(TEST_DB_PATH):
+    os.remove(TEST_DB_PATH)
+
+TEST_DB_URL = f"sqlite:///{TEST_DB_PATH}"
 engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False}, future=True)
-TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
 
 # Préparer le schéma
 Base.metadata.create_all(bind=engine)
