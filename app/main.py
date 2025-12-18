@@ -42,7 +42,7 @@ from fastapi import FastAPI, HTTPException, Depends, APIRouter
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
-api = APIRouter(prefix="/api")
+api = APIRouter()
 if notifications_router is not None and hasattr(notifications_router, "router"):
     app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 # Middleware d'accès (A39)
@@ -108,11 +108,7 @@ _FAKE_PRODUCTS: List[Product] = [
 # ====== Health (racine) ======
 @app.get("/health")
 def health():
-    env = os.getenv("ENV", "production")
-    db_url = (os.getenv("DATABASE_URL") or "").strip()
-
-    if not db_url:
-        return {"status": "ok", "env": env, "db": "not_configured"}
+    return {"status": "ok"}
 
     # Test DB léger (Option A) : SELECT 1
     try:
@@ -304,7 +300,9 @@ def compare_products(payload: CompareRequest):
     return CompareResponse(results=results)
 
 # Monter le router /api
-app.include_router(api)
+app.include_router(api)  # sans préfixe (compat tests)
+app.include_router(api, prefix="/api")  # avec préfixe (prod stable)
+
 
 
 # === A36 — Emissions API (squelette) ===
