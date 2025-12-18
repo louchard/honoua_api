@@ -10,7 +10,27 @@ if os.path.exists(TEST_DB_PATH):
     os.remove(TEST_DB_PATH)
 
 TEST_DB_URL = f"sqlite:///{TEST_DB_PATH}"
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False}, future=True)
+engine = create_engine(
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False},
+    future=True
+)
+
+TestingSessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    future=True
+)
+
+# Préparer le schéma
+Base.metadata.create_all(bind=engine)
+
+# Seed: un produit présent uniquement en BDD (pas dans la liste mémoire)
+with TestingSessionLocal() as s:
+    if not s.get(ProductDB, "9990000000000"):
+        s.add(ProductDB(ean="9990000000000", name="Produit DB Test", category="CatTest"))
+        s.commit()
 
 
 # Préparer le schéma
