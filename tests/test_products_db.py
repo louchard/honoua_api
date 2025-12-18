@@ -46,7 +46,9 @@ client = TestClient(app)
 def test_get_product_reads_from_db_first():
     r = client.get("/products/9990000000000")
     assert r.status_code == 200
+
     data = r.json()
-        assert data["ean13_clean"] == "9990000000000"
-        assert data["product_name"] == "Produit DB Test"
-        assert data["category"] == "CatTest"
+    assert data["ean13_clean"] == "9990000000000"
+    assert data["product_name"] == "Produit DB Test"
+    assert data["category"] == "CatTest"
+
