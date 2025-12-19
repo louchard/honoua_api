@@ -18,6 +18,8 @@ from app.core.logger import logger
 from app.telemetry.metrics import get_metrics_snapshot, record_request
 from app.telemetry.metrics import get_prometheus_metrics
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect
+
 #import importlib
 
 try:
@@ -162,13 +164,31 @@ if DB_URL:
 else:
     print("[DB] DATABASE_URL not configured (DB disabled)")
 
+# --- Auto-init DB schema for SQLite (tests/local) ---
+try:
+    if engine is not None and engine.url.get_backend_name() == "sqlite":
+
+     # IMPORTANT: ensure all models are imported so Base.metadata is complete
+        from app.models import audit_event  # noqa: F401
+        from app.models import notifications  # noqa: F401
+
+        Base.metadata.create_all(bind=engine)
+except Exception as e:
+    logger.warning(f"[DB] SQLite schema auto-create skipped: {e}")
+
 
 Base = declarative_base()
+# --- SQLite: auto-create tables for local/tests ---
+if DB_URL.startswith("sqlite"):
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[DB] SQLite schema created (Base.metadata.create_all)")
+    except Exception as e:
+        print(f"[DB] SQLite schema creation skipped: {e}")
+
 
 class ProductDB(Base):
     __tablename__ = "products"
-   
-
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ean13_clean: Mapped[str] = mapped_column(String, index=True)
     product_name: Mapped[str] = mapped_column(String)
@@ -241,10 +261,26 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
+def get_db_optional() -> Generator[Optional[Session], None, None]:
+    """
+    Variante tolérante : si la DB n’est pas configurée, on continue sans DB (fallback mémoire).
+    Utile pour les tests CI et le mode MVP.
+    """
+    if SessionLocal is None:
+        yield None
+        return
 
-@api.get("/products/{ean}", response_model=Product)
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@api.get("/products/{ean}")
 def get_product(ean: str, db: Session = Depends(get_db)):
-
+    
+    # 1) Priorité DB si disponible
+    
     try:
         db_obj = (
             db.query(ProductDB)
@@ -252,16 +288,35 @@ def get_product(ean: str, db: Session = Depends(get_db)):
             .first()
         )
         if db_obj:
-            return Product(
-                ean=ean,
-                name=db_obj.product_name,
-                brand=db_obj.brand,       
-                category=db_obj.category,
-            )
+            # JSON attendu par les tests + alias pour compat
+            return {
+                "ean13_clean": db_obj.ean13_clean,
+                "product_name": db_obj.product_name,
+                "brand": db_obj.brand,
+                "category": db_obj.category,
+                # alias (front / ancien contrat)
+                "ean": db_obj.ean13_clean,
+                "name": db_obj.product_name,
+            }
     except Exception as e:
         logger.error(f"[get_product] Erreur DB pour EAN {ean}: {e}")
 
+
+    # 2) Fallback mémoire (CI / MVP)
+    p = next((x for x in _FAKE_PRODUCTS if x.ean == ean), None)
+    if p:
+        return {
+            "ean13_clean": p.ean,
+            "product_name": p.name,
+            "brand": p.brand,
+            "category": p.category,
+            # alias (front / ancien contrat)
+            "ean": p.ean,
+            "name": p.name,
+        }
+
     raise HTTPException(status_code=404, detail="Product not found")
+
 
 @api.post("/products/search", response_model=List[Product])
 def search_products(query: ProductSearchQuery):
