@@ -199,3 +199,17 @@ async def app_client(_SessionLocal):
         yield ac
 
     app.dependency_overrides.clear()
+
+    # --- SAFETY: reset FastAPI dependency overrides between tests ---
+import pytest
+from app.main import app
+
+@pytest.fixture(autouse=True)
+def _reset_dependency_overrides():
+    """
+    Empêche la pollution d'état entre tests (override get_db, etc.).
+    Symptom: un test passe seul mais échoue dans la suite.
+    """
+    yield
+    app.dependency_overrides.clear()
+
