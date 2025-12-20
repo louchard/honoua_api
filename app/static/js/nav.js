@@ -1,0 +1,40 @@
+(function () {
+  const routes = {
+    home: "/static/home.html",
+    eco: "/static/eco-select.html",
+    scan: "/static/scan-impact.html",
+    suivi: "/static/suivi-co2.html",
+  };
+
+  function setActiveByUrl() {
+    const path = window.location.pathname || "";
+    const items = document.querySelectorAll(".honoua-footer-nav__item");
+    items.forEach((btn) => {
+      const key = btn.getAttribute("data-page");
+      const url = routes[key] || "";
+      const isActive = url && path.endsWith(url.replace("/static/", "/static/"));
+      btn.classList.toggle("is-active", isActive);
+    });
+  }
+
+  function initFooterNav() {
+    const nav = document.querySelector(".honoua-footer-nav");
+    if (!nav) return;
+
+    nav.addEventListener("click", (e) => {
+      const btn = e.target.closest(".honoua-footer-nav__item");
+      if (!btn) return;
+
+      const page = btn.getAttribute("data-page");
+      const targetUrl = routes[page];
+      if (!targetUrl) return;
+
+      if (window.location.pathname === targetUrl) return;
+      window.location.href = targetUrl;
+    });
+
+    setActiveByUrl();
+  }
+
+  document.addEventListener("DOMContentLoaded", initFooterNav);
+})();

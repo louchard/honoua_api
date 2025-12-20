@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Honoua – Suivi CO₂</title>
+  <!-- Même CSS que EcoSelect / ScanImpact -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="suivico2-page ecoselect-page">
+  <!-- CONTENU PRINCIPAL SUIVI CO₂ -->
+  <main class="suivico2-main ecoselect-main">
+
+       <!-- NAVIGATION INTERNE (Suivi CO₂) -->
+    <nav id="suivi-co2-nav" class="suivi-co2-nav card">
+      <a class="suivi-co2-nav__link" href="#suivi-budget">Budget</a>
+      <a class="suivi-co2-nav__link" href="#suivi-evolution">Évolution</a>
+      <a class="suivi-co2-nav__link" href="#co2-cart-history-section">Historique</a>
+      <a class="suivi-co2-nav__link" href="#co2-challenges-section">Défis perso</a>
+      <a class="suivi-co2-nav__link" href="#co2-challenges-collective-section">Défis collectifs</a>
+    </nav>
+
+
+
+    <!-- BLOC 1 – Budget carbone annuel -->
+    <section id="suivi-budget" class="card suivi-budget">
+      <div class="suivi-budget-header">
+        <h2>Budget carbone annuel</h2>
+        <p class="suivi-budget-sub">
+          Objectif GIEC : 2&nbsp;t CO₂ / personne / an. Le budget repart au 1er janvier.
+        </p>
+      </div>
+
+      <div class="suivi-budget-body">
+        <!-- Paramétrage du foyer -->
+        <div class="suivi-household">
+          <label for="household-size-input" class="suivi-household__label">
+            Nombre de personne(s) dans le foyer
+          </label>
+
+          <div class="suivi-household__controls">
+            <input
+              id="household-size-input"
+              class="suivi-household__input"
+              type="number"
+              min="1"
+              max="10"
+              step="1"
+              inputmode="numeric"
+              placeholder="ex : 1"
+            />
+            <button
+              type="button"
+              id="household-size-save"
+              class="suivi-household__btn">
+              Mettre à jour
+            </button>
+          </div>
+        </div>
+
+        <div class="suivi-budget-line">
+          <span class="label">Budget annuel du foyer</span>
+          <span id="budget-total" class="value">— kg</span>
+        </div>
+
+        <div class="suivi-budget-line">
+          <span class="label">CO₂ consommé (depuis le 1er janvier)</span>
+          <span id="co2-consomme" class="value">— kg</span>
+        </div>
+
+        <div class="suivi-budget-line">
+          <span class="label">Budget utilisé</span>
+          <span id="budget-used" class="value">— %</span>
+        </div>
+
+        <div class="suivi-budget-line">
+          <span class="label">Budget restant</span>
+          <span id="budget-left" class="value">— kg (— %)</span>
+        </div>
+
+        <div class="suivi-budget-progress">
+          <div id="budget-progress-bar" class="progress-bar"></div>
+        </div>
+
+        <div id="budget-status" class="suivi-budget-status status-green">
+          <!-- Texte de statut inséré en JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- BLOC 2 – Évolution dans le temps -->
+    <section id="suivi-evolution" class="card suivi-evolution">
+      <div class="suivi-evolution-header">
+        <h2>Évolution de mes émissions</h2>
+        <p class="suivi-evolution-sub">
+          Visualisez vos émissions et distances par période.
+        </p>
+
+        <div class="suivi-evolution-period-toggle">
+          <button
+            type="button"
+            id="evo-period-month"
+            class="evo-period-btn evo-period-btn-active">
+            Mois
+          </button>
+          <button
+            type="button"
+            id="evo-period-week"
+            class="evo-period-btn">
+            Semaines
+          </button>
+        </div>
+
+        <div class="suivi-evolution-metric-toggle">
+          <button type="button" id="evo-metric-co2" class="evo-metric-btn evo-metric-btn-active">CO₂ (kg)</button>
+          <button type="button" id="evo-metric-distance" class="evo-metric-btn">Distance (km)</button>
+        </div>
+
+        <p class="suivi-evolution-legend" id="evo-legend">
+          Graphique : CO₂ (kg) par période
+        </p>
+
+
+
+      </div>
+
+      <div class="suivi-evolution-body">
+        <div class="suivi-evolution-chart">
+          <canvas id="evo-chart" width="320" height="180">
+            Votre navigateur ne supporte pas l’affichage du graphique.
+          </canvas>
+        </div>
+
+        <div class="suivi-evolution-summary">
+          <div class="summary-line">
+            <span class="label">Période actuelle</span>
+            <span id="evo-current-period" class="value">—</span>
+          </div>
+
+          <div class="summary-line">
+            <span class="label">CO₂ de la période</span>
+            <span id="evo-current-co2" class="value">— kg</span>
+          </div>
+
+          <div class="summary-line">
+            <span class="label">Distance totale</span>
+            <span id="evo-current-distance" class="value">— km</span>
+          </div>
+
+          <div class="summary-line">
+            <span class="label">Évolution CO₂ vs période précédente</span>
+            <span id="evo-co2-change" class="value">— %</span>
+          </div>
+
+          <div class="summary-line">
+            <span class="label">Évolution distance vs période précédente</span>
+            <span id="evo-distance-change" class="value">— %</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BLOC 3 – Historique des paniers -->
+    <section id="co2-cart-history-section" class="card co2-cart-history">
+      <div class="header">
+        <div class="title-block">
+          <h2 class="title">Historique de vos paniers CO₂</h2>
+          <p class="subtitle">
+            Retrouvez vos derniers paniers validés et leur impact carbone.
+          </p>
+        </div>
+      </div>
+
+      <div id="co2-cart-history-list" class="co2-cart-history-list">
+        <p class="co2-cart-history-empty">
+          Chargement de votre historique...
+        </p>
+      </div>
+    </section>
+
+    <!-- BLOC 4 – Défis CO₂ -->
+    <section id="co2-challenges-section" class="co2-challenges-section card">
+    
+
+      <button id="co2-challenges-refresh" class="co2-challenges-refresh-btn">
+        🔄 Mettre à jour les défis
+      </button>
+      <h2 class="co2-challenges-title">🏆 Défis personnels</h2>
+
+      <div id="co2-challenges-list" class="co2-challenges-list">
+        <div class="co2-challenge-empty">
+          Aucun défi actif pour le moment. Active ton premier défi pour suivre ta progression.
+        </div>
+      </div>
+    </section>
+
+        <!-- BLOC 5 – Défis collectifs (EN CONSTRUCTION) -->
+    <section id="co2-challenges-collective-section" class="co2-challenges-section card">
+      <div class="header">
+        <div class="title-block">
+          <h2 class="co2-challenges-title">🤝 Défis collectifs</h2>
+          <p class="subtitle">
+            Défis en groupe (entre amis, entreprise, communauté). Cette partie arrive bientôt.
+          </p>
+        </div>
+      </div>
+
+      <div id="co2-challenges-collective" class="co2-challenges-list">
+        <div id="co2-challenges-collective-status" class="co2-challenge-empty">
+          🚧 En construction — Les défis collectifs seront disponibles dans une prochaine version.
+        </div>
+      </div>
+    </section>
+
+
+  </main>
+
+  <!-- FOOTER / MENU PRINCIPAL -->
+  <footer class="honoua-footer-nav">
+    <button class="honoua-footer-nav__item" data-page="home">
+      <span class="honoua-footer-nav__icon">🏠</span>
+      <span class="honoua-footer-nav__label">Accueil</span>
+    </button>
+
+    <button class="honoua-footer-nav__item" data-page="eco">
+      <span class="honoua-footer-nav__icon">⛶</span>
+      <span class="honoua-footer-nav__label">EcoSelect</span>
+    </button>
+
+    <button class="honoua-footer-nav__item" data-page="scan">
+      <span class="honoua-footer-nav__icon">🛒</span>
+      <span class="honoua-footer-nav__label">ScanImpact</span>
+    </button>
+
+    <button class="honoua-footer-nav__item is-active" data-page="suivi">
+      <span class="honoua-footer-nav__icon">📊</span>
+      <span class="honoua-footer-nav__label">Suivi CO₂</span>
+    </button>
+  </footer>
+
+  <script src="js/honoua-core.js"></script>
+  <script src="js/suivi-co2.js"></script>
+  <script src="js/nav.js"></script>
+ 
+</body>
+</html>

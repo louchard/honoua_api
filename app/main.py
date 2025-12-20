@@ -1,6 +1,12 @@
 ﻿import importlib
-from fastapi import FastAPI, HTTPException, Depends, APIRouter
+import os
+import math
+from sqlalchemy import String, Float, Integer, create_engine
+from sqlalchemy import String, Float, BigInteger, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
+from fastapi import FastAPI, HTTPException, Depends, APIRouter, Query
 from fastapi import Response
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
 from app.routers import tokens
@@ -11,7 +17,22 @@ from app.routers import notifications as notifications_router  # 👈 IMPORTANT
 from app.core.logger import logger
 from app.telemetry.metrics import get_metrics_snapshot, record_request
 from app.telemetry.metrics import get_prometheus_metrics
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect
+
 #import importlib
+
+try:
+    from app.routers import challenges
+except ImportError:
+    challenges = None
+
+try:
+    from app.routers import cart_history
+except ImportError:
+    cart_history = None
+
+
 try:
     notifications_router = importlib.import_module("app.routers.notifications")
 except Exception:
@@ -19,36 +40,31 @@ except Exception:
 from app.routers.emissions_summary_a40 import router as emissions_summary_a40_router
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 
-try:
-    notifications_router = importlib.import_module("app.routers.notifications")
-except Exception:
-    notifications_router = None
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
-api = APIRouter(prefix="/api")
+api = APIRouter()
 if notifications_router is not None and hasattr(notifications_router, "router"):
     app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 # Middleware d'accès (A39)
 from time import perf_counter
-@app.middleware("http")
-async def access_log(request, call_next):
-    start = perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (perf_counter() - start) * 1000
-    logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({elapsed_ms:.1f} ms)")
-    return response
 
 
-
-# ... après la création de l'app FastAPI
-app.include_router(logs_router.router)
 # Routeurs montés au niveau racine
 app.include_router(tokens.router)        # /tokens/...
 app.include_router(emissions_summary_a40_router)
 app.include_router(groups_a41.router)
 app.include_router(groups_a42.router)
+if challenges is not None:
+    app.include_router(challenges.router)
+
+# ... après la création de l'app FastAPI
+app.include_router(logs_router.router)
+if cart_history is not None:
+    app.include_router(cart_history.router)
+
+
 
 # Router prefixé /api pour compat front
 if notifications_router is not None and hasattr(notifications_router, "router"):
@@ -70,14 +86,19 @@ async def access_log(request, call_next):
     return response
 
 
+from pydantic import BaseModel
+from typing import List, Optional
+
 # ====== Modèles Pydantic (API) ======
 class Product(BaseModel):
     ean: str
     name: Optional[str] = None
+    brand: Optional[str] = None
     category: Optional[str] = None
 
 class ProductSearchQuery(BaseModel):
     q: str
+
 
 # ====== Données statiques (fallback mémoire) ======
 _FAKE_PRODUCTS: List[Product] = [
@@ -90,6 +111,17 @@ _FAKE_PRODUCTS: List[Product] = [
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+    # Test DB léger (Option A) : SELECT 1
+    try:
+        # IMPORTANT: on force une connexion ponctuelle pour le diagnostic
+        test_engine = create_engine(db_url, echo=False, future=True)
+        with test_engine.connect() as conn:
+            conn.exec_driver_sql("SELECT 1")
+        return {"status": "ok", "env": env, "db": "ok"}
+    except Exception:
+        return {"status": "ok", "env": env, "db": "error"}
+
     
 # code pour la télémetry
 @app.get("/metrics", tags=["metrics"])
@@ -114,38 +146,101 @@ async def read_metrics_prometheus():
 # ==========================
 #      SQLAlchemy (DB)
 # ==========================
-import os
-from sqlalchemy import String, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
+
 
 # URL DB via .env (compose) sinon fallback SQLite local
-DB_URL = os.getenv("DATABASE_URL", "sqlite:///./honoua.db")
+# DB_URL = os.getenv("DATABASE_URL", "sqlite:///./honoua.db")
+# APRÈS (version MVP, plus explicite)
 
-# Pour SQLite, besoin de ce connect_args
-connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
-engine = create_engine(DB_URL, echo=False, future=True, connect_args=connect_args)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+DB_URL = (os.getenv("DATABASE_URL") or "").strip()
+
+engine = None
+SessionLocal = None
+
+if DB_URL:
+    engine = create_engine(DB_URL, echo=False, future=True)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    print("[DB] DATABASE_URL configured")
+else:
+    print("[DB] DATABASE_URL not configured (DB disabled)")
+
+# --- Auto-init DB schema for SQLite (tests/local) ---
+try:
+    if engine is not None and engine.url.get_backend_name() == "sqlite":
+
+     # IMPORTANT: ensure all models are imported so Base.metadata is complete
+        from app.models import audit_event  # noqa: F401
+        from app.models import notifications  # noqa: F401
+
+        Base.metadata.create_all(bind=engine)
+except Exception as e:
+    logger.warning(f"[DB] SQLite schema auto-create skipped: {e}")
+
+
 Base = declarative_base()
+# --- SQLite: auto-create tables for local/tests ---
+if DB_URL.startswith("sqlite"):
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[DB] SQLite schema created (Base.metadata.create_all)")
+    except Exception as e:
+        print(f"[DB] SQLite schema creation skipped: {e}")
+
 
 class ProductDB(Base):
     __tablename__ = "products"
-    ean: Mapped[str] = mapped_column(String, primary_key=True, index=True)
-    name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ean13_clean: Mapped[str] = mapped_column(String, index=True)
+    product_name: Mapped[str] = mapped_column(String)
+    brand: Mapped[Optional[str]] = mapped_column(String)
+    category: Mapped[Optional[str]] = mapped_column(String)
 
-# Création des tables si besoin (no-op si déjà existantes)
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception:
-    # Pas bloquant si la DB n’est pas prête — on garde le fallback mémoire
-    pass
+    # Colonnes carbone (kg CO2e)
+    carbon_product_kgco2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    carbon_pack_kgco2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    # Poids net (kg)
+    net_weight_kg: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Origine
+    origin_country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    origin_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    origin_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    zone_geo: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    # Confiance sur l’origine / la donnée
+    # origin_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+# Coordonnées de référence : centre approximatif de la France
+FRANCE_LAT = 46.603354
+FRANCE_LON = 1.888334
+
+# Facteur d'émission pour le transport (kg CO2e / tonne.km)
+# Valeur MVP simple à affiner plus tard.
+EMISSION_FACTOR_TONNE_KM = 0.1
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calcul de la distance entre deux points GPS (lat, lon) en km
+    en utilisant la formule de Haversine.
+    """
+    # Conversion en radians
+    rlat1 = math.radians(lat1)
+    rlon1 = math.radians(lon1)
+    rlat2 = math.radians(lat2)
+    rlon2 = math.radians(lon2)
+
+    dlat = rlat2 - rlat1
+    dlon = rlon2 - rlon1
+
+    a = math.sin(dlat / 2) ** 2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+
+    # Rayon moyen de la Terre en km
+    R = 6371.0
+    return R * c
+
 
 # ==========================
 #        Products
@@ -155,54 +250,88 @@ def list_products():
     """Retourne la liste statique (smoke test)."""
     return _FAKE_PRODUCTS
 
-@api.get("/products/{ean}", response_model=Product)
-def get_product(ean: str, db: Session = Depends(get_db)):
-    """
-    Lecture en BDD (si présente), sinon fallback mémoire.
-    """
-    # 1) Essayer la BDD
-    try:
-        db_obj = db.get(ProductDB, ean)
-        if db_obj:
-            return Product(ean=db_obj.ean, name=db_obj.name, category=db_obj.category)
-    except Exception:
-        # Si la BDD n'est pas dispo ou autre erreur, on ignore et on tente le fallback
-        pass
+from typing import Generator
 
-    # 2) Fallback mémoire
-    for p in _FAKE_PRODUCTS:
-        if p.ean == ean:
-            return p
+def get_db() -> Generator[Session, None, None]:
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="DB not configured")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def get_db_optional() -> Generator[Optional[Session], None, None]:
+    """
+    Variante tolérante : si la DB n’est pas configurée, on continue sans DB (fallback mémoire).
+    Utile pour les tests CI et le mode MVP.
+    """
+    if SessionLocal is None:
+        yield None
+        return
+
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@api.get("/products/{ean}")
+def get_product(ean: str, db: Session = Depends(get_db)):
+    
+    # 1) Priorité DB si disponible
+    
+    try:
+        db_obj = (
+            db.query(ProductDB)
+            .filter(ProductDB.ean13_clean == ean)
+            .first()
+        )
+        if db_obj:
+            # JSON attendu par les tests + alias pour compat
+            return {
+                "ean13_clean": db_obj.ean13_clean,
+                "product_name": db_obj.product_name,
+                "brand": db_obj.brand,
+                "category": db_obj.category,
+                # alias (front / ancien contrat)
+                "ean": db_obj.ean13_clean,
+                "name": db_obj.product_name,
+            }
+    except Exception as e:
+        logger.error(f"[get_product] Erreur DB pour EAN {ean}: {e}")
+
+
+    # 2) Fallback mémoire (CI / MVP)
+    p = next((x for x in _FAKE_PRODUCTS if x.ean == ean), None)
+    if p:
+        return {
+            "ean13_clean": p.ean,
+            "product_name": p.name,
+            "brand": p.brand,
+            "category": p.category,
+            # alias (front / ancien contrat)
+            "ean": p.ean,
+            "name": p.name,
+        }
+
     raise HTTPException(status_code=404, detail="Product not found")
 
+
 @api.post("/products/search", response_model=List[Product])
-def search_products(query: ProductSearchQuery, db: Session = Depends(get_db)):
+def search_products(query: ProductSearchQuery):
     """
-    Recherche très simple par nom. On tente la BDD d'abord (full scan),
-    sinon on revient au fallback mémoire.
+    MVP (Option A): recherche uniquement en mémoire, sans dépendre de la DB.
     """
     q = (query.q or "").strip().lower()
     if not q:
         return []
 
-    results: List[Product] = []
-    # 1) Essayer la BDD (si table existe)
-    try:
-        rows = db.query(ProductDB).all()
-        for row in rows:
-            if row.name and q in row.name.lower():
-                results.append(Product(ean=row.ean, name=row.name, category=row.category))
-    except Exception:
-        # Si erreur DB, on ignore
-        pass
+    return [
+        p for p in _FAKE_PRODUCTS
+        if (p.name or "").lower().find(q) != -1
+    ]
 
-    # 2) Fallback mémoire (compléter les résultats)
-    seen = {r.ean for r in results}
-    for p in _FAKE_PRODUCTS:
-        if p.name and q in p.name.lower() and p.ean not in seen:
-            results.append(p)
-
-    return results
 
 # ==========================
 #        Compare
@@ -226,7 +355,9 @@ def compare_products(payload: CompareRequest):
     return CompareResponse(results=results)
 
 # Monter le router /api
-app.include_router(api)
+app.include_router(api)  # sans préfixe (compat tests)
+app.include_router(api, prefix="/api")  # avec préfixe (prod stable)
+
 
 
 # === A36 — Emissions API (squelette) ===
@@ -257,46 +388,17 @@ class EmissionCalcOut(BaseModel):
     created_at: Optional[str] = None
     session_id: Optional[str] = None
     note: str = "A36: endpoint squelette — logique à implémenter (Étapes suivantes)."
+
 @app.post("/emissions/calc", response_model=EmissionCalcOut, tags=["emissions"])
 async def calc_emissions(payload: EmissionCalcIn):
     """
-    A36 — Calcul réel + idempotence:
-    - Sélection facteur
-    - Normalisation
-    - Calcul
-    - UPSERT par idempotency_key (retourne la ligne existante si déjà insérée)
+    A36 — Calcul réel + idempotence (à implémenter plus tard).
+    MVP: endpoint volontairement désactivé tant que la DB sync n’est pas migrée.
     """
-    import asyncpg
-    import uuid
-    import hashlib
-    from datetime import datetime
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="DB not configured")
+    raise HTTPException(status_code=501, detail="Not implemented (sync DB migration pending)")
 
-    # Connexion simple (dev)
-    conn = await asyncpg.connect("postgresql://honou:Honou2025Lg!@postgres:5432/honoua")
-
-    # 0) Clé d'idempotence (déterministe si non fournie)
-    # On utilise un hash des champs "stables" du calcul
-    if not payload.idempotency_key:
-        base = f"{payload.product_id}|{payload.category_code}|{payload.quantity}|{payload.quantity_unit}|{payload.session_id or ''}"
-        payload.idempotency_key = hashlib.sha256(base.encode("utf-8")).hexdigest()
-
-    # 1) Sélection du facteur (catégorie + unité)
-    factor_row = await conn.fetchrow(
-        """
-        SELECT id, unit, factor_gco2e_per_unit, version, source
-        FROM emission_factors
-        WHERE category_code = $1 AND unit = $2
-        ORDER BY valid_from DESC NULLS LAST
-        LIMIT 1;
-        """,
-        payload.category_code,
-        payload.quantity_unit,
-    )
-    if not factor_row:
-        await conn.close()
-        return EmissionCalcOut(
-            note=f"A36: aucun facteur trouvé pour {payload.category_code}/{payload.quantity_unit}"
-        )
 
     factor_value = float(factor_row["factor_gco2e_per_unit"])
     factor_unit = factor_row["unit"]
@@ -384,200 +486,26 @@ async def get_emissions_history(
     product_id: Optional[str] = None,
     category_code: Optional[str] = None,
     session_id: Optional[str] = None,
-    date_from: Optional[str] = None,  # ISO (ex: 2025-10-23T00:00:00Z)
-    date_to: Optional[str] = None,    # ISO
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     limit: int = 50,
 ):
     """
-    A36 — Historique minimal des calculs.
-    - Filtres: product_id, category_code, session_id, date_from, date_to
-    - Tri: plus récents d'abord
-    - Limit: 50 par défaut
+    A36 — Historique (à implémenter plus tard).
+    MVP: endpoint volontairement désactivé tant que la DB sync n’est pas migrée.
     """
-    import asyncpg
-
-    conn = await asyncpg.connect("postgresql://honou:Honou2025Lg!@postgres:5432/honoua")
-
-    # Construction dynamique et sûre du WHERE + paramètres
-    where = []
-    params = []
-
-    def add(cond, val):
-        where.append(cond)
-        params.append(val)
-
-    if product_id:
-        add(f"c.product_id = ${len(params)+1}", product_id)
-    if category_code:
-        add(f"c.category_code = ${len(params)+1}", category_code)
-    if session_id:
-        add(f"c.session_id = ${len(params)+1}", session_id)
-    if date_from:
-        add(f"c.created_at >= ${len(params)+1}::timestamptz", date_from)
-    if date_to:
-        add(f"c.created_at <= ${len(params)+1}::timestamptz", date_to)
-
-    where_sql = " AND ".join(where) if where else "TRUE"
-
-    query = f"""
-        SELECT
-            c.id,
-            c.product_id,
-            c.category_code,
-            c.quantity,
-            c.quantity_unit,
-            c.normalized_qty,
-            c.emissions_gco2e,
-            c.method,
-            c.session_id,
-            c.created_at,
-            f.id   AS factor_id,
-            f.unit AS factor_unit,
-            f.factor_gco2e_per_unit AS factor_value,
-            f.version AS factor_version,
-            f.source  AS factor_source
-        FROM emission_calculations c
-        JOIN emission_factors f ON f.id = c.factor_id
-        WHERE {where_sql}
-        ORDER BY c.created_at DESC
-        LIMIT ${len(params)+1};
-    """
-    params.append(limit)
-
-    rows = await conn.fetch(query, *params)
-    await conn.close()
-
-    out: List[EmissionHistoryItem] = []
-    for r in rows:
-        out.append(
-            EmissionHistoryItem(
-                id=str(r["id"]),
-                product_id=r["product_id"],
-                category_code=r["category_code"],
-                quantity=float(r["quantity"]) if r["quantity"] is not None else None,
-                quantity_unit=r["quantity_unit"],
-                emissions_gco2e=float(r["emissions_gco2e"]) if r["emissions_gco2e"] is not None else None,
-                normalized_qty=float(r["normalized_qty"]) if r["normalized_qty"] is not None else None,
-                method=r["method"],
-                session_id=r["session_id"],
-                created_at=(r["created_at"].isoformat() if r["created_at"] else None),
-                factor=FactorInfo(
-                    id=r["factor_id"],
-                    unit=r["factor_unit"],
-                    value=float(r["factor_value"]) if r["factor_value"] is not None else None,
-                    version=r["factor_version"],
-                    source=r["factor_source"],
-                ),
-                note="A36: history minimal",
-            )
-        )
-    return out
-
-# === Hotfix A35 — Endpoints minimum pour la CI (statuts attendus) ===
-from typing import List as _List  # éviter conflit de noms
-
-# Mémoire locale simple pour satisfaire les tests
-_FAKE_PRODUCTS = {
-    "3560071234567": {"ean": "3560071234567", "name": "Lait UHT", "brand": "Generic", "category": "Lait"},
-    "3017620422003": {"ean": "3017620422003", "name": "Pâte à tartiner", "brand": "Generic", "category": "Pâte à tartiner"},
-    "9990000000000": {"ean": "9990000000000", "name": "Produit DB Test", "brand": "DB", "category": "CatTest"},
-    "1234567890123": {"ean": "1234567890123", "name": "Yaourt nature", "brand": "Generic", "category": "Yaourt"},
-}
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="DB not configured")
+    raise HTTPException(status_code=501, detail="Not implemented (sync DB migration pending)")
 
 
-@app.get("/products", tags=["products"])
-async def list_products():
-    return list(_FAKE_PRODUCTS.values())
 
-
-@app.get("/products/{ean}", tags=["products"])
-async def get_product(ean: str):
-    # Cas 404 spécifique attendu par les tests : "Product not found"
-    if ean == "0000000000000":
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Product not found")
-    # Sinon, renvoyer un produit (fake si inconnu)
-    return _FAKE_PRODUCTS.get(ean, {"ean": ean, "name": "Unknown", "brand": "Unknown", "category": "Unknown"})
-
-class ProductSearchIn(BaseModel):
-    q: str
-
-@app.post("/products/search", tags=["products"])
-async def search_products(payload: ProductSearchIn):
-    # Retour minimal avec status 200
-    term = (payload.q or "").lower()
-    results = [p for p in _FAKE_PRODUCTS.values() if term in p["name"].lower()]
-    return results
-
-
-class CompareIn(BaseModel):
-    eans: _List[str]
-
-@app.post("/products/search", tags=["products"])
-async def search_products(payload: ProductSearchIn):
-    term = (payload.q or "").lower()
-    results = [p for p in _FAKE_PRODUCTS.values() if term in p.get("name", "").lower()]
-    # Les tests attendent une LISTE
-    return results
-
-
-# === Hotfix A35 — Endpoints minimum pour la CI (copie pour ci_main) ===
-from typing import List as _List
-from pydantic import BaseModel
-
-# Mémoire locale simple pour satisfaire les tests
-_FAKE_PRODUCTS = {
-    "3560071234567": {"ean": "3560071234567", "name": "Lait UHT", "brand": "Generic", "category": "Lait"},
-    "3017620422003": {"ean": "3017620422003", "name": "Pâte à tartiner", "brand": "Generic", "category": "Pâte à tartiner"},
-    "9990000000000": {"ean": "9990000000000", "name": "Produit DB Test", "brand": "DB", "category": "CatTest"},
-    # Produit pour que la recherche 'yaourt' renvoie un résultat
-    "1234567890123": {"ean": "1234567890123", "name": "Yaourt nature", "brand": "Generic", "category": "Yaourt"},
-}
-
-@app.get("/products", tags=["products"])
-async def list_products():
-    # Les tests attendent une LISTE
-    return list(_FAKE_PRODUCTS.values())
-
-@app.get("/products/{ean}", tags=["products"])
-async def get_product(ean: str):
-    # Cas 404 spécifique attendu par les tests : "Product not found"
-    if ean == "0000000000000":
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Product not found")
-    # Sinon, renvoyer un produit (fake si inconnu)
-    return _FAKE_PRODUCTS.get(ean, {"ean": ean, "name": "Unknown", "brand": "Unknown", "category": "Unknown"})
-
-class ProductSearchIn(BaseModel):
-    q: str
-
-@app.post("/products/search", tags=["products"])
-async def search_products(payload: ProductSearchIn):
-    term = (payload.q or "").lower()
-    results = [p for p in _FAKE_PRODUCTS.values() if term in p.get("name", "").lower()]
-    # Les tests attendent une LISTE
-    return results
-
-
-class CompareIn(BaseModel):
-    eans: _List[str]
-
-@app.post("/compare", tags=["compare"])
-async def compare_products(payload: CompareIn):
-    items = []
-    for e in payload.eans:
-        p = _FAKE_PRODUCTS.get(e, {"ean": e, "name": "Unknown", "brand": "Unknown", "category": "Unknown"})
-        # Les tests attendent la clé 'carbon_kgCO2e'
-        items.append({"ean": p["ean"], "carbon_kgCO2e": 0.0, "meta": p})
-    return {"results": items}
 from app.routers import emissions_history
 app.include_router(emissions_history.router)
 
-from app.routers import emissions_history
-app.include_router(emissions_history.router)
+
+
 # Monter le router /api (à la fin de la section API)
-app.include_router(api)
-
 
 from app.middleware.blacklist_guard import blacklist_guard
 
@@ -599,6 +527,200 @@ if notifications_router is not None and hasattr(notifications_router, "router"):
         tags=["notifications"],
     )
 
-# Si tu utilises api comme façade
-app.include_router(api)
+from fastapi.staticfiles import StaticFiles
+
+# Servir les fichiers statiques (scanner.html)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+def compute_reliability(origin_confidence: float | None) -> tuple[int, str]:
+    """
+    Transforme origin_confidence en (reliability_score, reliability_level).
+
+    - Si origin_confidence est sur 0–100 : utilisée telle quelle.
+    - Si sur 0–1 : convertie en 0–100.
+    - Si None : score par défaut = 30 (faible).
+    """
+    if origin_confidence is None:
+        score = 30
+    else:
+        # Si la valeur semble entre 0 et 1, on la convertit en pourcentage
+        if 0 <= origin_confidence <= 1:
+            score = int(origin_confidence * 100)
+        else:
+            score = int(origin_confidence)
+
+    if score >= 80:
+        level = "élevée"
+    elif score >= 40:
+        level = "moyenne"
+    else:
+        level = "faible"
+
+    return score, level
+
+
+@app.get("/api/v1/co2/product/{ean}")
+async def get_co2_product(
+    ean: str,
+    user_lat: float | None = Query(None),
+    user_lon: float | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint MVP pour retourner les données CO₂ d’un produit à partir de l’EAN.
+    Lit dans honou.products (ProductDB) et renvoie un JSON normalisé pour le front.
+    """
+
+    # 1) Validation simple de l’EAN (8 à 14 chiffres)
+    if not (8 <= len(ean) <= 14) or not ean.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="EAN invalide (8 à 14 chiffres attendus).",
+        )
+
+    # 2) Récupération du produit dans honou.products
+    stmt = select(ProductDB).where(ProductDB.ean13_clean == ean)
+    result = db.execute(stmt).scalar_one_or_none()
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Produit introuvable pour cet EAN.",
+        )
+
+    row = result  # alias pour la lisibilité
+
+    # 3) Champs simples
+    ean_out = row.ean13_clean
+    product_name = row.product_name
+    brand = row.brand
+    category = row.category
+    origin_country = row.origin_country
+
+    # Valeurs brutes venant de la DB
+    origin_lat_db = row.origin_lat
+    origin_lon_db = row.origin_lon
+    zone_geo_db = row.zone_geo
+
+    # Correction MVP : si lat est vide mais lon + zone_geo ressemblent à des coordonnées,
+    # on considère que lon_db = latitude et zone_geo_db = longitude.
+    origin_lat = origin_lat_db
+    origin_lon = origin_lon_db
+    zone_geo = zone_geo_db
+
+
+    try:
+        lon_as_float = float(origin_lon_db) if origin_lon_db is not None else None
+    except (TypeError, ValueError):
+        lon_as_float = None
+
+    try:
+        zone_as_float = float(zone_geo_db) if zone_geo_db is not None else None
+    except (TypeError, ValueError):
+        zone_as_float = None
+
+    # Heuristique simple : si origin_lat est NULL et que lon/zone sont numériques,
+    # on les utilise comme latitude / longitude.
+    if origin_lat_db is None and lon_as_float is not None and zone_as_float is not None:
+        origin_lat = lon_as_float           # ex : 46.603354
+        origin_lon = zone_as_float          # ex : 1.888334
+        # zone_geo : tu peux le mettre à None ou le garder pour autre usage
+        zone_geo = None
+
+
+    # 4) Poids utilisé (avec fallback 0,5 kg)
+    if row.net_weight_kg is not None:
+        weight_kg_used = float(row.net_weight_kg)
+    else:
+        weight_kg_used = 0.5  # valeur par défaut (500 g)
+
+            # 5) CO₂ production et emballage
+    carbon_product_kg = float(row.carbon_product_kgco2e or 0.0)
+    carbon_pack_kg = float(row.carbon_pack_kgco2e or 0.0)
+
+    # 6) Distance et transport
+
+    # Par défaut
+    distance_km = 0.0
+
+    # 6.1. Si on a des coordonnées d'origine, on tente d'abord utilisateur → produit
+    try:
+        origin_lat_f = float(origin_lat) if origin_lat is not None else None
+        origin_lon_f = float(origin_lon) if origin_lon is not None else None
+    except (TypeError, ValueError):
+        origin_lat_f = None
+        origin_lon_f = None
+
+    # Si on a origine ET utilisateur, distance réelle origine → utilisateur
+    if (
+        origin_lat_f is not None
+        and origin_lon_f is not None
+        and user_lat is not None
+        and user_lon is not None
+    ):
+        try:
+            distance_km = haversine_km(
+                origin_lat_f,
+                origin_lon_f,
+                float(user_lat),
+                float(user_lon),
+            )
+        except (TypeError, ValueError):
+            distance_km = 0.0
+
+    # Si pas de distance utilisateur, mais origine connue : origine → centre France
+    if distance_km == 0.0 and origin_lat_f is not None and origin_lon_f is not None:
+        try:
+            distance_km = haversine_km(
+                origin_lat_f,
+                origin_lon_f,
+                FRANCE_LAT,
+                FRANCE_LON,
+            )
+        except (TypeError, ValueError):
+            distance_km = 0.0
+
+    # 6.2. Si on n'a toujours pas de distance, on applique tes valeurs de référence
+    if distance_km == 0.0:
+        if origin_country == "FR":
+            distance_km = 1100.0
+        else:
+            distance_km = 4500.0
+
+    # 6.3. Calcul des émissions de transport
+    weight_tonnes = weight_kg_used / 1000.0
+    carbon_transport_kg = distance_km * weight_tonnes * EMISSION_FACTOR_TONNE_KM
+
+    # 7) Total CO₂
+    carbon_total_kg = carbon_product_kg + carbon_pack_kg + carbon_transport_kg
+
+
+       # 8) Fiabilité (MVP : fixée à "moyenne")
+    reliability_score = 60
+    reliability_level = "moyenne"
+
+    # 9) Construction du JSON final conforme au contrat validé
+    return {
+        "ean": ean_out,
+        "product_name": product_name,
+        "brand": brand,
+        "category": category,
+
+        "carbon_product_kg": carbon_product_kg,
+        "carbon_pack_kg": carbon_pack_kg,
+        "carbon_transport_kg": carbon_transport_kg,
+        "carbon_total_kg": carbon_total_kg,
+
+        "weight_kg_used": weight_kg_used,
+        "distance_km": distance_km,
+
+        "reliability_score": reliability_score,
+        "reliability_level": reliability_level,
+
+        "origin_country": origin_country,
+        "origin_lat": origin_lat,
+        "origin_lon": origin_lon,
+        "zone_geo": zone_geo,
+    }
 

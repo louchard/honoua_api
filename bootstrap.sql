@@ -32,3 +32,29 @@ VALUES
  ('7612345000001','Yaourt nature 4x125g','MarqueC','Produits laitiers, Yaourt',1.2,0.15,0.5,'France');
 
 REFRESH MATERIALIZED VIEW honou.mv_metrics_category;
+
+CREATE TABLE IF NOT EXISTS honou.co2_cart_history (
+    id                      BIGSERIAL PRIMARY KEY,
+    user_id                 INTEGER NULL,
+    validated_at            TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+
+    -- Impact CO₂ du panier
+    total_co2_g             INTEGER NOT NULL,
+    nb_articles             INTEGER NOT NULL,
+    nb_distinct_products    INTEGER NOT NULL,
+
+    -- Distances
+    total_distance_km       NUMERIC(10,2) NOT NULL,
+
+    -- Conversion CO₂ → jours → arbres
+    days_captured_by_tree   NUMERIC(10,2) NOT NULL,
+    tree_equivalent         NUMERIC(10,2) NOT NULL,
+
+    -- Clés de période pour l’agrégation
+    period_month            VARCHAR(7) NOT NULL,   -- 'YYYY-MM'
+    period_week             VARCHAR(8) NOT NULL,   -- 'YYYY-WW'
+
+    -- Score climat optionnel
+    climate_score           SMALLINT NULL
+);
+
