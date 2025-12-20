@@ -182,15 +182,17 @@ try:
 except Exception as e:
     logger.warning(f"[DB] SQLite schema auto-create skipped: {e}")
 
-
 Base = declarative_base()
-# --- SQLite: auto-create tables for local/tests ---
-if DB_URL.startswith("sqlite"):
-    try:
+
+
+# --- Auto-init DB schema (SQLite & PostgreSQL) ---
+try:
+    if engine:
         Base.metadata.create_all(bind=engine)
-        print("[DB] SQLite schema created (Base.metadata.create_all)")
-    except Exception as e:
-        print(f"[DB] SQLite schema creation skipped: {e}")
+        print("[DB] Schema created (Base.metadata.create_all)")
+except Exception as e:
+    print("[DB] DB init error:", e)
+
 
 
 class ProductDB(Base):
