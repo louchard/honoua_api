@@ -154,6 +154,12 @@ async def read_metrics_prometheus():
 
 DB_URL = (os.getenv("DATABASE_URL") or "").strip()
 
+# Force SQLAlchemy to use psycopg (v3) driver on Postgres
+if DB_URL.startswith("postgres://"):
+    DB_URL = DB_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DB_URL.startswith("postgresql://"):
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
 engine = None
 SessionLocal = None
 
