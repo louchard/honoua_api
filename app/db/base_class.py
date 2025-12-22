@@ -1,6 +1,5 @@
-﻿from __future__ import annotations
-from sqlalchemy.orm import DeclarativeBase
+﻿from sqlalchemy.orm import DeclarativeBase
+
 
 class Base(DeclarativeBase):
-    """Base déclarative SQLAlchemy (v2)."""
     pass

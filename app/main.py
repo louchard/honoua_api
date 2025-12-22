@@ -20,7 +20,7 @@ from app.telemetry.metrics import get_prometheus_metrics
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
-#import importlib
+
 
 try:
     from app.routers import challenges
@@ -41,10 +41,10 @@ from app.routers.emissions_summary_a40 import router as emissions_summary_a40_ro
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 
 
+
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
 
-api = APIRouter()
 if notifications_router is not None and hasattr(notifications_router, "router"):
     app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 # Middleware d'accès (A39)
@@ -152,6 +152,8 @@ async def read_metrics_prometheus():
 # DB_URL = os.getenv("DATABASE_URL", "sqlite:///./honoua.db")
 # APRÈS (version MVP, plus explicite)
 
+from app.db.base_class import Base  # ✅ Base unique pour tous les modèles
+
 DB_URL = (os.getenv("DATABASE_URL") or "").strip()
 
 # Force SQLAlchemy to use psycopg (v3) driver on Postgres
@@ -166,42 +168,30 @@ SessionLocal = None
 if DB_URL:
     engine = create_engine(DB_URL, echo=False, future=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-    print("[DB] DATABASE_URL configured")
+    logger.info("[DB] DATABASE_URL configured")
 else:
-    print("[DB] DATABASE_URL not configured (DB disabled)")
+    logger.warning("[DB] DATABASE_URL not configured (DB disabled)")
 
-# --- Auto-init DB schema for SQLite (tests/local) ---
+# --- Auto-init DB schema (PostgreSQL on Railway / SQLite local) ---
 try:
-    if engine is not None and engine.url.get_backend_name() == "sqlite":
-
-     # IMPORTANT: ensure all models are imported so Base.metadata is complete
-        from app.models import audit_event  # noqa: F401
-        from app.models import notifications  # noqa: F401
-
-        Base.metadata.create_all(bind=engine)
-except Exception as e:
-    logger.warning(f"[DB] SQLite schema auto-create skipped: {e}")
-
-Base = declarative_base()
-
-
-# --- Auto-init DB schema (SQLite & PostgreSQL) ---
-try:
+    import importlib
+    importlib.import_module("app.models")  # noqa: F401  ✅ charge les modèles dans Base.metadata
     if engine:
         Base.metadata.create_all(bind=engine)
-        print("[DB] Schema created (Base.metadata.create_all)")
+        logger.info("[DB] Schema created/checked (Base.metadata.create_all)")
 except Exception as e:
-    print("[DB] DB init error:", e)
-
+    logger.warning(f"[DB] Schema auto-create skipped: {e}")
 
 
 class ProductDB(Base):
+
     __tablename__ = "products"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     ean13_clean: Mapped[str] = mapped_column(String, index=True)
     product_name: Mapped[str] = mapped_column(String)
     brand: Mapped[Optional[str]] = mapped_column(String)
     category: Mapped[Optional[str]] = mapped_column(String)
+
 
     # Colonnes carbone (kg CO2e)
     carbon_product_kgco2e: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -222,6 +212,19 @@ class ProductDB(Base):
 # Coordonnées de référence : centre approximatif de la France
 FRANCE_LAT = 46.603354
 FRANCE_LON = 1.888334
+
+# --- Auto-init DB schema (SQLite & PostgreSQL) ---
+try:
+    # Charge les modèles éventuels d'autres modules (si tu en as)
+    import importlib
+    importlib.import_module("app.models")  # noqa: F401
+
+    if engine:
+        Base.metadata.create_all(bind=engine)
+        logger.info("[DB] Schema created/checked (Base.metadata.create_all)")
+except Exception as e:
+    logger.warning(f"[DB] DB init error: {e}")
+
 
 # Facteur d'émission pour le transport (kg CO2e / tonne.km)
 # Valeur MVP simple à affiner plus tard.
@@ -253,7 +256,10 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 # ==========================
 #        Products
 # ==========================
-@api.get("/products", response_model=List[Product])
+print("[DEBUG] before products routes - app is:", app, "type:", type(app))
+print("[DEBUG] app.__name__:", getattr(app, "__name__", None), "module:", getattr(app, "__file__", None))
+
+@app.get("/products", response_model=List[Product])
 def list_products():
     """Retourne la liste statique (smoke test)."""
     return _FAKE_PRODUCTS
@@ -284,7 +290,7 @@ def get_db_optional() -> Generator[Optional[Session], None, None]:
     finally:
         db.close()
 
-@api.get("/products/{ean}")
+@app.get("/products/{ean}")
 def get_product(ean: str, db: Session = Depends(get_db)):
     
     # 1) Priorité DB si disponible
@@ -326,7 +332,7 @@ def get_product(ean: str, db: Session = Depends(get_db)):
     raise HTTPException(status_code=404, detail="Product not found")
 
 
-@api.post("/products/search", response_model=List[Product])
+@app.post("/products/search", response_model=List[Product])
 def search_products(query: ProductSearchQuery):
     """
     MVP (Option A): recherche uniquement en mémoire, sans dépendre de la DB.
@@ -354,7 +360,8 @@ class CompareItemResult(BaseModel):
 class CompareResponse(BaseModel):
     results: list[CompareItemResult]
 
-@api.post("/compare", response_model=CompareResponse)
+@app.post("/compare", response_model=CompareResponse)
+@app.post("/api/compare", response_model=CompareResponse)  # alias pour compat tests / front
 def compare_products(payload: CompareRequest):
     """
     Endpoint de comparaison carbone minimal (valeurs null pour préparer le front).
@@ -363,9 +370,8 @@ def compare_products(payload: CompareRequest):
     return CompareResponse(results=results)
 
 # Monter le router /api
-app.include_router(api)  # sans préfixe (compat tests)
-app.include_router(api, prefix="/api")  # avec préfixe (prod stable)
-
+# app.include_router(api_router)  # sans préfixe (compat tests)
+# app.include_router(api_router, prefix="/api")  # avec préfixe (prod stable)
 
 
 # === A36 — Emissions API (squelette) ===
@@ -529,7 +535,7 @@ if notifications_router is not None and hasattr(notifications_router, "router"):
         tags=["notifications"],
     )
     # Optionnel : si tu veux aussi /api/notifications/...
-    api.include_router(
+    app.include_router(
         notifications_router.router,
         prefix="/notifications",
         tags=["notifications"],

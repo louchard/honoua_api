@@ -45,7 +45,8 @@ class NotificationFrequency(str, enum.Enum):
 
 
 class NotificationPreferences(Base):
-    __tablename__ = "user_notification_preferences"
+    __tablename__ = "notification_preferences_legacy"
+
 
     id = Column(Integer, primary_key=True, index=True)
 

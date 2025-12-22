@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, Integer, SmallInteger, String, UniqueConstraint
 from sqlalchemy.orm import declarative_mixin
-from app.db import Base  # doit déjà exister dans ton projet
+from app.db.base import Base
 
 @declarative_mixin
 class TimestampMixin:

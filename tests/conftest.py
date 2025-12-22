@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 
 
+
 # ---------------------------------------------------------------------
 # IMPORTANT : DATABASE_URL doit être défini AVANT l'import de l'app
 # ---------------------------------------------------------------------
@@ -27,7 +28,10 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # ---------------------------------------------------------------------
 # Import app (après DATABASE_URL)
 # ---------------------------------------------------------------------
-from app.main import app  # noqa: E402
+import importlib  # noqa: E402
+
+fastapi_app = importlib.import_module("app.main").app  # noqa: E402
+app = fastapi_app  # alias local: tous les usages de `app` dans ce conftest pointent vers FastAPI
 
 
 def _safe_import_attr(module_path: str, attr: str):
@@ -179,30 +183,30 @@ def _apply_db_overrides(_SessionLocal):
     """
     override = _override_get_db_factory(_SessionLocal)
     for dep in _collect_get_db_deps():
-        app.dependency_overrides[dep] = override
+        fastapi_app.dependency_overrides[dep] = override
+
+
 
 
 @pytest.fixture(scope="function")
 def client(_SessionLocal):
     _apply_db_overrides(_SessionLocal)
-    with TestClient(app) as c:
+    with TestClient(fastapi_app) as c:
         yield c
-    app.dependency_overrides.clear()
+
+
 
 
 @pytest_asyncio.fixture(scope="function")
 async def app_client(_SessionLocal):
     _apply_db_overrides(_SessionLocal)
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=fastapi_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
-    app.dependency_overrides.clear()
 
     # --- SAFETY: reset FastAPI dependency overrides between tests ---
-import pytest
-from app.main import app
 
 @pytest.fixture(autouse=True)
 def _reset_dependency_overrides():
@@ -211,5 +215,5 @@ def _reset_dependency_overrides():
     Symptom: un test passe seul mais échoue dans la suite.
     """
     yield
-    app.dependency_overrides.clear()
+
 
