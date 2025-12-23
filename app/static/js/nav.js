@@ -1,10 +1,10 @@
 (function () {
-  const routes = {
-    home: "/static/home.html",
-    eco: "/static/eco-select.html",
-    scan: "/static/scan-impact.html",
-    suivi: "/static/suivi-co2.html",
-  };
+  const ROUTES = {
+  home: "/index.html",
+  eco: "/eco-select.html",
+  scan: "/scan-impact.html",
+  suivi: "/suivi-co2.html",
+};
 
   function setActiveByUrl() {
     const path = window.location.pathname || "";

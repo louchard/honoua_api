@@ -1,14 +1,23 @@
  
 // === API Honoua : fonction utilitaire ===
 async function fetchProductCo2ByEan(ean) {
-    const url = `/api/v1/co2/product/${ean}`;
-    const res = await fetch(url);
+  const base = (window && window.HONOUA_API_BASE) ? String(window.HONOUA_API_BASE) : '';
+  const cleanBase = base.replace(/\/+$/, '');
 
-    if (!res.ok) {
-        throw new Error("Produit introuvable ou erreur serveur");
-    }
-    return await res.json();
+  // Fallback conservateur si jamais HONOUA_API_BASE n'est pas encore défini
+  const endpointBase = cleanBase ? `${cleanBase}/api/v1/co2/product` : '/api/v1/co2/product';
+
+  // Sécurise le paramètre
+  const safeEan = encodeURIComponent(String(ean || '').trim());
+  const url = `${endpointBase}/${safeEan}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error("Produit introuvable ou erreur serveur");
+  }
+  return await res.json();
 }
+
 
 (async () => {
   const $video = document.getElementById('preview');
@@ -25,21 +34,48 @@ async function fetchProductCo2ByEan(ean) {
 
 
 
-   // === Config API Honoua ===
-  // ATTENTION : ceci est l'URL HTTP de ton backend, PAS le nom de la base Postgres.
-  // En local avec FastAPI sur le même host/port que le front (reverse proxy) :
-  //   const HONOUA_API_BASE = '';
-  //
-  // En local si ton FastAPI tourne sur http://localhost:8000 :
-  //   const HONOUA_API_BASE = 'http://localhost:8000';
-  //
-  // À TOI de mettre la valeur qui correspond à ton backend FastAPI actuel.
-  const HONOUA_API_BASE = 'http://localhost:8000'; // par exemple
+    // === Config API Honoua ===
+  // Priorité des sources (de la plus forte à la plus faible) :
+  // 1) window.HONOUA_API_BASE_OVERRIDE (utile en debug)
+  // 2) <meta name="honoua-api-base" content="https://api.honoua.com">
+  // 3) localStorage('honoua_api_base')
+  // 4) fallback prod : https://api.honoua.com
+  function normalizeBaseUrl(url) {
+    return (url || '').trim().replace(/\/+$/, '');
+  }
+
+  const HONOUA_API_BASE = (function resolveHonouaApiBase() {
+    // 1) Override global
+    if (typeof window !== 'undefined' && window.HONOUA_API_BASE_OVERRIDE) {
+      return normalizeBaseUrl(window.HONOUA_API_BASE_OVERRIDE);
+    }
+
+    // 2) Meta tag (si tu veux le piloter par page)
+    const meta = document.querySelector('meta[name="honoua-api-base"]');
+    if (meta && meta.content) {
+      return normalizeBaseUrl(meta.content);
+    }
+
+    // 3) localStorage (si tu veux le piloter sans changer le code)
+    try {
+      const ls = localStorage.getItem('honoua_api_base');
+      if (ls) return normalizeBaseUrl(ls);
+    } catch (e) {}
+
+    // 4) Par défaut : PROD
+    return 'https://api.honoua.com';
+  })();
+
+  // Expose la base API pour debug et pour les autres scripts
+  window.HONOUA_API_BASE = HONOUA_API_BASE;
 
   // Endpoints REST utilisés par le scanner
   const CO2_API_BASE = `${HONOUA_API_BASE}/api/v1/co2/product`;
   const CART_HISTORY_ENDPOINT = `${HONOUA_API_BASE}/api/cart/history`;
-  window.CART_HISTORY_ENDPOINT = CART_HISTORY_ENDPOINT; // ✅ rend l’endpoint accessible aux autres scripts
+
+  // ✅ rend l’endpoint accessible aux autres scripts
+  window.CART_HISTORY_ENDPOINT = CART_HISTORY_ENDPOINT;
+
 
   
 
