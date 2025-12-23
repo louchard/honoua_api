@@ -6,6 +6,7 @@ from sqlalchemy import String, Float, BigInteger, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Mapped, mapped_column, Session
 from fastapi import FastAPI, HTTPException, Depends, APIRouter, Query
 from fastapi import Response
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
@@ -44,6 +45,34 @@ from fastapi import FastAPI, HTTPException, Depends, APIRouter
 
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
+
+# ====== CORS (Front Render / Local) ======
+# Origines autorisées via variable d'env (recommandé en prod) :
+# HONOUA_ALLOWED_ORIGINS="https://honoua-front.onrender.com,https://honoua.com"
+raw_origins = os.getenv("HONOUA_ALLOWED_ORIGINS", "").strip()
+
+allowed_origins = []
+if raw_origins:
+    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+else:
+    # Fallback minimal (local + site)
+    allowed_origins = [
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://honoua.com",
+        "https://www.honoua.com",
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 if notifications_router is not None and hasattr(notifications_router, "router"):
     app.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
