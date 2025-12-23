@@ -2778,17 +2778,17 @@ Mise à jour du code Eco Select
 }
 
 
-/* --- Render/MVP Safety: footer toujours au-dessus --- */
+/* --- MVP Safety: footer toujours cliquable (EcoSelect overlay) --- */
 .honoua-footer-nav {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 9999;
+  z-index: 2147483647; /* au-dessus de tout */
   pointer-events: auto;
 }
 
-/* Réserve de l’espace pour éviter qu’un écran plein ne recouvre le footer */
+/* Empêche les écrans plein (scanner/overlay) de recouvrir la zone du footer */
 body {
   padding-bottom: 90px;
 }
