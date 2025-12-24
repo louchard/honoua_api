@@ -559,6 +559,7 @@ function showScannerError(text, persistent = false) {
 
       // 404 : produit non trouvé → cas métier attendu en MVP (ne doit pas casser l’UX)
     if (resp.status === 404) {
+      console.warn("[CO2 404 HANDLED]", ean);
       let detail = "Nous n’avons pas encore de données CO₂ pour ce produit.";
       try {
         const err = await resp.json();
