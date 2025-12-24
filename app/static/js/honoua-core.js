@@ -557,13 +557,32 @@ function showScannerError(text, persistent = false) {
     });
 
 
-    // 404 : produit non trouvé → encart CO₂ uniquement, rien dans EcoSELECT
-   if (resp.status === 404){
-  setCo2Error("Nous n’avons pas encore de données CO₂ pour ce produit.");
-  // A55.10 — message erreur clair et neutre
-  showScannerError("Produit introuvable.");
-  return;
-}
+      // 404 : produit non trouvé → cas métier attendu en MVP (ne doit pas casser l’UX)
+    if (resp.status === 404) {
+      let detail = "Nous n’avons pas encore de données CO₂ pour ce produit.";
+      try {
+        const err = await resp.json();
+        if (err && typeof err.detail === "string" && err.detail.trim()) {
+          detail = err.detail.trim();
+        }
+      } catch (_) {}
+
+      setCo2Error(detail);
+
+      // Message non bloquant selon le contexte (EcoSelect / ScanImpact / scanner)
+      if (typeof window.updateEcoSelectMessage === "function") {
+        window.updateEcoSelectMessage(detail, "warn");
+      } else if (typeof window.showScanImpactStatus === "function") {
+        window.showScanImpactStatus(detail, "warn");
+      } else {
+        // fallback scanner
+        showScannerError(detail);
+      }
+
+      // Important : on sort sans throw, et on laisse l’app continuer
+      return null;
+    }
+
 
 
     // Autre erreur HTTP → encart CO₂ uniquement
