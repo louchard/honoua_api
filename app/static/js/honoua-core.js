@@ -569,15 +569,20 @@ function showScannerError(text, persistent = false) {
 
       setCo2Error(detail);
 
-      // Message non bloquant selon le contexte (EcoSelect / ScanImpact / scanner)
+            // Message non bloquant (robuste) : on tente tous les canaux disponibles
       if (typeof window.updateEcoSelectMessage === "function") {
         window.updateEcoSelectMessage(detail, "warn");
-      } else if (typeof window.showScanImpactStatus === "function") {
-        window.showScanImpactStatus(detail, "warn");
-      } else {
-        // fallback scanner
-        showScannerError(detail);
       }
+
+      if (typeof window.showScanImpactStatus === "function") {
+        window.showScanImpactStatus(detail, "warn");
+      }
+
+      // fallback : toast scanner (si disponible)
+      if (typeof window.showScannerError === "function") {
+        window.showScannerError(detail, 2500);
+      }
+
 
       // Important : on sort sans throw, et on laisse l’app continuer
       return null;
