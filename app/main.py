@@ -141,6 +141,17 @@ _FAKE_PRODUCTS: List[Product] = [
 def health():
     return {"status": "ok"}
 
+# ====== Root (API status) ======
+@app.get("/", tags=["root"])
+def root():
+    return {
+        "status": "ok",
+        "service": "Honoua API",
+        "health": "/health",
+        "docs": "/docs"
+    }
+
+
     # Test DB léger (Option A) : SELECT 1
     try:
         # IMPORTANT: on force une connexion ponctuelle pour le diagnostic
