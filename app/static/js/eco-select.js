@@ -538,6 +538,18 @@ function handleEcoSelectProduct(product) {
   window.ecoSelectRemoveProduct = ecoSelectRemoveProduct;
   window.ecoSelectSetSortMode = ecoSelectSetSortMode;
 
+  // Expose un canal de message standard pour honoua-core.js
+// Signature "propre" attendue: updateEcoSelectMessage(text, type)
+window.updateEcoSelectMessage = function (text, type = "info") {
+  // NOTE: la fonction interne est: updateEcoSelectMessage(type, text)
+  try {
+    return updateEcoSelectMessage(type, text);
+  } catch (e) {
+    console.warn("[EcoSELECT] updateEcoSelectMessage failed:", e);
+  }
+};
+
+
   console.log("[EcoSELECT] Initialisé (version nettoyée)");
 })();
 
@@ -622,7 +634,17 @@ function ecoSelectCompare(a, b) {
   }
 
   // --- Config API CO₂ ---
-  const CO2_API_BASE = '/api/v1/co2/product';
+// Important: toujours appeler l’API (api.honoua.com), jamais le front (app.honoua.com)
+  // Base API : on privilégie window.HONOUA_API_BASE (prod Render) sinon fallback relatif (dev/local)
+  const HONOUA_API_BASE = (typeof window !== "undefined" && window.HONOUA_API_BASE)
+    ? String(window.HONOUA_API_BASE).replace(/\/$/, "")
+    : "";
+
+  const CO2_API_BASE = HONOUA_API_BASE
+    ? `${HONOUA_API_BASE}/api/v1/co2/product`
+    : "/api/v1/co2/product";
+
+
 
   // --- État caméra ---
   let currentStream   = null;
@@ -857,12 +879,22 @@ function ecoSelectCompare(a, b) {
       return;
     }
     console.log('[Scanner CO2] triggerManualEan avec :', raw);
+        // Si honoua-core expose déjà une gestion unifiée, on la privilégie (évite doublons)
+    if (typeof window.handleEanDetected === "function") {
+      window.handleEanDetected(raw);
+      return;
+    }
     fetchCo2ForEan(raw);
+
   }
 
-  if ($btnTest) {
-    $btnTest.addEventListener('click', triggerManualEan);
+   if ($btnTest) {
+    // Ne pas rajouter un 2e handler si honoua-core a déjà posé un onclick
+    if (typeof $btnTest.onclick !== "function") {
+      $btnTest.addEventListener("click", triggerManualEan);
+    }
   }
+
   if ($eanInput) {
     $eanInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
