@@ -1,23 +1,4 @@
  
-// === API Honoua : fonction utilitaire ===
-async function fetchProductCo2ByEan(ean) {
-  const base = (window && window.HONOUA_API_BASE) ? String(window.HONOUA_API_BASE) : '';
-  const cleanBase = base.replace(/\/+$/, '');
-
-  // Fallback conservateur si jamais HONOUA_API_BASE n'est pas encore défini
-  const endpointBase = cleanBase ? `${cleanBase}/api/v1/co2/product` : '/api/v1/co2/product';
-
-  // Sécurise le paramètre
-  const safeEan = encodeURIComponent(String(ean || '').trim());
-  const url = `${endpointBase}/${safeEan}`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error("Produit introuvable ou erreur serveur");
-  }
-  return await res.json();
-}
-
 
 (async () => {
   const $video = document.getElementById('preview');
@@ -868,6 +849,8 @@ if (typeof data.co2_kg_total === "number") {
   let sortMode = 'co2'; // 'co2' | 'distance'
   const items = [];     // { ean, label, co2Total, distanceKm, origin, ... }
 
+
+
   function safeText(v, fallback='—'){
     const s = (v == null) ? '' : String(v).trim();
     return s ? s : fallback;
@@ -903,25 +886,42 @@ if (typeof data.co2_kg_total === "number") {
     else items[idx] = { ...items[idx], ...p };
   }
 
-  function sortItems(){
+    function sortItems(){
     const arr = items.slice();
+
+    const toSortableNumber = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+    };
+
+    const tieBreak = (a, b) => {
+      const la = safeText(a?.label, '').toLowerCase();
+      const lb = safeText(b?.label, '').toLowerCase();
+      if (la && lb && la !== lb) return la.localeCompare(lb, 'fr');
+      const ea = safeText(a?.ean, '');
+      const eb = safeText(b?.ean, '');
+      return ea.localeCompare(eb, 'fr');
+    };
 
     if (sortMode === 'distance') {
       arr.sort((a,b) => {
-        const da = Number.isFinite(a.distanceKm) ? a.distanceKm : Number.POSITIVE_INFINITY;
-        const db = Number.isFinite(b.distanceKm) ? b.distanceKm : Number.POSITIVE_INFINITY;
-        return da - db;
+        const da = toSortableNumber(a?.distanceKm);
+        const db = toSortableNumber(b?.distanceKm);
+        if (da !== db) return da - db;
+        return tieBreak(a,b);
       });
     } else {
       arr.sort((a,b) => {
-        const ca = Number.isFinite(a.co2Total) ? a.co2Total : Number.POSITIVE_INFINITY;
-        const cb = Number.isFinite(b.co2Total) ? b.co2Total : Number.POSITIVE_INFINITY;
-        return ca - cb;
+        const ca = toSortableNumber(a?.co2Total);
+        const cb = toSortableNumber(b?.co2Total);
+        if (ca !== cb) return ca - cb;
+        return tieBreak(a,b);
       });
     }
 
     return arr;
   }
+
 
   function render(){
     const arr = sortItems();
@@ -997,18 +997,22 @@ if (typeof data.co2_kg_total === "number") {
   }
 
   // Boutons tri (si présents)
+
   if (btnCo2) {
-    btnCo2.addEventListener('click', () => {
+    btnCo2.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
       sortMode = 'co2';
       render();
     });
   }
   if (btnDist) {
-    btnDist.addEventListener('click', () => {
+    btnDist.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
       sortMode = 'distance';
       render();
     });
   }
+ 
 
   // API globale appelée par fetchCo2ForEan()
   window.ecoSelectAddProduct = function(product){
