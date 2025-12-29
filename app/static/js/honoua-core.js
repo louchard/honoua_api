@@ -2748,7 +2748,10 @@ function honouaRenderLastTwoCartsInReco() {
 // ==============================
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
-let __CO2_CART_HISTORY_DISABLED = false;
+// Endpoint /api/cart/history absent en prod (404) : on désactive côté front pour éviter le spam réseau/console.
+// Le jour où l’endpoint est disponible, repasser à false.
+let __CO2_CART_HISTORY_DISABLED = true;
+
 
 async function loadCo2CartHistory(limit = 5) {
   const $list = document.getElementById("co2-cart-history-list");
