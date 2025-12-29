@@ -3221,7 +3221,17 @@ function aggregateHistoryByPeriod(items) {
   async function refreshBudgetFromApi() {
     const $budgetStatus = document.getElementById('budget-status');
 
+    if (__CO2_CART_HISTORY_DISABLED) {
+      if ($budgetStatus) {
+        $budgetStatus.textContent = "Budget indisponible pour le moment.";
+        $budgetStatus.classList.remove('status-green', 'status-orange');
+        $budgetStatus.classList.add('status-red');
+      }
+      return;
+    }
+
     try {
+
              const userId =
           (window.getHonouaUserId && typeof window.getHonouaUserId === 'function')
             ? window.getHonouaUserId()
@@ -3241,7 +3251,18 @@ function aggregateHistoryByPeriod(items) {
     }
 
       if (!resp.ok) {
-        console.error('[Suivi CO2] Erreur HTTP /api/cart/history :', resp.status);
+        if (resp.status === 404) {
+          __CO2_CART_HISTORY_DISABLED = true;
+          console.info('[Suivi CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.');
+          if ($budgetStatus) {
+            $budgetStatus.textContent = "Budget indisponible pour le moment.";
+            $budgetStatus.classList.remove('status-green', 'status-orange');
+            $budgetStatus.classList.add('status-red');
+          }
+          return;
+        }
+
+        console.warn('[Suivi CO2] Erreur HTTP /api/cart/history :', resp.status);
         if ($budgetStatus) {
           $budgetStatus.textContent = "Budget indisponible (erreur de chargement).";
           $budgetStatus.classList.remove('status-green', 'status-orange');
@@ -3249,6 +3270,7 @@ function aggregateHistoryByPeriod(items) {
         }
         return;
       }
+
 
       const raw = await resp.json();
       const items = normalizeHistoryResponse(raw);
@@ -3573,6 +3595,11 @@ function buildEvolutionSeriesFromAgg(agg, periodType) {
 async function refreshEvolution(periodType = "month") {
   currentEvolutionPeriodType = periodType;
 
+  if (__CO2_CART_HISTORY_DISABLED) {
+    // L’endpoint historique est indisponible : on évite les refetch et le spam console.
+    return;
+  }
+
   try {
     const userId =
       (window.getHonouaUserId && typeof window.getHonouaUserId === "function")
@@ -3587,9 +3614,15 @@ async function refreshEvolution(periodType = "month") {
     });
 
     if (!resp.ok) {
-      console.error("[Evolution] Erreur HTTP :", resp.status);
+      if (resp.status === 404) {
+        __CO2_CART_HISTORY_DISABLED = true;
+        console.info("[Evolution] /api/cart/history indisponible (404) -> évolution désactivée côté front.");
+        return;
+      }
+      console.warn("[Evolution] Erreur HTTP :", resp.status);
       return;
     }
+
 
     const raw = await resp.json();
     const items = normalizeHistoryResponse(raw);
