@@ -258,9 +258,20 @@ function renderBudgetFromState(state) {
   $status.className = "suivi-budget-status status-" + state.statusLevel;
 }
 
+// Base API (évite les fetch relatifs sur app.honoua.com)
+    function getApiBase() {
+      return (window.HONOUA_API_BASE || "https://api.honoua.com").replace(/\/$/, "");
+    }
+
+    // Endpoint historique (centralisé)
+    function cartHistoryUrl(limit) {
+      return `${getApiBase()}/api/cart/history?limit=${encodeURIComponent(limit)}`;
+    }
+
+
 async function refreshBudget() {
   try {
-    const res = await fetch("/api/cart/history?limit=200");
+    const res = await fetch(cartHistoryUrl(200), { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error("Erreur HTTP: " + res.status);
 
     const raw = await res.json();
@@ -417,7 +428,7 @@ async function refreshEvolution(type = "month") {
   currentPeriod = type;
 
   try {
-    const resp = await fetch("/api/cart/history?limit=200");
+    const resp = await fetch(cartHistoryUrl(200), { headers: { Accept: "application/json" } });
     if (!resp.ok) return;
 
     const raw = await resp.json();
@@ -484,7 +495,11 @@ if (btnDist) btnDist.addEventListener("click", () => {
 
   let historySortMode = "co2"; // "co2" | "distance"
   let lastHistoryRaw = [];     // cache pour re-render sans refetch
-  let __SUIVI_CO2_HISTORY_DISABLED = false;
+  // L’endpoint /api/cart/history n’est pas encore disponible côté API.
+  // On désactive le suivi CO₂ côté front pour éviter les 404 et le spam console.
+  // À remettre à false quand l’API Railway sera prête.
+  let __SUIVI_CO2_HISTORY_DISABLED = true;
+
 
 async function loadCo2History(limit = 5) {
   const $list = document.getElementById("co2-cart-history-list");
