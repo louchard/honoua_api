@@ -484,18 +484,43 @@ if (btnDist) btnDist.addEventListener("click", () => {
 
   let historySortMode = "co2"; // "co2" | "distance"
   let lastHistoryRaw = [];     // cache pour re-render sans refetch
+  let __SUIVI_CO2_HISTORY_DISABLED = false;
 
 async function loadCo2History(limit = 5) {
   const $list = document.getElementById("co2-cart-history-list");
   if (!$list) return;
 
+   // Si l’endpoint n’existe pas (404), on stoppe les refetch suivants.
+  if (__SUIVI_CO2_HISTORY_DISABLED) {
+    $list.innerHTML =
+      `<p class="co2-cart-history-empty">Historique indisponible pour le moment.</p>`;
+    return;
+  }
+
   try {
-    const res = await fetch(`/api/cart/history?limit=${limit}`);
-    if (!res.ok) throw new Error("Erreur HTTP");
+    const base = (window.HONOUA_API_BASE || "https://api.honoua.com");
+    const url = `${base}/api/cart/history?limit=${limit}`;
+
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        __SUIVI_CO2_HISTORY_DISABLED = true;
+        console.info("[Suivi CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.");
+        $list.innerHTML =
+          `<p class="co2-cart-history-empty">Historique indisponible pour le moment.</p>`;
+        return;
+      }
+      console.warn("[Suivi CO2] Erreur HTTP /api/cart/history :", res.status);
+      $list.innerHTML =
+        `<p class="co2-cart-history-empty">Impossible de charger les données</p>`;
+      return;
+    }
 
     const raw = await res.json();
     const hist = normalizeHistoryResponse(raw);
     lastHistoryRaw = Array.isArray(hist) ? hist.slice() : [];
+
 
 
     $list.innerHTML = "";

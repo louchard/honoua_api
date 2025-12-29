@@ -2748,6 +2748,8 @@ function honouaRenderLastTwoCartsInReco() {
 // ==============================
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
+let __CO2_CART_HISTORY_DISABLED = false;
+
 async function loadCo2CartHistory(limit = 5) {
   const $list = document.getElementById("co2-cart-history-list");
   const $reportList = document.getElementById("co2-report-history-list"); // ✅ historique dans le rapport
@@ -2757,8 +2759,19 @@ async function loadCo2CartHistory(limit = 5) {
     return;
   }
 
+  // Si l’endpoint n’existe pas en API (404), on stoppe les refetch suivants.
+  if (__CO2_CART_HISTORY_DISABLED) {
+    $list.innerHTML = `
+      <p class="co2-cart-history-empty">
+        Historique indisponible pour le moment.
+      </p>`;
+    if ($reportList) $reportList.innerHTML = "";
+    return;
+  }
+
   try {
     const res = await fetch(`${CART_HISTORY_ENDPOINT}?limit=${limit}`, {
+
       credentials: 'same-origin',
       headers: {
         'Accept': 'application/json',
@@ -2767,14 +2780,29 @@ async function loadCo2CartHistory(limit = 5) {
     });
 
 
-    if (!res.ok) {
-      console.error("[Historique CO2] Erreur HTTP /api/cart/history :", res.status);
+      if (!res.ok) {
+      // 404 = endpoint non disponible : on désactive définitivement côté front
+      if (res.status === 404) {
+        __CO2_CART_HISTORY_DISABLED = true;
+        console.info("[Historique CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.");
+        $list.innerHTML = `
+          <p class="co2-cart-history-empty">
+            Historique indisponible pour le moment.
+          </p>`;
+        if ($reportList) $reportList.innerHTML = "";
+        return;
+      }
+
+      // Autres erreurs : on garde un message, mais sans spam agressif
+      console.warn("[Historique CO2] Erreur HTTP /api/cart/history :", res.status);
       $list.innerHTML = `
         <p class="co2-cart-history-empty">
           Historique indisponible (erreur de chargement).
         </p>`;
+      if ($reportList) $reportList.innerHTML = "";
       return;
     }
+
 
     const raw = await res.json();
     // On réutilise normalizeHistoryResponse défini plus haut
