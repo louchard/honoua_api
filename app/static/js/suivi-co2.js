@@ -270,6 +270,8 @@ function renderBudgetFromState(state) {
 
 
 async function refreshBudget() {
+  if (__SUIVI_CO2_HISTORY_DISABLED) return;
+
   try {
     const res = await fetch(cartHistoryUrl(200), { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error("Erreur HTTP: " + res.status);
@@ -426,6 +428,8 @@ let currentPeriod = "month";
 
 async function refreshEvolution(type = "month") {
   currentPeriod = type;
+
+  if (__SUIVI_CO2_HISTORY_DISABLED) return;
 
   try {
     const resp = await fetch(cartHistoryUrl(200), { headers: { Accept: "application/json" } });
