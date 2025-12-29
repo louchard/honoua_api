@@ -784,24 +784,35 @@ if (typeof data.co2_kg_total === "number") {
 
   }
 
-  $start.onclick = async()=>{
-    try{
-      const tmp = await navigator.mediaDevices.getUserMedia({video:true});
-      tmp.getTracks().forEach(t=>t.stop());
-    }catch(_){}
-    const vids=await listCameras();
-    const back=pickBackCamera(vids);
-    await startWith(back?.deviceId);
-  };
+    if ($start) {
+    $start.onclick = async () => {
+      try {
+        const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+        tmp.getTracks().forEach((t) => t.stop());
+      } catch (_) {}
+      const vids = await listCameras();
+      const back = pickBackCamera(vids);
+      await startWith(back?.deviceId);
+    };
+  }
 
-  $cams.onchange = e => startWith(e.target.value);
-  $reset.onclick = ()=>{
-  stopStream();            // Arrête la caméra
-  setCo2Waiting();         // Remet l'encart CO₂ en état initial
-  showScannerInfo("Scanner réinitialisé.");  // Message UX clair
-};
+  if ($cams) {
+    $cams.onchange = (e) => startWith(e.target.value);
+  }
 
-  $torch.onclick = ()=> toggleTorch();
+  if ($reset) {
+    $reset.onclick = () => {
+      stopStream();                 // Arrête la caméra
+      setCo2Waiting();              // Remet l'encart CO₂ en état initial
+      showScannerInfo("Scanner réinitialisé."); // Message UX clair
+    };
+  }
+
+  if ($torch) {
+    $torch.onclick = () => toggleTorch();
+  }
+
+
 
   // === Point d’entrée appelé par le lecteur de code-barres ===
   
