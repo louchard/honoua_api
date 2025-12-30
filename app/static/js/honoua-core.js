@@ -891,6 +891,33 @@ if (typeof data.co2_kg_total === "number") {
       } catch (_) {}
     }, 6000);
   }
+  async function waitForVideoReady(video, timeoutMs = 2500) {
+    if (!video) return false;
+
+    // Si déjà prêt
+    if (video.videoWidth > 0 && video.videoHeight > 0) return true;
+
+    return await new Promise((resolve) => {
+      let done = false;
+
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        try { video.removeEventListener('loadedmetadata', onMeta); } catch(_) {}
+        try { video.removeEventListener('playing', onPlay); } catch(_) {}
+        resolve(!!ok);
+      };
+
+      const onMeta = () => finish(video.videoWidth > 0 && video.videoHeight > 0);
+      const onPlay = () => finish(video.videoWidth > 0 && video.videoHeight > 0);
+
+      try { video.addEventListener('loadedmetadata', onMeta, { once: true }); } catch(_) {}
+      try { video.addEventListener('playing', onPlay, { once: true }); } catch(_) {}
+
+      // Filet de sécurité
+      setTimeout(() => finish(video.videoWidth > 0 && video.videoHeight > 0), timeoutMs);
+    });
+  }
 
 async function startWith(deviceId){
   try{
@@ -911,15 +938,29 @@ async function startWith(deviceId){
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-    currentStream = stream;
+     currentStream = stream;
     $video.srcObject = stream;
 
     try { await $video.play(); } catch(_) {}
+
+    // IMPORTANT iPhone : attendre les dimensions réelles de la vidéo avant ZXing
+    await waitForVideoReady($video, 3000);
 
     currentTrack = stream.getVideoTracks()[0] || null;
     setStatus('Caméra active', true);
 
     if(currentTrack) await detectTorchSupport(currentTrack);
+
+    // BONUS iPhone : zoom léger si supporté (améliore énormément la lecture EAN)
+    try {
+      if (currentTrack && currentTrack.getCapabilities) {
+        const caps = currentTrack.getCapabilities();
+        if (caps && caps.zoom) {
+          const targetZoom = Math.min(2, caps.zoom.max || 2);
+          await currentTrack.applyConstraints({ advanced: [{ zoom: targetZoom }] });
+        }
+      }
+    } catch (_) {}
 
     // Démarre le décodage EAN (si ZXing est chargé sur la page)
     await startZXingFromStream(stream);
