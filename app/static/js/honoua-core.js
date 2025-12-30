@@ -83,9 +83,104 @@
 
 
 
-
+ 
   let currentStream = null;
   let currentTrack = null;
+    // --- Quagga2 (fallback iPhone) ---
+  let __quaggaRunning = false;
+
+  function isIphoneIOS(){
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isWebkit = /WebKit/.test(ua);
+    return isIOS && isWebkit;
+  }
+
+  function stopQuagga(){
+    try {
+      if (window.Quagga && __quaggaRunning) {
+        window.Quagga.stop();
+      }
+    } catch(_) {}
+    __quaggaRunning = false;
+
+    // Réaffiche la vidéo native si on l’avait cachée
+    try { if ($video) $video.style.display = ''; } catch(_) {}
+  }
+
+  async function startQuaggaInTarget(){
+    const Q = window.Quagga;
+    if (!Q) {
+      console.warn('[Quagga] Quagga non chargé (script manquant).');
+      try { showScannerError("Quagga non chargé (script)."); } catch(_) {}
+      return;
+    }
+
+    // IMPORTANT : éviter conflits caméra → stoppe ton stream avant Quagga
+    await stopStream(); // stopStream appelle déjà stopZXing; on va y ajouter stopQuagga plus bas
+
+    // Quagga va créer son propre flux ; on masque la vidéo native
+    try { if ($video) $video.style.display = 'none'; } catch(_) {}
+
+    const targetEl = document.querySelector('.video-wrap') || document.body;
+
+    return await new Promise((resolve) => {
+      Q.init({
+        inputStream: {
+          type: "LiveStream",
+          target: targetEl,
+          constraints: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        locator: {
+          halfSample: true
+        },
+        decoder: {
+          readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader", "code_128_reader"]
+        },
+        locate: true
+      }, (err) => {
+        if (err) {
+          console.warn('[Quagga] init error:', err);
+          try { showScannerError("Impossible de démarrer le scan (Quagga)."); } catch(_) {}
+          __quaggaRunning = false;
+          return resolve(false);
+        }
+
+        __quaggaRunning = true;
+
+        // Important : éviter doublons
+        let last = '';
+        let lastAt = 0;
+
+        Q.onDetected((data) => {
+          try {
+            const code = data && data.codeResult && data.codeResult.code ? String(data.codeResult.code).trim() : '';
+            const now = Date.now();
+            if (!code) return;
+            if (code === last && (now - lastAt) < 1200) return;
+
+            last = code; lastAt = now;
+            console.info('[Quagga] detected:', code);
+
+            if (typeof window.handleEanDetected === 'function') {
+              window.handleEanDetected(code);
+            }
+
+            // Stoppe après détection (optionnel, mais utile pour éviter “rafales”)
+            stopQuagga();
+          } catch(_) {}
+        });
+
+        Q.start();
+        resolve(true);
+      });
+    });
+  }
+
   let torchSupported = false;
   let torchOn = false;
   let lastChallengeAutoEval = 0;
@@ -824,6 +919,7 @@ if (typeof data.co2_kg_total === "number") {
   async function stopStream(){
     // Stop le décodage EAN si actif
     stopZXing();
+    stopQuagga();
 
     if(currentStream){
       currentStream.getTracks().forEach(t=>t.stop());
@@ -947,6 +1043,14 @@ if (typeof data.co2_kg_total === "number") {
 async function startWith(deviceId){
   try{
     await stopStream();
+
+        // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
+    if (isIphoneIOS() && window.Quagga) {
+      setStatus('Caméra active', true);
+      await startQuaggaInTarget();
+      return;
+    }
+
 
     // iOS: stabilise la lecture vidéo (indispensable pour analyse frame/ZXing)
     if ($video) {
