@@ -815,23 +815,22 @@ if (typeof data.co2_kg_total === "number") {
   }
 }
 
-  function pickBackCamera(devices){
-    return devices.find(d=>/back|arrière|rear|environment/i.test(d.label))||devices[0]||null;
-  }
+ function pickBackCamera(devices){
+  const list = Array.isArray(devices) ? devices : [];
 
-  async function detectTorchSupport(track){
-    try{
-      const caps = track.getCapabilities?.();
-      torchSupported = !!(caps && 'torch' in caps);
-      if (!torchSupported){
-        await track.applyConstraints({advanced:[{torch:false}]}).then(
-          ()=>{ torchSupported=true; }, ()=>{ torchSupported=false; }
-        );
-      }
-    }catch(_){ torchSupported=false; }
-    $torch.disabled = !torchSupported;
-    $torch.title = torchSupported ? 'Activer/Désactiver la lampe' : 'Lampe non supportée';
-  }
+  // 1) Heuristique iOS/Android : "back", "rear", "environment"
+  const byLabel = list.find(d =>
+    d && typeof d.label === 'string' &&
+    /back|rear|environment|arrière|arri[eè]re/i.test(d.label)
+  );
+  if (byLabel) return byLabel;
+
+  // 2) Sinon : si on a plusieurs caméras, la dernière est souvent la back cam (mobile)
+  if (list.length > 1) return list[list.length - 1];
+
+  // 3) Sinon : unique caméra ou rien
+  return list[0] || null;
+}
 
   async function toggleTorch(){
     if(!currentTrack || !torchSupported) return;
@@ -976,7 +975,7 @@ async function startWith(deviceId){
         const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
         tmp.getTracks().forEach((t) => t.stop());
       } catch (_) {}
-      const vids = await listCameras();
+      const vids = await listCameras().catch(() => []);
       const back = pickBackCamera(vids);
       await startWith(back?.deviceId);
     };
