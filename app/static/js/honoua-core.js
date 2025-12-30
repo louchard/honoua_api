@@ -109,20 +109,21 @@
   }
 
   async function startZXingFromStream(stream) {
-  const ZX = window.ZXingBrowser;
+  // Selon la build UMD, le global peut être ZXingBrowser ou ZXing
+  const ZX = window.ZXingBrowser || window.ZXing;
 
-  // Diagnostic immédiat : si ZXing n’est pas chargé, iPhone ne détectera jamais.
   if (!ZX) {
-    console.warn('[ZXing] ZXingBrowser non chargé. Vérifie le <script src="https://unpkg.com/@zxing/browser..."> dans eco-select.html et scan-impact.html');
-    if (typeof updateEcoSelectMessage === 'function') updateEcoSelectMessage("Lecteur EAN non chargé (ZXing).", "error");
-    if (typeof updateScanImpactMessage === 'function') updateScanImpactMessage("Lecteur EAN non chargé (ZXing).", "error");
+    console.warn('[ZXing] Global ZXing introuvable. Script UMD non chargé ou bloqué.');
+    // Message visible (au lieu d’un silence total)
+    try { showScannerError("Lecteur EAN non chargé (ZXing). Vérifie le script ZXing dans la page."); } catch(_) {}
     return;
   }
+
   if (!$video || !stream) return;
 
   stopZXing();
 
-  // Hints: on restreint aux formats utiles pour accélérer et fiabiliser EAN/UPC.
+  // Hints (EAN/UPC) + TRY_HARDER
   const hints = new Map();
   try {
     hints.set(ZX.DecodeHintType.TRY_HARDER, true);
@@ -135,25 +136,17 @@
     ]);
   } catch (_) {}
 
-  // timeBetweenScansMs réduit le CPU et laisse l’AF iPhone faire son travail
+  // timeBetweenScansMs : laisse l’autofocus iPhone travailler
   __zxingReader = new ZX.BrowserMultiFormatReader(hints, 250);
 
-  // Heartbeat léger pour confirmer que la boucle tourne (sans spam)
-  let lastBeat = 0;
+  console.info('[ZXing] démarrage decodeFromStream', { w: $video.videoWidth, h: $video.videoHeight });
 
   __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
     try {
-      const now = Date.now();
-      if (now - lastBeat > 2000) {
-        lastBeat = now;
-        // Donne des infos utiles sur iPhone (si videoWidth/videoHeight restent à 0, problème de flux)
-        console.debug('[ZXing] running', { readyState: $video.readyState, w: $video.videoWidth, h: $video.videoHeight });
-      }
-
       if (result && result.getText) {
         const text = String(result.getText()).trim();
+        const now = Date.now();
 
-        // anti-doublon / anti-rafale
         if (!text) return;
         if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
 
@@ -161,20 +154,14 @@
         __lastZxingAt = now;
 
         console.info('[ZXing] code détecté:', text);
-
-        if (typeof window.handleEanDetected === 'function') {
-          window.handleEanDetected(text);
-        }
-        return;
+        if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
       }
-
-      // Les erreurs NotFound sont normales quand aucun code n’est dans le frame.
-      // On ne log pas err pour éviter le spam.
     } catch (e) {
       console.warn('[ZXing] callback error:', e);
     }
   });
 }
+
 
 
     // === Localisation utilisateur (GPS) ===
@@ -936,9 +923,20 @@ async function startWith(deviceId){
       ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
       : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
 
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    let stream = null;
 
-     currentStream = stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e1) {
+      // Fallback desktop : certaines contraintes (facingMode env / deviceId exact) peuvent échouer
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      } catch (e2) {
+        throw e1; // on garde l’erreur initiale pour ton message UX
+      }
+    }
+
+    currentStream = stream;
     $video.srcObject = stream;
 
     try { await $video.play(); } catch(_) {}
