@@ -90,52 +90,59 @@
   let torchOn = false;
   let lastChallengeAutoEval = 0;
 
-// --- ZXing (EAN/Code-barres) : fallback iPhone (BarcodeDetector non supporté iOS) ---
+  // --- ZXing (EAN/Code-barres) : iPhone stable ---
+  // Important : on évite decodeFromVideoDevice (double ouverture caméra). On scanne depuis le stream déjà ouvert.
   let __zxingReader = null;
-  let __zxingStop = null;
+  let __zxingControls = null;
   let __lastZxingText = '';
   let __lastZxingAt = 0;
 
   function stopZXing() {
-    try { if (__zxingStop) __zxingStop(); } catch (_) {}
-    __zxingStop = null;
+    try { if (__zxingControls && typeof __zxingControls.stop === 'function') __zxingControls.stop(); } catch (_) {}
+    __zxingControls = null;
+
+    try { if (__zxingReader && typeof __zxingReader.reset === 'function') __zxingReader.reset(); } catch (_) {}
     __zxingReader = null;
+
     __lastZxingText = '';
     __lastZxingAt = 0;
   }
 
-  function startZXing(deviceId) {
-    // Disponible uniquement si le script UMD a été chargé sur la page
+  async function startZXingFromStream(stream) {
     const ZX = window.ZXingBrowser;
-    if (!ZX || !$video) return;
+    if (!ZX || !$video || !stream) return;
 
     stopZXing();
-
     __zxingReader = new ZX.BrowserMultiFormatReader();
 
-    // decodeFromVideoDevice : on passe le deviceId et l’élément video existant
-    __zxingStop = __zxingReader.decodeFromVideoDevice(deviceId || null, $video, (result, err) => {
-      if (result && result.getText) {
-        const text = String(result.getText()).trim();
+    // decodeFromStream = réutilise le flux déjà actif (évite que la caméra "saute" sur iPhone)
+    __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
+      try {
+        if (result && result.getText) {
+          const text = String(result.getText()).trim();
+          const now = Date.now();
 
-        // anti-doublon (évite les rafales)
-        const now = Date.now();
-        if (text && (text !== __lastZxingText || (now - __lastZxingAt) > 1200)) {
+          // anti-doublon / anti-rafale
+          if (!text) return;
+          if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
+
           __lastZxingText = text;
           __lastZxingAt = now;
 
-          // Filtre simple : EAN/UPC = chiffres (8/12/13/14). On laisse passer si tu veux tout.
+          // Laisse passer EAN/UPC, sinon on tente quand même (au besoin tu restreins)
           if (/^\d{8}(\d{4,6})?$/.test(text)) {
-            window.handleEanDetected(text);
+            if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
           } else {
-            // Si tu veux accepter tout type de code, remplace par : window.handleEanDetected(text);
-            window.handleEanDetected(text);
+            if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
           }
         }
+        // err ignorée : NotFound est normal entre 2 frames
+      } catch (e) {
+        console.warn('[ZXing] callback error:', e);
       }
-      // err ignorée : ZXing remonte souvent des erreurs “NotFound” normales entre 2 frames
     });
   }
+
 
 
     // === Localisation utilisateur (GPS) ===
@@ -883,7 +890,8 @@ async function startWith(deviceId){
     if(currentTrack) await detectTorchSupport(currentTrack);
 
     // Démarre le décodage EAN (si ZXing est chargé sur la page)
-    startZXing(deviceId);
+    await startZXingFromStream(stream);
+
 
   } catch(e) {
     setStatus('Erreur ou refus caméra', false);
