@@ -112,14 +112,32 @@
   // Selon la build UMD, le global peut être ZXingBrowser ou ZXing
   const ZX = window.ZXingBrowser || window.ZXing;
 
+  // Diagnostics UI (visible sur iPhone)
+  let loops = 0;
+  let detected = 0;
+  let startedAt = Date.now();
+  let watchdogTimer = null;
+
+  function ui(msg, ok) {
+    try {
+      if (typeof setStatus === 'function') setStatus(msg, !!ok);
+    } catch (_) {}
+    try {
+      if ($badge) $badge.textContent = ok ? "OK" : "KO";
+    } catch (_) {}
+  }
+
   if (!ZX) {
     console.warn('[ZXing] Global ZXing introuvable. Script UMD non chargé ou bloqué.');
-    // Message visible (au lieu d’un silence total)
+    ui("ZXing: NON CHARGÉ", false);
     try { showScannerError("Lecteur EAN non chargé (ZXing). Vérifie le script ZXing dans la page."); } catch(_) {}
     return;
   }
 
-  if (!$video || !stream) return;
+  if (!$video || !stream) {
+    ui("ZXing: vidéo/stream manquant", false);
+    return;
+  }
 
   stopZXing();
 
@@ -139,10 +157,26 @@
   // timeBetweenScansMs : laisse l’autofocus iPhone travailler
   __zxingReader = new ZX.BrowserMultiFormatReader(hints, 250);
 
-  console.info('[ZXing] démarrage decodeFromStream', { w: $video.videoWidth, h: $video.videoHeight });
+  // Affiche la résolution réelle (crucial sur iPhone)
+  ui(`ZXing: démarrage (${ $video.videoWidth }x${ $video.videoHeight })`, true);
+
+  // Watchdog : si aucune détection après 8s, on le dit clairement
+  watchdogTimer = setTimeout(() => {
+    if (detected === 0) {
+      ui(`ZXing: 0 détection (8s) (${ $video.videoWidth }x${ $video.videoHeight })`, false);
+      try { showScannerError("Aucune détection EAN. Approche le code-barres, évite les reflets, et vérifie que l'image est nette."); } catch(_) {}
+    }
+  }, 8000);
 
   __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
     try {
+      loops++;
+
+      // Heartbeat UI (toutes les ~2s environ)
+      if (loops % 8 === 0) {
+        ui(`ZXing: actif (${detected}) (${ $video.videoWidth }x${ $video.videoHeight })`, true);
+      }
+
       if (result && result.getText) {
         const text = String(result.getText()).trim();
         const now = Date.now();
@@ -152,8 +186,13 @@
 
         __lastZxingText = text;
         __lastZxingAt = now;
+        detected++;
 
+        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
+
+        ui(`ZXing: détecté ${text}`, true);
         console.info('[ZXing] code détecté:', text);
+
         if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
       }
     } catch (e) {
@@ -163,7 +202,7 @@
 }
 
 
-
+ 
     // === Localisation utilisateur (GPS) ===
   // === Localisation utilisateur (GPS) ===
   const userLocation = {
