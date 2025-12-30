@@ -109,40 +109,72 @@
   }
 
   async function startZXingFromStream(stream) {
-    const ZX = window.ZXingBrowser;
-    if (!ZX || !$video || !stream) return;
+  const ZX = window.ZXingBrowser;
 
-    stopZXing();
-    __zxingReader = new ZX.BrowserMultiFormatReader();
-
-    // decodeFromStream = réutilise le flux déjà actif (évite que la caméra "saute" sur iPhone)
-    __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
-      try {
-        if (result && result.getText) {
-          const text = String(result.getText()).trim();
-          const now = Date.now();
-
-          // anti-doublon / anti-rafale
-          if (!text) return;
-          if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
-
-          __lastZxingText = text;
-          __lastZxingAt = now;
-
-          // Laisse passer EAN/UPC, sinon on tente quand même (au besoin tu restreins)
-          if (/^\d{8}(\d{4,6})?$/.test(text)) {
-            if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
-          } else {
-            if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
-          }
-        }
-        // err ignorée : NotFound est normal entre 2 frames
-      } catch (e) {
-        console.warn('[ZXing] callback error:', e);
-      }
-    });
+  // Diagnostic immédiat : si ZXing n’est pas chargé, iPhone ne détectera jamais.
+  if (!ZX) {
+    console.warn('[ZXing] ZXingBrowser non chargé. Vérifie le <script src="https://unpkg.com/@zxing/browser..."> dans eco-select.html et scan-impact.html');
+    if (typeof updateEcoSelectMessage === 'function') updateEcoSelectMessage("Lecteur EAN non chargé (ZXing).", "error");
+    if (typeof updateScanImpactMessage === 'function') updateScanImpactMessage("Lecteur EAN non chargé (ZXing).", "error");
+    return;
   }
+  if (!$video || !stream) return;
 
+  stopZXing();
+
+  // Hints: on restreint aux formats utiles pour accélérer et fiabiliser EAN/UPC.
+  const hints = new Map();
+  try {
+    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+      ZX.BarcodeFormat.EAN_13,
+      ZX.BarcodeFormat.EAN_8,
+      ZX.BarcodeFormat.UPC_A,
+      ZX.BarcodeFormat.UPC_E,
+      ZX.BarcodeFormat.CODE_128
+    ]);
+  } catch (_) {}
+
+  // timeBetweenScansMs réduit le CPU et laisse l’AF iPhone faire son travail
+  __zxingReader = new ZX.BrowserMultiFormatReader(hints, 250);
+
+  // Heartbeat léger pour confirmer que la boucle tourne (sans spam)
+  let lastBeat = 0;
+
+  __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
+    try {
+      const now = Date.now();
+      if (now - lastBeat > 2000) {
+        lastBeat = now;
+        // Donne des infos utiles sur iPhone (si videoWidth/videoHeight restent à 0, problème de flux)
+        console.debug('[ZXing] running', { readyState: $video.readyState, w: $video.videoWidth, h: $video.videoHeight });
+      }
+
+      if (result && result.getText) {
+        const text = String(result.getText()).trim();
+
+        // anti-doublon / anti-rafale
+        if (!text) return;
+        if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
+
+        __lastZxingText = text;
+        __lastZxingAt = now;
+
+        console.info('[ZXing] code détecté:', text);
+
+        if (typeof window.handleEanDetected === 'function') {
+          window.handleEanDetected(text);
+        }
+        return;
+      }
+
+      // Les erreurs NotFound sont normales quand aucun code n’est dans le frame.
+      // On ne log pas err pour éviter le spam.
+    } catch (e) {
+      console.warn('[ZXing] callback error:', e);
+    }
+  });
+}
 
 
     // === Localisation utilisateur (GPS) ===
