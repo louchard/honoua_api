@@ -90,6 +90,54 @@
   let torchOn = false;
   let lastChallengeAutoEval = 0;
 
+// --- ZXing (EAN/Code-barres) : fallback iPhone (BarcodeDetector non supporté iOS) ---
+  let __zxingReader = null;
+  let __zxingStop = null;
+  let __lastZxingText = '';
+  let __lastZxingAt = 0;
+
+  function stopZXing() {
+    try { if (__zxingStop) __zxingStop(); } catch (_) {}
+    __zxingStop = null;
+    __zxingReader = null;
+    __lastZxingText = '';
+    __lastZxingAt = 0;
+  }
+
+  function startZXing(deviceId) {
+    // Disponible uniquement si le script UMD a été chargé sur la page
+    const ZX = window.ZXingBrowser;
+    if (!ZX || !$video) return;
+
+    stopZXing();
+
+    __zxingReader = new ZX.BrowserMultiFormatReader();
+
+    // decodeFromVideoDevice : on passe le deviceId et l’élément video existant
+    __zxingStop = __zxingReader.decodeFromVideoDevice(deviceId || null, $video, (result, err) => {
+      if (result && result.getText) {
+        const text = String(result.getText()).trim();
+
+        // anti-doublon (évite les rafales)
+        const now = Date.now();
+        if (text && (text !== __lastZxingText || (now - __lastZxingAt) > 1200)) {
+          __lastZxingText = text;
+          __lastZxingAt = now;
+
+          // Filtre simple : EAN/UPC = chiffres (8/12/13/14). On laisse passer si tu veux tout.
+          if (/^\d{8}(\d{4,6})?$/.test(text)) {
+            window.handleEanDetected(text);
+          } else {
+            // Si tu veux accepter tout type de code, remplace par : window.handleEanDetected(text);
+            window.handleEanDetected(text);
+          }
+        }
+      }
+      // err ignorée : ZXing remonte souvent des erreurs “NotFound” normales entre 2 frames
+    });
+  }
+
+
     // === Localisation utilisateur (GPS) ===
   // === Localisation utilisateur (GPS) ===
   const userLocation = {
@@ -709,6 +757,9 @@ if (typeof data.co2_kg_total === "number") {
   }
 
   async function stopStream(){
+    // Stop le décodage EAN si actif
+    stopZXing();
+
     if(currentStream){
       currentStream.getTracks().forEach(t=>t.stop());
       currentStream=null; currentTrack=null;
@@ -803,46 +854,42 @@ if (typeof data.co2_kg_total === "number") {
   }
 
 async function startWith(deviceId){
-    try{
-      await stopStream();
+  try{
+    await stopStream();
 
-      // iOS: améliore la stabilité lecture vidéo
-      if ($video) {
-        $video.setAttribute('playsinline', '');
-        $video.setAttribute('webkit-playsinline', '');
-        $video.muted = true;
-        $video.autoplay = true;
-      }
+    // iOS: stabilise la lecture vidéo (indispensable pour analyse frame/ZXing)
+    if ($video) {
+      $video.setAttribute('playsinline', '');
+      $video.setAttribute('webkit-playsinline', '');
+      $video.muted = true;
+      $video.autoplay = true;
+    }
 
-      // Contraintes caméra (un peu plus strictes, sans casser Android)
-      const constraints = deviceId
-        ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
-        : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    // Résolution plus exploitable pour EAN
+    const constraints = deviceId
+      ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
+      : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      currentStream = stream;
-      $video.srcObject = stream;
+    currentStream = stream;
+    $video.srcObject = stream;
 
-      // Forcer play (iOS peut rester bloqué sinon)
-      try { await $video.play(); } catch(_) {}
+    try { await $video.play(); } catch(_) {}
 
-      currentTrack = stream.getVideoTracks()[0] || null;
+    currentTrack = stream.getVideoTracks()[0] || null;
+    setStatus('Caméra active', true);
 
-      setStatus('Caméra active', true);
+    if(currentTrack) await detectTorchSupport(currentTrack);
 
-      if(currentTrack) await detectTorchSupport(currentTrack);
+    // Démarre le décodage EAN (si ZXing est chargé sur la page)
+    startZXing(deviceId);
 
-      // Lance le diagnostic si aucune détection EAN
-      startScanWatchdog();
-
-   }catch(e){
-      setStatus('Erreur ou refus caméra', false);
-      showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
-   }
+  } catch(e) {
+    setStatus('Erreur ou refus caméra', false);
+    showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
+  }
 }
-
- 
 
     if ($start) {
     $start.onclick = async () => {
