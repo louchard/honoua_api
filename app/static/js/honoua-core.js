@@ -766,23 +766,83 @@ if (typeof data.co2_kg_total === "number") {
     }catch(e){ $torch.disabled=true; }
   }
 
-  async function startWith(deviceId){
+// --- A. Scan Watchdog (diagnostic iPhone) ---
+  let __lastEanDetectedAt = 0;
+  let __scanWatchdogTimer = null;
+
+  function markEanDetected(){
+    __lastEanDetectedAt = Date.now();
+  }
+
+  function startScanWatchdog(){
+    // Si aucun EAN n’est détecté après X secondes, on remonte un diagnostic utile.
+    if (__scanWatchdogTimer) clearTimeout(__scanWatchdogTimer);
+
+    __scanWatchdogTimer = setTimeout(() => {
+      try {
+        // si le flux n’est pas actif, inutile
+        if (!currentStream || !$video) return;
+
+        // si un EAN vient d’être détecté, inutile
+        if (__lastEanDetectedAt && (Date.now() - __lastEanDetectedAt) < 1500) return;
+
+        // diagnostic vidéo
+        const diag = {
+          readyState: $video.readyState,
+          videoW: $video.videoWidth,
+          videoH: $video.videoHeight,
+          trackSettings: currentTrack?.getSettings ? currentTrack.getSettings() : null
+        };
+
+        console.warn('[Scan][Watchdog] Aucun EAN détecté après 6s. Probable lecteur EAN inactif (iOS).', diag);
+
+        // message UX (sans bloquer)
+        showScannerError("Scan iPhone : aucune détection EAN. Si le cadre est sombre ou si rien n’est détecté, utilise le test EAN manuel. Diagnostic enregistré dans la console.");
+      } catch (_) {}
+    }, 6000);
+  }
+
+async function startWith(deviceId){
     try{
       await stopStream();
-      const constraints = deviceId ? {video:{deviceId:{exact:deviceId}}}
-                                   : {video:{facingMode:{ideal:'environment'}}};
+
+      // iOS: améliore la stabilité lecture vidéo
+      if ($video) {
+        $video.setAttribute('playsinline', '');
+        $video.setAttribute('webkit-playsinline', '');
+        $video.muted = true;
+        $video.autoplay = true;
+      }
+
+      // Contraintes caméra (un peu plus strictes, sans casser Android)
+      const constraints = deviceId
+        ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
+        : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
       currentStream = stream;
       $video.srcObject = stream;
+
+      // Forcer play (iOS peut rester bloqué sinon)
+      try { await $video.play(); } catch(_) {}
+
       currentTrack = stream.getVideoTracks()[0] || null;
+
       setStatus('Caméra active', true);
+
       if(currentTrack) await detectTorchSupport(currentTrack);
+
+      // Lance le diagnostic si aucune détection EAN
+      startScanWatchdog();
+
    }catch(e){
-  setStatus('Erreur ou refus caméra', false);
-  showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
+      setStatus('Erreur ou refus caméra', false);
+      showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
+   }
 }
 
-  }
+ 
 
     if ($start) {
     $start.onclick = async () => {
@@ -823,18 +883,20 @@ if (typeof data.co2_kg_total === "number") {
 
   })();
 
-  // Fallback global pour être sûr que handleEanDetected existe
+   // Fallback global pour être sûr que handleEanDetected existe
   window.handleEanDetected = function(ean){
     if (!ean) return;
 
+    // Marque une détection (empêche le watchdog de conclure à une absence de scan)
+    markEanDetected();
+
     console.log('handleEanDetected (fallback) appelé avec :', ean);
 
-    // Si la fonction fetchCo2ForEan existe (définie dans le gros script),
-    // on l’utilise. Sinon on se contente du log.
     if (typeof fetchCo2ForEan === 'function') {
       fetchCo2ForEan(String(ean).trim());
     }
   };
+
 
 /* ============================================================================
    EcoSELECT (AUTONOME) — rendu du comparateur dans scanner.html
