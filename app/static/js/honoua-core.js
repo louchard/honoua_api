@@ -1,42 +1,3 @@
-
-// =========================
-// Session ID (MVP, sans auth)
-// =========================
-function getOrCreateSessionId() {
-  const KEY = "honoua_session_id";
-  let sid = localStorage.getItem(KEY);
-  if (!sid) {
-    sid = crypto.randomUUID();
-    localStorage.setItem(KEY, sid);
-  }
-  return sid;
-}
-
-const HONOUA_SESSION_ID = getOrCreateSessionId();
-
-// =========================
-// Fetch central Honoua (ajoute X-Session-Id partout)
-// =========================
-async function honouaFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {});
-  headers.set("X-Session-Id", HONOUA_SESSION_ID);
-
-  if (!headers.has("Accept")) headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(url, { ...options, headers });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`[Honoua API ${response.status}] ${text}`);
-  }
-
-  return response;
-}
-
-
  
 
 (async () => {
@@ -779,7 +740,7 @@ function showScannerError(text, persistent = false) {
       url += `?${params.toString()}`;
     }
 
-    const resp = await honouaFetch(url, {
+    const resp = await fetch(url, {
       method: 'GET',
       headers: { 'Accept':'application/json' }
     });
@@ -2151,38 +2112,16 @@ document.addEventListener('DOMContentLoaded', function () {
   const $validateBtn = document.getElementById('co2-cart-validate-btn');
 
   if ($clearBtn) {
-  $clearBtn.addEventListener('click', function () {
+    $clearBtn.addEventListener('click', function () {
+      clearCart();
+      renderCo2Cart();
 
-    // 1) Si déjà vide
-    if (!Array.isArray(co2Cart) || co2Cart.length === 0) {
-      if (typeof showScannerInfo === "function") {
-        showScannerInfo("Votre panier est déjà vide.", 2200);
-      } else {
-        alert("Votre panier est déjà vide.");
+      const $reportSection = document.getElementById('co2-cart-report');
+      if ($reportSection) {
+        $reportSection.classList.add('hidden');
       }
-      return;
-    }
-
-    // 2) Confirmation
-    const ok = window.confirm("Confirmez-vous la suppression de tout le panier ?");
-    if (!ok) return;
-
-    // 3) Vidage + refresh UI
-    clearCart();
-    renderCo2Cart();
-
-    // 4) Cache le rapport si présent
-    const $reportSection = document.getElementById('co2-cart-report');
-    if ($reportSection) {
-      $reportSection.classList.add('hidden');
-    }
-
-    // 5) Feedback utilisateur
-    if (typeof showScannerInfo === "function") {
-      showScannerInfo("Panier vidé.", 2200);
-    }
-  });
-}
+    });
+  }
 
   if ($validateBtn) {
     $validateBtn.addEventListener('click', function () {
@@ -2267,17 +2206,18 @@ function saveCartHistoryFromCart() {
       tree_equivalent: Number.isFinite(treeEq) ? Number(treeEq) : 0
        };
 
-       return honouaFetch((window.CART_HISTORY_ENDPOINT || CART_HISTORY_ENDPOINT), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        })
+       return fetch((window.CART_HISTORY_ENDPOINT || CART_HISTORY_ENDPOINT), {
+      method: 'POST',
+      credentials: 'same-origin',
+     headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Honoua-User-Id': (window.getHonouaUserId ? window.getHonouaUserId() : '')
 
+         },
 
+      body: JSON.stringify(payload)
+    })
     .then(async (res) => {
       if (res.ok) return;
 
@@ -3174,7 +3114,7 @@ async function loadCo2CartHistory(limit = 5) {
   }
 
   try {
-    const res = await honouaFetch(`${CART_HISTORY_ENDPOINT}?limit=${limit}`, {
+    const res = await fetch(`${CART_HISTORY_ENDPOINT}?limit=${limit}`, {
 
       credentials: 'same-origin',
       headers: {
@@ -3641,7 +3581,7 @@ function aggregateHistoryByPeriod(items) {
             ? window.getHonouaUserId()
             : (localStorage.getItem('honoua_user_id') || '');
 
-        const resp = await honouaFetch(`${CART_HISTORY_ENDPOINT}?limit=100`, {
+        const resp = await fetch(`${CART_HISTORY_ENDPOINT}?limit=100`, {
           headers: {
             'Accept': 'application/json',
             'X-Honoua-User-Id': userId
@@ -4010,7 +3950,7 @@ async function refreshEvolution(periodType = "month") {
         ? window.getHonouaUserId()
         : (localStorage.getItem("honoua_user_id") || "");
 
-    const resp = await honouaFetch(`${CART_HISTORY_ENDPOINT}?limit=150`, {
+    const resp = await fetch(`${CART_HISTORY_ENDPOINT}?limit=150`, {
       headers: {
         "Accept": "application/json",
         "X-Honoua-User-Id": userId

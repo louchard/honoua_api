@@ -8,39 +8,7 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
  <link rel="icon" href="/favicon.ico" sizes="any">
-<style>
-  .co2-challenge-card{
-  padding:12px;
-  border:1px solid #ddd;
-  border-radius:12px;
-  margin:10px 0;
-  background:#fff;
-}
-.co2-challenge-head{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:8px;
-}
-.co2-challenge-name{ font-weight:600; }
-.co2-challenge-status{ opacity:.7; font-size:.9em; }
-.co2-challenge-bar{
-  height:10px;
-  border-radius:999px;
-  background:#eee;
-  overflow:hidden;
-}
-.co2-challenge-bar-fill{
-  height:100%;
-  background:#001D85; /* ta charte bleue */
-}
-.co2-challenge-bar-label{ margin-top:6px; font-size:.9em; opacity:.8; }
-.co2-challenge-message{ margin-top:8px; font-size:.95em; }
-.co2-challenge-empty{ opacity:.75; padding:10px 0; }
-.co2-challenges-actions{ display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
 
-
-</style>
 </head>
 
 <body class="suivico2-page ecoselect-page">
@@ -208,11 +176,10 @@
       </div>
 
       <div id="co2-cart-history-list" class="co2-cart-history-list">
-          <p id="co2-cart-history-status" class="co2-cart-history-empty">
-            Aucun panier enregistré pour le moment.
-          </p>
-     </div>
-
+        <p class="co2-cart-history-empty">
+          Chargement de votre historique...
+        </p>
+      </div>
     </section>
 
     <!-- BLOC 4 – Défis CO₂ -->
@@ -220,59 +187,35 @@
     
 
       <button id="co2-challenges-refresh" class="co2-challenges-refresh-btn">
-        🔄 Mettre à jour les défis : 🏆 Défis personnels
+        🔄 Mettre à jour les défis
       </button>
-      <h2 class="co2-challenges-title">Défis personnels</h2>
+      <h2 class="co2-challenges-title">🏆 Défis personnels</h2>
 
-      <p class="co2-challenges-help">
-        Activez un défi pour suivre votre progression. Les résultats sont calculés à partir de l’historique de vos paniers.
-      </p>
-
-      <div class="co2-challenges-actions">
-        <button id="co2-challenges-activate-default" class="co2-challenges-refresh-btn" type="button">
-          Activer le défi -10% CO2 (30 jours)
-        </button>
-
-       
-      </div>
-
-      <div id="co2-challenges-list" class="co2-challenges-list" data-state="loading">
+      <div id="co2-challenges-list" class="co2-challenges-list">
         <div class="co2-challenge-empty">
-          Chargement…
+          Aucun défi actif pour le moment. Active ton premier défi pour suivre ta progression.
         </div>
       </div>
-
     </section>
 
         <!-- BLOC 5 – Défis collectifs (EN CONSTRUCTION) -->
     <section id="co2-challenges-collective-section" class="co2-challenges-section card">
-      
-       <button id="co2-challenges-refresh-collective" class="co2-challenges-refresh-btn">
-        🔄 Mettre à jour les défis: 🤝 Défis collectifs
-      </button>
-      <h2 class="co2-challenges-title"> Défis collectifs</h2>
-
-      <div id="co2-challenges-list-collective" class="co2-challenges-list">
-        <div class="co2-challenge-empty">
-           Défis en groupe (entre amis, entreprise, communauté). Cette partie arrive bientôt.
+      <div class="header">
+        <div class="title-block">
+          <h2 class="co2-challenges-title">🤝 Défis collectifs</h2>
+          <p class="subtitle">
+            Défis en groupe (entre amis, entreprise, communauté). Cette partie arrive bientôt.
+          </p>
         </div>
       </div>
-    
 
-    <p class="co2-challenges-help">
-      🚧 Bientôt : rejoignez un défi en groupe (amis, entreprise, association) et suivez un objectif commun.
-    </p>
-
-
-    <div id="co2-challenges-collective-list" class="co2-challenges-list" data-state="inactive">
-      <div class="co2-challenge-empty">
-        Aucun défi collectif n’est disponible pour le moment.
-        <br />
-        Exemple : “Défi d’équipe : -5% sur 1 mois”.
+      <div id="co2-challenges-collective" class="co2-challenges-list">
+        <div id="co2-challenges-collective-status" class="co2-challenge-empty">
+          🚧 En construction — Les défis collectifs seront disponibles dans une prochaine version.
+        </div>
       </div>
-    </div>
+    </section>
 
-      </section>
 
   </main>
 
