@@ -22,7 +22,6 @@ class ChallengeRead(BaseModel):
 
     class Config:
         # Compatibilité FastAPI / ORM
-        orm_mode = True
         from_attributes = True
 
 
