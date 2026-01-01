@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 import calendar
-from sqlalchemy.exc import OperationalError
+from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Header
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
+# IMPORTANT: aligne l'import get_db avec ton projet.
+# Dans ton repo, tu as app\db\deps.py: def get_db() (confirmé).
+from app.db.deps import get_db
 
 from app.schemas.challenges import (
     ChallengeRead,
@@ -13,22 +18,24 @@ from app.schemas.challenges import (
     ChallengeInstanceRead,
     ChallengeEvaluateResponse,
 )
-from app.db import get_db # adapte ce chemin si besoin
+
+router = APIRouter(tags=["challenges"])
 
 
-router = APIRouter(
-    tags=["challenges"]
-)
+def _require_session_id(x_session_id: Optional[str]) -> str:
+    session_id = (x_session_id or "").strip()
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Missing X-Session-Id header")
+    return session_id
 
 
-# ---------- 1) Lister les défis disponibles ---------- #
+# ---------- 1) Lister les défis disponibles (catalogue) ---------- #
 
 @router.get("/challenges", response_model=list[ChallengeRead])
 def list_challenges(db: Session = Depends(get_db)):
     """
     Retourne la liste des défis CO2 disponibles (catalogue).
-    Lit directement la table 'challenges' en SQLite et ne renvoie
-    que les défis actifs (active = 1).
+    Lit la table 'challenges' et ne renvoie que les défis actifs (active = 1).
     """
     query = text("""
         SELECT
@@ -47,39 +54,38 @@ def list_challenges(db: Session = Depends(get_db)):
         ORDER BY id;
     """)
 
-    # .mappings() permet de récupérer des dicts {colonne: valeur}
-    rows = db.execute(query).mappings().all()
+    try:
+        rows = db.execute(query).mappings().all()
+    except Exception as e:
+        print("[Challenges][WARN] Table 'challenges' absente ? Retour []. Détail:", e)
+        return []
 
-    # On transforme chaque ligne en objet Pydantic ChallengeRead
-    challenges = [ChallengeRead(**row) for row in rows]
-    return challenges
+    return [ChallengeRead(**row) for row in rows]
 
 
-# ---------- 2) Activer un défi pour un utilisateur ---------- #
 
-@router.post(
-    "/users/{user_id}/challenges/activate",
-    response_model=ChallengeInstanceRead,
-)
+
+# ---------- 2) Activer un défi (cible: session) ---------- #
+
+@router.post("/challenges/personal/activate", response_model=ChallengeInstanceRead)
 def activate_challenge(
-    user_id: int,
     payload: ChallengeActivateRequest,
     db: Session = Depends(get_db),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ):
     """
-    Active un défi pour un utilisateur et crée une instance de défi.
-    Version MVP simple :
+    Active un défi pour la session courante et crée une instance de défi.
+    MVP:
     - récupère le défi (challenges)
     - déduit start_date / end_date selon period_type
     - crée une ligne dans challenge_instances
     - initialise status='en_cours' et target_value=default_target_value
-    - ne calcule pas encore les valeurs métier complexes (reference_value, etc.)
     """
+    session_id = _require_session_id(x_session_id)
 
     # 1) Récupérer le défi demandé
     challenge_row = db.execute(
-        text(
-            """
+        text("""
             SELECT
                 id,
                 code,
@@ -94,62 +100,41 @@ def activate_challenge(
             FROM challenges
             WHERE id = :challenge_id
               AND active = 1
-            """
-        ),
+        """),
         {"challenge_id": payload.challenge_id},
     ).mappings().first()
 
     if challenge_row is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Défi introuvable ou inactif."
-        )
+        raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
 
     period_type = challenge_row["period_type"]
-
-    # 2) Déterminer start_date et end_date (version simple)
     now = datetime.utcnow()
 
+    # 2) Déterminer start_date et end_date (simple)
     if period_type == "30_jours_glissants":
         start_date = now
         end_date = now + timedelta(days=30)
-
     elif period_type == "7_jours_glissants":
         start_date = now
         end_date = now + timedelta(days=7)
-
     elif period_type == "mois_calendaire":
-        # début du mois courant
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # fin du mois courant (23:59:59)
         last_day = calendar.monthrange(now.year, now.month)[1]
-        end_date = start_date.replace(
-            day=last_day,
-            hour=23,
-            minute=59,
-            second=59,
-            microsecond=0,
-        )
+        end_date = start_date.replace(day=last_day, hour=23, minute=59, second=59, microsecond=0)
     else:
-        # Sécurité : fallback générique = 30 jours
         start_date = now
         end_date = now + timedelta(days=30)
 
-    # 3) Préparer les valeurs à insérer dans challenge_instances
+    # 3) Valeurs instance
     status = "en_cours"
     created_at = now
-
-    # MVP : on ne calcule pas encore reference_value / current_value / progress_percent
     reference_value = None
     current_value = None
     progress_percent = None
-
-    # On copie l'objectif par défaut du défi
     target_value = float(challenge_row["default_target_value"])
 
-    # 4) Insérer l'instance dans la base
-    insert_sql = text(
-        """
+    # 4) Insert instance
+    insert_sql = text("""
         INSERT INTO challenge_instances (
             challenge_id,
             target_type,
@@ -177,13 +162,12 @@ def activate_challenge(
             :created_at,
             :last_evaluated_at
         )
-        """
-    )
+    """)
 
     params = {
         "challenge_id": challenge_row["id"],
-        "target_type": "user",
-        "target_id": user_id,
+        "target_type": "session",
+        "target_id": session_id,
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "status": status,
@@ -197,13 +181,10 @@ def activate_challenge(
 
     result = db.execute(insert_sql, params)
     db.commit()
-
-    # Récupérer l'id auto-incrémenté de l'instance
     instance_id = result.lastrowid
 
-    # 5) Relire l'instance insérée avec jointure sur challenges
-    select_sql = text(
-        """
+    # 5) Relire l'instance (join challenges)
+    select_sql = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -226,37 +207,27 @@ def activate_challenge(
         JOIN challenges AS c
             ON ci.challenge_id = c.id
         WHERE ci.id = :instance_id
-        """
-    )
+    """)
 
     row = db.execute(select_sql, {"instance_id": instance_id}).mappings().first()
     if row is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Erreur lors de la création de l'instance de défi."
-        )
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de l'instance de défi.")
 
-    # Pydantic se charge de parser les dates ISO en datetime
     return ChallengeInstanceRead(**row)
 
 
+# ---------- 3) Lister les défis actifs (cible: session) ---------- #
 
-# ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
-
-@router.get(
-    "/users/{user_id}/challenges/active",
-    response_model=list[ChallengeInstanceRead],
-)
+@router.get("/challenges/personal/active", response_model=list[ChallengeInstanceRead])
 def get_active_challenges(
-    user_id: int,
     db: Session = Depends(get_db),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ):
     """
-    Retourne la liste des défis actifs pour un utilisateur.
-    Version robuste :
-    - Si les tables 'challenge_instances' et 'challenges' existent → OK.
-    - Si l'une des deux tables n'existe pas → renvoie [] sans planter.
+    Retourne la liste des défis actifs pour la session.
+    Robuste: si tables manquantes -> [].
     """
+    session_id = _require_session_id(x_session_id)
 
     sql = text("""
         SELECT
@@ -280,70 +251,38 @@ def get_active_challenges(
         FROM challenge_instances AS ci
         JOIN challenges AS c
             ON ci.challenge_id = c.id
-        WHERE ci.target_type = 'user'
-          AND ci.target_id = :user_id
+        WHERE ci.target_type = 'session'
+          AND ci.target_id = :session_id
           AND ci.status = 'en_cours'
         ORDER BY ci.created_at DESC
     """)
 
     try:
-        rows = db.execute(sql, {"user_id": user_id}).mappings().all()
+        rows = db.execute(sql, {"session_id": session_id}).mappings().all()
     except Exception as e:
-        print("[A54][WARN] Impossible de charger les défis actifs (table manquante ?) → retour []. Détail :", e)
+        print("[Challenges][WARN] Impossible de charger les défis actifs -> retour []. Détail:", e)
         return []
 
-    # Construction du modèle Pydantic
-    results = []
-    for r in rows:
-        results.append(
-            ChallengeInstanceRead(
-                instance_id=r["instance_id"],
-                challenge_id=r["challenge_id"],
-                code=r["code"],
-                name=r["name"],
-                description=r["description"],
-                metric=r["metric"],
-                logic_type=r["logic_type"],
-                period_type=r["period_type"],
-                status=r["status"],
-                start_date=r["start_date"],
-                end_date=r["end_date"],
-                reference_value=r["reference_value"],
-                current_value=r["current_value"],
-                target_value=r["target_value"],
-                progress_percent=r["progress_percent"],
-                created_at=r["created_at"],
-                last_evaluated_at=r["last_evaluated_at"],
-            )
-        )
-
-    return results
+    return [ChallengeInstanceRead(**r) for r in rows]
 
 
+# ---------- 4) Réévaluer un défi (cible: session) ---------- #
 
-
-
-# ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
-
-@router.post(
-    "/users/{user_id}/challenges/{instance_id}/evaluate",
-    response_model=ChallengeEvaluateResponse,
-)
+@router.post("/challenges/personal/{instance_id}/evaluate", response_model=ChallengeEvaluateResponse)
 def evaluate_challenge(
-    user_id: int,
     instance_id: int,
     db: Session = Depends(get_db),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ):
     """
-    Réévalue un défi (recalcule la progression et le statut) pour un utilisateur.
-    Version A54.19 : prise en charge du défi CO2 30 jours (CO2_30D_MINUS_10).
+    Réévalue un défi (recalcule la progression et le statut) pour la session.
+    MVP: prise en charge du défi CO2 réduction relative sur 30 jours glissants.
     """
-
+    session_id = _require_session_id(x_session_id)
     now = datetime.utcnow()
 
-    # 1) Récupérer l'instance + le défi associé
-    select_sql = text(
-        """
+    # 1) Récupérer instance + défi
+    select_sql = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -367,189 +306,141 @@ def evaluate_challenge(
         JOIN challenges AS c
             ON ci.challenge_id = c.id
         WHERE ci.id = :instance_id
-          AND ci.target_type = 'user'
-          AND ci.target_id = :user_id
-        """
-    )
+          AND ci.target_type = 'session'
+          AND ci.target_id = :session_id
+    """)
 
     row = db.execute(
         select_sql,
-        {"instance_id": instance_id, "user_id": user_id},
+        {"instance_id": instance_id, "session_id": session_id},
     ).mappings().first()
 
     if row is None:
-        raise HTTPException(status_code=404, detail="Instance de défi introuvable pour cet utilisateur.")
+        raise HTTPException(status_code=404, detail="Instance de défi introuvable pour cette session.")
 
-    # Vérifier qu'on est bien sur le défi CO2 30 jours
+    # MVP : uniquement CO2 / reduction_relative / 30_jours_glissants
     if not (
         row["metric"] == "co2"
         and row["logic_type"] == "reduction_relative"
         and row["period_type"] == "30_jours_glissants"
     ):
-        raise HTTPException(
-            status_code=400,
-            detail="Ce type de défi n'est pas encore pris en charge par l'évaluation."
-        )
+        raise HTTPException(status_code=400, detail="Ce type de défi n'est pas encore pris en charge.")
 
-    # 2) Convertir les dates stockées (ISO texte) en datetime
+    # 2) Dates
     try:
         start_date = datetime.fromisoformat(row["start_date"])
         end_date = datetime.fromisoformat(row["end_date"])
     except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Format de date invalide dans l'instance de défi."
-        )
+        raise HTTPException(status_code=500, detail="Format de date invalide dans l'instance de défi.")
 
-    # Périodes de calcul
-    # Période de référence: 30 jours AVANT le début du défi
+    # Période de référence: 30 jours avant le début
     periode_ref_fin = start_date
     periode_ref_debut = start_date - timedelta(days=30)
 
-    # Période actuelle: pendant le défi (limitée à now ou end_date)
+    # Période actuelle: pendant le défi (jusqu'à now ou end_date)
     periode_actuelle_debut = start_date
     periode_actuelle_fin = end_date if now > end_date else now
 
-    # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nécessaire.
-       # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # On utilise la table réelle: co2_cart_history
-    # - total_co2_g : CO2 en grammes
-    # - created_at  : date de création de l'agrégat
-    ref_sql = text(
-        """
+    # 3) Sommes CO2 depuis co2_cart_history (par session_id)
+    ref_sql = text("""
         SELECT SUM(total_co2_g) AS total_co2_g
-        FROM co2_cart_history
-        WHERE user_id = :user_id
-          AND created_at >= :start
-          AND created_at < :end
-        """
-    )
+          FROM co2_cart_history
+         WHERE session_id = :session_id
+           AND created_at >= :start
+           AND created_at < :end
+    """)
 
-    cur_sql = text(
-        """
+    cur_sql = text("""
         SELECT SUM(total_co2_g) AS total_co2_g
-        FROM co2_cart_history
-        WHERE user_id = :user_id
-          AND created_at >= :start
-          AND created_at <= :end
-        """
-    )
+          FROM co2_cart_history
+         WHERE session_id = :session_id
+           AND created_at >= :start
+           AND created_at <= :end
+    """)
 
-    # NOTE : user_id est TEXT dans co2_cart_history, on convertit donc en str
     ref_row = db.execute(
         ref_sql,
-        {
-            "user_id": str(user_id),
-            "start": periode_ref_debut.isoformat(),
-            "end": periode_ref_fin.isoformat(),
-        },
+        {"session_id": session_id, "start": periode_ref_debut.isoformat(), "end": periode_ref_fin.isoformat()},
     ).mappings().first()
 
     cur_row = db.execute(
         cur_sql,
-        {
-            "user_id": str(user_id),
-            "start": periode_actuelle_debut.isoformat(),
-            "end": periode_actuelle_fin.isoformat(),
-        },
+        {"session_id": session_id, "start": periode_actuelle_debut.isoformat(), "end": periode_actuelle_fin.isoformat()},
     ).mappings().first()
 
-    # Conversion en kg CO2 pour le défi
-    if ref_row["total_co2_g"] is not None:
-        reference_value = float(ref_row["total_co2_g"]) / 1000.0
-    else:
-        reference_value = None
+    count_sql = text("""
+    SELECT COUNT(1) AS n
+      FROM co2_cart_history
+     WHERE session_id = :session_id
+       AND created_at >= :start
+       AND created_at <= :end
+""")
 
-    if cur_row["total_co2_g"] is not None:
-        current_value = float(cur_row["total_co2_g"]) / 1000.0
-    else:
-        current_value = 0.0
+    count_row = db.execute(
+          count_sql,
+          {"session_id": session_id, "start": periode_actuelle_debut.isoformat(), "end": periode_actuelle_fin.isoformat()},
+    ).mappings().first()
 
+    nb_paniers_actuels = int(count_row["n"]) if count_row and count_row["n"] is not None else 0
+
+
+    reference_value = (
+        float(ref_row["total_co2_g"]) / 1000.0
+        if ref_row and ref_row["total_co2_g"] is not None
+        else None
+    )
+
+    current_value = (
+        float(cur_row["total_co2_g"]) / 1000.0
+        if cur_row and cur_row["total_co2_g"] is not None
+        else 0.0
+    )
 
     target_value = float(row["target_value"]) if row["target_value"] is not None else 0.10
 
-    # 4) Calcul de la réduction et de la progression
+
+    # 4) Calcul progression
     progress_percent: float | None = None
     status = row["status"]
     message = ""
 
     if reference_value is None or reference_value <= 0:
-        # Pas assez d'historique pour calculer une réduction
         if now < end_date:
             status = "en_cours"
             progress_percent = None
-            message = (
-                "Pas encore assez d'historique CO₂ pour évaluer ce défi. "
-                "Continue à scanner des produits."
-            )
+            message = "Pas encore assez d'historique CO₂ pour évaluer ce défi. Continue à scanner."
         else:
             status = "expire"
             progress_percent = None
-            message = (
-                "Le défi est terminé mais il n'y avait pas assez d'historique CO₂ "
-                "pour calculer une réduction."
-            )
+            message = "Défi terminé mais pas assez d'historique CO₂ pour calculer une réduction."
     else:
-        # Il y a une référence, on peut calculer la réduction
-        reduction = 1.0 - (current_value / reference_value) if reference_value > 0 else 0.0
-
-        # Progression par rapport à l'objectif (target_value = 0.10 pour 10%)
-        if target_value > 0:
-            progress_percent = (reduction / target_value) * 100.0
-        else:
+        if nb_paniers_actuels == 0:
+            status = "en_cours"
+            message = "Ajoutez au moins un panier sur la periode en cours pour valider la progression."
             progress_percent = None
-
-        # On peut borner pour l'affichage si tu veux rester à 0–100
-        if progress_percent is not None:
-            if progress_percent < 0:
-                progress_percent = 0.0
-            # On pourrait laisser > 100 pour montrer qu'il a dépassé l'objectif,
-            # mais pour un affichage simple on peut limiter à 100.
-            if progress_percent > 100:
-                progress_percent = 100.0
-
-        # Détermination du statut
-        if reduction >= target_value:
-            # Objectif atteint
+        elif reduction >= target_value:
             status = "reussi"
-            if now < end_date:
-                message = (
-                    "Bravo ! Tu as déjà atteint ton objectif de réduction de CO₂ 🎉"
-                )
-            else:
-                message = (
-                    "Bravo ! Tu as réussi ton défi de réduction de CO₂ sur 30 jours 🎉"
-                )
+            message = "Bravo ! Objectif de réduction CO2 atteint." if now < end_date else "Bravo ! Défi réussi sur 30 jours."
         else:
-            # Objectif pas encore atteint
             if now < end_date:
                 status = "en_cours"
-                message = (
-                    f"Tu as réduit ton CO₂ de {reduction * 100:.1f} %, "
-                    f"objectif : {target_value * 100:.0f} %. Continue !"
-                )
+                message = f"Réduction actuelle : {reduction * 100:.1f} %, objectif : {target_value * 100:.0f} %."
             else:
                 status = "echoue"
-                message = (
-                    f"Le défi est terminé. Tu as réduit ton CO₂ de {reduction * 100:.1f} %, "
-                    f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
-                )
+                message = f"Défi terminé. Réduction : {reduction * 100:.1f} %, objectif : {target_value * 100:.0f} %."
 
-    # 5) Mise à jour de l'instance dans la base
-    update_sql = text(
-        """
+
+    # 5) Update DB
+    update_sql = text("""
         UPDATE challenge_instances
-        SET
-            reference_value = :reference_value,
-            current_value = :current_value,
-            target_value = :target_value,
-            progress_percent = :progress_percent,
-            status = :status,
-            last_evaluated_at = :last_evaluated_at
-        WHERE id = :instance_id
-        """
-    )
+           SET reference_value = :reference_value,
+               current_value = :current_value,
+               target_value = :target_value,
+               progress_percent = :progress_percent,
+               status = :status,
+               last_evaluated_at = :last_evaluated_at
+         WHERE id = :instance_id
+    """)
 
     db.execute(
         update_sql,
@@ -565,7 +456,6 @@ def evaluate_challenge(
     )
     db.commit()
 
-    # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
         instance_id=row["instance_id"],
         challenge_id=row["challenge_id"],
@@ -579,4 +469,67 @@ def evaluate_challenge(
         last_evaluated_at=now,
         message=message,
     )
+@router.post("/challenges/_init")
+def init_challenges_tables(db: Session = Depends(get_db)):
+    """
+    DEV uniquement (SQLite) : crée les tables challenges + challenge_instances
+    et insère 1 défi par défaut si vide.
+    """
+    # 1) Tables
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS challenges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT,
+            metric TEXT NOT NULL,
+            logic_type TEXT NOT NULL,
+            period_type TEXT NOT NULL,
+            default_target_value REAL NOT NULL,
+            scope_type TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1
+        );
+    """))
+
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS challenge_instances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            challenge_id INTEGER NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reference_value REAL,
+            current_value REAL,
+            target_value REAL,
+            progress_percent REAL,
+            created_at TEXT NOT NULL,
+            last_evaluated_at TEXT
+        );
+    """))
+
+    # 2) Seed minimal (si vide)
+    count = db.execute(text("SELECT COUNT(1) AS n FROM challenges;")).mappings().first()["n"]
+    if int(count) == 0:
+        db.execute(text("""
+            INSERT INTO challenges (
+                code, name, description, metric, logic_type, period_type, default_target_value, scope_type, active
+            ) VALUES (
+                'CO2_30D_MINUS_10',
+                'Reduire -10% CO2 sur 30 jours',
+                'Objectif : reduire vos emissions CO2 de 10% par rapport aux 30 jours précédents.',
+                'co2',
+                'reduction_relative',
+                '30_jours_glissants',
+                0.10,
+                'personal',
+                1
+            );
+        """))
+
+    db.commit()
+    return {"status": "ok"}
+
+    
 

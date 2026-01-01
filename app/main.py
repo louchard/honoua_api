@@ -15,6 +15,8 @@ from app.routers import logs as logs_router
 from app.routers import groups_a41
 from app.routers import groups_a42
 from app.routers import notifications as notifications_router  # 👈 IMPORTANT
+from app.routers.cart_history import router as cart_history_router
+from app.routers.challenges import router as challenges_router
 from app.core.logger import logger
 from app.telemetry.metrics import get_metrics_snapshot, record_request
 from app.telemetry.metrics import get_prometheus_metrics
@@ -85,6 +87,8 @@ app.include_router(tokens.router)        # /tokens/...
 app.include_router(emissions_summary_a40_router)
 app.include_router(groups_a41.router)
 app.include_router(groups_a42.router)
+app.include_router(cart_history_router)
+app.include_router(challenges_router)
 if challenges is not None:
     app.include_router(challenges.router)
 
