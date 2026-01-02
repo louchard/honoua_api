@@ -195,11 +195,39 @@ def activate_challenge(
         "last_evaluated_at": None,
     }
 
-    result = db.execute(insert_sql, params)
+    result = db.execute(
+    text("""
+        INSERT INTO public.challenge_instances (
+            challenge_id,
+            user_id,
+            period_start,
+            period_end,
+            status,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            :challenge_id,
+            :user_id,
+            :period_start,
+            :period_end,
+            'ACTIVE',
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+    """),
+            {
+                "challenge_id": challenge_id,
+                "user_id": user_id,
+                "period_start": period_start,
+                "period_end": period_end,
+            },
+        )
+
+    instance_id = result.scalar_one()
     db.commit()
 
-    # Récupérer l'id auto-incrémenté de l'instance
-    instance_id = result.lastrowid
 
     # 5) Relire l'instance insérée avec jointure sur challenges
     select_sql = text(
