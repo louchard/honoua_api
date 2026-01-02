@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from datetime import datetime, timedelta
 import calendar
-from sqlalchemy.exc import OperationalError
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
 
@@ -26,33 +26,33 @@ router = APIRouter(
 @router.get("/challenges", response_model=list[ChallengeRead])
 def list_challenges(db: Session = Depends(get_db)):
     """
-    Retourne la liste des défis CO2 disponibles (catalogue).
-    Lit directement la table 'challenges' en SQLite et ne renvoie
-    que les défis actifs (active = 1).
+    Retourne la liste des défis disponibles (catalogue).
+    Robuste : en cas de mismatch de schéma (colonne/table), renvoie [] au lieu de 500.
     """
-    query = text("""
-        SELECT
-            id,
-            code,
-            name,
-            description,
-            metric,
-            logic_type,
-            period_type,
-            default_target_value,
-            scope_type,
-            active
-        FROM challenges
-        WHERE active = 1
-        ORDER BY id;
-    """)
+    try:
+        rows = db.execute(
+            text("""
+                SELECT
+                    id,
+                    code,
+                    COALESCE(name, title, code) AS name,
+                    metric,
+                    logic_type,
+                    period_type,
+                    default_target_value,
+                    COALESCE(scope_type, score_type) AS scope_type,
+                    COALESCE(active, is_active, TRUE) AS active
+                FROM public.challenges
+                WHERE COALESCE(active, is_active, TRUE) = TRUE
+                ORDER BY id ASC
+            """)
+        ).mappings().all()
 
-    # .mappings() permet de récupérer des dicts {colonne: valeur}
-    rows = db.execute(query).mappings().all()
+        return [dict(r) for r in rows]
 
-    # On transforme chaque ligne en objet Pydantic ChallengeRead
-    challenges = [ChallengeRead(**row) for row in rows]
-    return challenges
+    except (OperationalError, ProgrammingError):
+        return []
+
 
 
 # ---------- 2) Activer un défi pour un utilisateur ---------- #
