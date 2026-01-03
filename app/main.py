@@ -61,15 +61,22 @@ async def log_exceptions_with_request_id(request: Request, call_next):
             request.headers.get("x-railway-request-id")
             or request.headers.get("x-request-id")
         )
-        logger.error(
-            "Unhandled exception | method=%s path=%s request_id=%s error=%r\n%s",
+        logger.exception(
+            "Unhandled exception | method=%s path=%s request_id=%s",
             request.method,
             request.url.path,
             req_id,
-            e,
-            traceback.format_exc(),
-        )
+       )
+
         raise
+
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 
 # ====== CORS (Front Render / Local) ======
