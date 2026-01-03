@@ -93,7 +93,7 @@ def activate_challenge(
                 active
             FROM challenges
             WHERE id = :challenge_id
-              AND active = 1
+              AND active = TRUE
             """
         ),
         {"challenge_id": payload.challenge_id},
