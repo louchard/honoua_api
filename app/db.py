@@ -22,9 +22,17 @@ def _default_sqlite_url() -> str:
 
 
 def db_url() -> str:
-    """Retourne l'URL de connexion (env HONOUA_DB_URL ou fallback SQLite)."""
-    url = os.getenv("HONOUA_DB_URL", "").strip()
+    """Retourne l'URL de connexion (env DATABASE_URL/HONOUA_DB_URL ou fallback SQLite)."""
+    url = (os.getenv("DATABASE_URL", "") or os.getenv("HONOUA_DB_URL", "")).strip()
+
+    # Railway fournit souvent postgres:// ; SQLAlchemy + psycopg préfèrent postgresql+psycopg://
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     return url if url else _default_sqlite_url()
+
 
 
 def make_engine() -> "Engine":
