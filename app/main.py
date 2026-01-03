@@ -42,9 +42,35 @@ from app.routers.emissions_summary_a40 import router as emissions_summary_a40_ro
 from fastapi import FastAPI, HTTPException, Depends, APIRouter
 
 
-
 # ====== FastAPI app ======
 app = FastAPI(title="Honoua API")
+
+# ====== Middleware : log exceptions avec Request-Id (Railway) ======
+import logging
+import traceback
+from fastapi import Request
+
+logger = logging.getLogger("honoua")
+
+@app.middleware("http")
+async def log_exceptions_with_request_id(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        req_id = (
+            request.headers.get("x-railway-request-id")
+            or request.headers.get("x-request-id")
+        )
+        logger.error(
+            "Unhandled exception | method=%s path=%s request_id=%s error=%r\n%s",
+            request.method,
+            request.url.path,
+            req_id,
+            e,
+            traceback.format_exc(),
+        )
+        raise
+
 
 # ====== CORS (Front Render / Local) ======
 # Origines autorisées via variable d'env (recommandé en prod) :
