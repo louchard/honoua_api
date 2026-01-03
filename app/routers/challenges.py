@@ -78,24 +78,22 @@ def activate_challenge(
 
     # 1) Récupérer le défi demandé
     challenge_row = db.execute(
-        text(
-            """
-            SELECT
-                id,
-                code,
-                name,
-                description,
-                metric,
-                logic_type,
-                period_type,
-                default_target_value,
-                scope_type,
-                active
-            FROM challenges
-            WHERE id = :challenge_id
-              AND active = TRUE
-            """
-        ),
+        text("""
+    SELECT
+        id,
+        code,
+        COALESCE(name, title, code) AS name,
+        NULL::text AS description,
+        metric,
+        logic_type,
+        period_type,
+        default_target_value,
+        COALESCE(scope_type, score_type) AS scope_type,
+        COALESCE(active, is_active, TRUE) AS active
+    FROM public.challenges
+    WHERE id = :challenge_id
+      AND COALESCE(active, is_active, TRUE) IS TRUE
+"""),
         {"challenge_id": payload.challenge_id},
     ).mappings().first()
 
