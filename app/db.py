@@ -25,7 +25,7 @@ def db_url() -> str:
     """Retourne l'URL de connexion (env DATABASE_URL/HONOUA_DB_URL ou fallback SQLite)."""
     url = (os.getenv("DATABASE_URL", "") or os.getenv("HONOUA_DB_URL", "")).strip()
 
-    # Railway fournit souvent postgres:// ; SQLAlchemy + psycopg préfèrent postgresql+psycopg://
+    # Railway fournit souvent postgres:// ; forcer un driver explicite
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif url.startswith("postgresql://"):
@@ -33,8 +33,8 @@ def db_url() -> str:
     elif url.startswith("postgresql+psycopg://"):
         url = url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
 
-
     return url if url else _default_sqlite_url()
+
 
 
 
