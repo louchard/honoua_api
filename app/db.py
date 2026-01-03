@@ -27,9 +27,12 @@ def db_url() -> str:
 
     # Railway fournit souvent postgres:// ; SQLAlchemy + psycopg préfèrent postgresql+psycopg://
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
     elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql+psycopg://"):
+        url = url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+
 
     return url if url else _default_sqlite_url()
 
