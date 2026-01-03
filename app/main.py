@@ -220,13 +220,15 @@ async def read_metrics_prometheus():
 
 from app.db.base_class import Base  # ✅ Base unique pour tous les modèles
 
-DB_URL = (os.getenv("DATABASE_URL") or "").strip()
+DB_URL = (os.getenv("DATABASE_URL") or os.getenv("HONOUA_DB_URL") or "").strip()
 
-# Force SQLAlchemy to use psycopg (v3) driver on Postgres
+# Forcer psycopg2 (Railway n'a pas psycopg v3)
 if DB_URL.startswith("postgres://"):
-    DB_URL = DB_URL.replace("postgres://", "postgresql+psycopg://", 1)
+    DB_URL = DB_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 elif DB_URL.startswith("postgresql://"):
-    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+elif DB_URL.startswith("postgresql+psycopg://"):
+    DB_URL = DB_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
 
 engine = None
 SessionLocal = None
