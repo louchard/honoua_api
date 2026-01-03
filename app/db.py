@@ -46,7 +46,8 @@ def make_engine() -> "Engine":
     # Options robustes : reconnexions, pre_ping, timeouts raisonnables
     common_kwargs = dict(pool_pre_ping=True)
 
-    if url.startswith(("postgres://", "postgresql://")):
+    if url.startswith(("postgres://", "postgresql://", "postgresql+psycopg://", "postgresql+psycopg2://")):
+
         # psycopg3 est recommandé (SQLAlchemy détecte le driver via l'URL)
         # Ex : HONOUA_DB_URL=postgresql+psycopg://user:pass@localhost:5432/honoua
         #      HONOUA_DB_URL=postgresql://user:pass@host/db  (auto-driver si dispo)
