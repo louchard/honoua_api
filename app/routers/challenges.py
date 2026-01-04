@@ -31,16 +31,20 @@ def list_challenges(db: Session = Depends(get_db)):
                     id,
                     code,
                     COALESCE(name, title, code) AS name,
-                    metric,
-                    logic_type,
-                    period_type,
-                    default_target_value,
-                    scope_type AS scope_type,
+
+                    -- Valeurs par défaut pour satisfaire ChallengeRead (non-null)
+                    COALESCE(metric, 'CO2') AS metric,
+                    COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
+                    COALESCE(period_type, 'DAYS') AS period_type,
+                    COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
+                    COALESCE(scope_type, 'CART') AS scope_type,
+
                     COALESCE(active, is_active, TRUE) AS active
                 FROM public.challenges
                 WHERE COALESCE(active, is_active, TRUE) = TRUE
                 ORDER BY id ASC
             """)
+
         ).mappings().all()
 
         return [dict(r) for r in rows]
