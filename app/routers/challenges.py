@@ -31,14 +31,11 @@ def list_challenges(db: Session = Depends(get_db)):
                     id,
                     code,
                     COALESCE(name, title, code) AS name,
-
-                    -- Valeurs par défaut pour satisfaire ChallengeRead (non-null)
                     COALESCE(metric, 'CO2') AS metric,
                     COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
                     COALESCE(period_type, 'DAYS') AS period_type,
                     COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
                     COALESCE(scope_type, 'CART') AS scope_type,
-
                     COALESCE(active, is_active, TRUE) AS active
                 FROM public.challenges
                 WHERE COALESCE(active, is_active, TRUE) = TRUE
@@ -80,11 +77,9 @@ def activate_challenge(
             id,
             code,
             COALESCE(name, title, code) AS name,
-            NULL::text AS description,
             COALESCE(metric, 'CO2') AS metric,
             COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
             COALESCE(period_type, 'DAYS') AS period_type,
-            -- IMPORTANT: ne jamais renvoyer NULL ici
             COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
             COALESCE(scope_type, 'CART') AS scope_type,
             COALESCE(active, is_active, TRUE) AS active
