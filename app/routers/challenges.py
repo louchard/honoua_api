@@ -22,13 +22,8 @@ router = APIRouter(
 
 
 # ---------- 1) Lister les défis disponibles ---------- #
-
 @router.get("/challenges", response_model=list[ChallengeRead])
 def list_challenges(db: Session = Depends(get_db)):
-    """
-    Retourne la liste des défis disponibles (catalogue).
-    Robuste : en cas de mismatch de schéma (colonne/table), renvoie [] au lieu de 500.
-    """
     try:
         rows = db.execute(
             text("""
@@ -40,7 +35,7 @@ def list_challenges(db: Session = Depends(get_db)):
                     logic_type,
                     period_type,
                     default_target_value,
-                    scope_type,
+                    scope_type AS scope_type,
                     COALESCE(active, is_active, TRUE) AS active
                 FROM public.challenges
                 WHERE COALESCE(active, is_active, TRUE) = TRUE
@@ -52,7 +47,6 @@ def list_challenges(db: Session = Depends(get_db)):
 
     except (OperationalError, ProgrammingError):
         return []
-
 
 
 # ---------- 2) Activer un défi pour un utilisateur ---------- #
@@ -76,29 +70,27 @@ def activate_challenge(
     - ne calcule pas encore les valeurs métier complexes (reference_value, etc.)
     """
 
-    # 1) Récupérer le défi demandé
     challenge_row = db.execute(
         text("""
-    SELECT
-        id,
-        code,
-        COALESCE(name, title, code) AS name,
-        NULL::text AS description,
-        metric,
-        logic_type,
-        period_type,
-        default_target_value,
-        scope_type,
-        COALESCE(active, is_active, TRUE) AS active
-    FROM public.challenges
-    WHERE id = :challenge_id
-      AND COALESCE(active, is_active, TRUE) IS TRUE
-
-""")
-,
+            SELECT
+                id,
+                code,
+                COALESCE(name, title, code) AS name,
+                NULL::text AS description,
+                metric,
+                logic_type,
+                period_type,
+                default_target_value,
+                scope_type AS scope_type,
+                COALESCE(active, is_active, TRUE) AS active
+            FROM public.challenges
+            WHERE id = :challenge_id
+              AND COALESCE(active, is_active, TRUE) IS TRUE
+        """),
         {"challenge_id": payload.challenge_id},
     ).mappings().first()
 
+    
     if challenge_row is None:
         raise HTTPException(
             status_code=404,
