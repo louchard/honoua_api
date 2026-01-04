@@ -88,7 +88,7 @@ def activate_challenge(
             -- IMPORTANT: ne jamais renvoyer NULL ici
             COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
 
-            COALESCE(scope_type, score_type, 'CART') AS scope_type,
+            COALESCE(scope_type, 'CART') AS scope_type,
             COALESCE(active, is_active, TRUE) AS active
         FROM public.challenges
         WHERE id = :challenge_id
