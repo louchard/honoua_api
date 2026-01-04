@@ -75,24 +75,28 @@ def activate_challenge(
     """
 
     challenge_row = db.execute(
-        text("""
-            SELECT
-                id,
-                code,
-                COALESCE(name, title, code) AS name,
-                NULL::text AS description,
-                metric,
-                logic_type,
-                period_type,
-                default_target_value,
-                scope_type AS scope_type,
-                COALESCE(active, is_active, TRUE) AS active
-            FROM public.challenges
-            WHERE id = :challenge_id
-              AND COALESCE(active, is_active, TRUE) IS TRUE
+    text("""
+        SELECT
+            id,
+            code,
+            COALESCE(name, title, code) AS name,
+            NULL::text AS description,
+            COALESCE(metric, 'CO2') AS metric,
+            COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(period_type, 'DAYS') AS period_type,
+
+            -- IMPORTANT: ne jamais renvoyer NULL ici
+            COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
+
+            COALESCE(scope_type, score_type, 'CART') AS scope_type,
+            COALESCE(active, is_active, TRUE) AS active
+        FROM public.challenges
+        WHERE id = :challenge_id
+          AND COALESCE(active, is_active, TRUE) IS TRUE
         """),
-        {"challenge_id": payload.challenge_id},
-    ).mappings().first()
+            {"challenge_id": payload.challenge_id},
+        ).mappings().first()
+
 
     
     if challenge_row is None:
@@ -141,7 +145,10 @@ def activate_challenge(
     progress_percent = None
 
     # On copie l'objectif par défaut du défi
-    target_value = float(challenge_row["default_target_value"])
+    raw_target = challenge_row.get("default_target_value")
+    target_value = float(raw_target) if raw_target is not None else 0.0
+
+
 
     # 4) Insérer l'instance dans la base
     insert_sql = text(
