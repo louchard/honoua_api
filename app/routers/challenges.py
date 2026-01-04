@@ -61,207 +61,106 @@ def activate_challenge(
     payload: ChallengeActivateRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    Active un défi pour un utilisateur et crée une instance de défi.
-    Version MVP simple :
-    - récupère le défi (challenges)
-    - déduit start_date / end_date selon period_type
-    - crée une ligne dans challenge_instances
-    - initialise status='en_cours' et target_value=default_target_value
-    - ne calcule pas encore les valeurs métier complexes (reference_value, etc.)
-    """
-
+    # 1) Charger le challenge (Postgres-friendly, champs non nuls)
     challenge_row = db.execute(
-    text("""
-        SELECT
-            id,
-            code,
-            COALESCE(name, title, code) AS name,
-            COALESCE(metric, 'CO2') AS metric,
-            COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(period_type, 'DAYS') AS period_type,
-            COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
-            COALESCE(scope_type, 'CART') AS scope_type,
-            COALESCE(active, is_active, TRUE) AS active
-        FROM public.challenges
-        WHERE id = :challenge_id
-          AND COALESCE(active, is_active, TRUE) IS TRUE
+        text("""
+            SELECT
+                id,
+                code,
+                COALESCE(name, title, code) AS name,
+                description,
+                COALESCE(metric, 'CO2') AS metric,
+                COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
+                COALESCE(period_type, 'DAYS') AS period_type,
+                COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
+                COALESCE(scope_type, 'CART') AS scope_type,
+                COALESCE(active, is_active, TRUE) AS active,
+                COALESCE(period_days, 30) AS period_days
+            FROM public.challenges
+            WHERE id = :challenge_id
+              AND COALESCE(active, is_active, TRUE) = TRUE
+            LIMIT 1
         """),
-            {"challenge_id": payload.challenge_id},
-        ).mappings().first()
+        {"challenge_id": payload.challenge_id},
+    ).mappings().first()
 
-
-    
     if challenge_row is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Défi introuvable ou inactif."
-        )
+        raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
 
-    period_type = challenge_row["period_type"]
+    # 2) Calcul period_start / period_end (schema prod)
+    today = datetime.utcnow().date()
+    period_days = int(challenge_row.get("period_days") or 30)
+    period_start = today
+    period_end = today + timedelta(days=period_days)
 
-    # 2) Déterminer start_date et end_date (version simple)
-    now = datetime.utcnow()
-
-    if period_type == "30_jours_glissants":
-        start_date = now
-        end_date = now + timedelta(days=30)
-
-    elif period_type == "7_jours_glissants":
-        start_date = now
-        end_date = now + timedelta(days=7)
-
-    elif period_type == "mois_calendaire":
-        # début du mois courant
-        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # fin du mois courant (23:59:59)
-        last_day = calendar.monthrange(now.year, now.month)[1]
-        end_date = start_date.replace(
-            day=last_day,
-            hour=23,
-            minute=59,
-            second=59,
-            microsecond=0,
-        )
-    else:
-        # Sécurité : fallback générique = 30 jours
-        start_date = now
-        end_date = now + timedelta(days=30)
-
-    # 3) Préparer les valeurs à insérer dans challenge_instances
-    status = "en_cours"
-    created_at = now
-
-    # MVP : on ne calcule pas encore reference_value / current_value / progress_percent
-    reference_value = None
-    current_value = None
-    progress_percent = None
-
-    # On copie l'objectif par défaut du défi
-    raw_target = challenge_row.get("default_target_value")
-    target_value = float(raw_target) if raw_target is not None else 0.0
-
-
-
-    # 4) Insérer l'instance dans la base
-    insert_sql = text(
-        """
-        INSERT INTO challenge_instances (
-            challenge_id,
-            target_type,
-            target_id,
-            start_date,
-            end_date,
-            status,
-            reference_value,
-            current_value,
-            target_value,
-            progress_percent,
-            created_at,
-            last_evaluated_at
-        ) VALUES (
-            :challenge_id,
-            :target_type,
-            :target_id,
-            :start_date,
-            :end_date,
-            :status,
-            :reference_value,
-            :current_value,
-            :target_value,
-            :progress_percent,
-            :created_at,
-            :last_evaluated_at
-        )
-        """
-    )
-
-    params = {
-        "challenge_id": challenge_row["id"],
-        "target_type": "user",
-        "target_id": user_id,
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "status": status,
-        "reference_value": reference_value,
-        "current_value": current_value,
-        "target_value": target_value,
-        "progress_percent": progress_percent,
-        "created_at": created_at.isoformat(),
-        "last_evaluated_at": None,
-    }
-
+    # 3) Insérer l'instance (schema prod)
     result = db.execute(
-    text("""
-        INSERT INTO public.challenge_instances (
-            challenge_id,
-            user_id,
-            period_start,
-            period_end,
-            status,
-            created_at,
-            updated_at
-        )
-        VALUES (
-            :challenge_id,
-            :user_id,
-            :period_start,
-            :period_end,
-            'ACTIVE',
-            NOW(),
-            NOW()
-        )
-        RETURNING id
-    """),
-            {
-                "challenge_id": int(challenge_row["id"]),
-                "user_id": user_id,
-                "period_start": period_start,
-                "period_end": period_end,
-            },
-        )
+        text("""
+            INSERT INTO public.challenge_instances (
+                challenge_id,
+                user_id,
+                period_start,
+                period_end,
+                status,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :challenge_id,
+                :user_id,
+                :period_start,
+                :period_end,
+                'ACTIVE',
+                NOW(),
+                NOW()
+            )
+            RETURNING id
+        """),
+        {
+            "challenge_id": int(challenge_row["id"]),
+            "user_id": str(user_id),
+            "period_start": period_start,
+            "period_end": period_end,
+        },
+    )
 
     instance_id = result.scalar_one()
     db.commit()
 
+    # 4) Relire et retourner une réponse compatible avec ChallengeInstanceRead
+    row = db.execute(
+        text("""
+            SELECT
+                ci.id AS instance_id,
+                ci.challenge_id,
+                c.code,
+                COALESCE(c.name, c.title, c.code) AS name,
+                c.description,
+                COALESCE(c.metric, 'CO2') AS metric,
+                COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+                COALESCE(c.period_type, 'DAYS') AS period_type,
+                ci.status,
+                ci.period_start AS start_date,
+                ci.period_end   AS end_date,
+                NULL::numeric   AS reference_value,
+                NULL::numeric   AS current_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                NULL::numeric   AS progress_percent,
+                ci.created_at,
+                NULL::timestamp AS last_evaluated_at
+            FROM public.challenge_instances ci
+            JOIN public.challenges c ON c.id = ci.challenge_id
+            WHERE ci.id = :instance_id
+            LIMIT 1
+        """),
+        {"instance_id": instance_id},
+    ).mappings().first()
 
-    # 5) Relire l'instance insérée avec jointure sur challenges
-    select_sql = text(
-        """
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            c.name,
-            c.description,
-            c.metric,
-            c.logic_type,
-            c.period_type,
-            ci.status,
-            ci.start_date,
-            ci.end_date,
-            ci.reference_value,
-            ci.current_value,
-            ci.target_value,
-            ci.progress_percent,
-            ci.created_at,
-            ci.last_evaluated_at
-        FROM challenge_instances AS ci
-        JOIN challenges AS c
-            ON ci.challenge_id = c.id
-        WHERE ci.id = :instance_id
-        """
-    )
-
-    row = db.execute(select_sql, {"instance_id": instance_id}).mappings().first()
     if row is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Erreur lors de la création de l'instance de défi."
-        )
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de l'instance de défi.")
 
-    # Pydantic se charge de parser les dates ISO en datetime
     return ChallengeInstanceRead(**row)
+
 
 
 
