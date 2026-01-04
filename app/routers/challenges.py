@@ -214,7 +214,7 @@ def activate_challenge(
         RETURNING id
     """),
             {
-                "challenge_id": challenge_id,
+                "challenge_id": int(challenge_row["id"]),
                 "user_id": user_id,
                 "period_start": period_start,
                 "period_end": period_end,
