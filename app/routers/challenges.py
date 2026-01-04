@@ -40,7 +40,7 @@ def list_challenges(db: Session = Depends(get_db)):
                     logic_type,
                     period_type,
                     default_target_value,
-                    COALESCE(scope_type, score_type) AS scope_type,
+                    scope_type,
                     COALESCE(active, is_active, TRUE) AS active
                 FROM public.challenges
                 WHERE COALESCE(active, is_active, TRUE) = TRUE
@@ -88,12 +88,14 @@ def activate_challenge(
         logic_type,
         period_type,
         default_target_value,
-        COALESCE(scope_type, score_type) AS scope_type,
+        scope_type,
         COALESCE(active, is_active, TRUE) AS active
     FROM public.challenges
     WHERE id = :challenge_id
       AND COALESCE(active, is_active, TRUE) IS TRUE
-"""),
+
+""")
+,
         {"challenge_id": payload.challenge_id},
     ).mappings().first()
 
