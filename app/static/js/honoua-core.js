@@ -1045,11 +1045,17 @@ async function startWith(deviceId){
     await stopStream();
 
         // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
+       // iPhone : tenter Quagga2 en priorité, mais NE PAS bloquer si Quagga échoue
     if (isIphoneIOS() && window.Quagga) {
       setStatus('Caméra active', true);
-      await startQuaggaInTarget();
-      return;
+
+      const ok = await startQuaggaInTarget();
+      if (ok) return;
+
+      console.warn('[Quagga] Échec init → fallback caméra native + ZXing.');
+      // IMPORTANT : on continue (pas de return)
     }
+
 
 
     // iOS: stabilise la lecture vidéo (indispensable pour analyse frame/ZXing)
@@ -1060,23 +1066,82 @@ async function startWith(deviceId){
       $video.autoplay = true;
     }
 
-    // Résolution plus exploitable pour EAN
-    const constraints = deviceId
-      ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
-      : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    // Résolution/contraintes robustes iOS pour EAN (tentatives successives)
+    const baseVideo = {
+      width: { ideal: 1280, min: 640 },
+      height: { ideal: 720, min: 480 },
+      aspectRatio: { ideal: 16 / 9 },
+      frameRate: { ideal: 30, max: 60 }
+    };
+
+    // Certaines contraintes avancées ne sont pas supportées partout : iOS les ignore si non supportées.
+    const advanced = [
+      { focusMode: "continuous" },
+      { exposureMode: "continuous" },
+      { whiteBalanceMode: "continuous" }
+    ];
+
+    const candidates = [];
+
+    // 1) Si l’utilisateur impose un deviceId (dropdown), on essaie en priorité
+    if (deviceId) {
+      candidates.push({
+        video: {
+          ...baseVideo,
+          deviceId: { exact: deviceId },
+          advanced
+        }
+      });
+    }
+
+    // 2) iOS/Android : tenter environment EXACT d’abord (si dispo)
+    candidates.push({
+      video: {
+        ...baseVideo,
+        facingMode: { exact: "environment" },
+        advanced
+      }
+    });
+
+    // 3) Puis environment IDEAL
+    candidates.push({
+      video: {
+        ...baseVideo,
+        facingMode: { ideal: "environment" },
+        advanced
+      }
+    });
+
+    // 4) Fallback ultime
+    candidates.push({ video: true });
 
     let stream = null;
+    let firstError = null;
 
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (e1) {
-      // Fallback desktop : certaines contraintes (facingMode env / deviceId exact) peuvent échouer
+    for (const c of candidates) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch (e2) {
-        throw e1; // on garde l’erreur initiale pour ton message UX
+        stream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (err) {
+        if (!firstError) firstError = err;
       }
     }
+
+    if (!stream) {
+      throw firstError || new Error("getUserMedia failed");
+    }
+
+    // Diagnostic utile (iPhone)
+    try {
+      const t = stream.getVideoTracks && stream.getVideoTracks()[0];
+      if (t && t.getSettings) {
+        console.info("[Cam] settings:", t.getSettings());
+      }
+      if (t && t.getConstraints) {
+        console.info("[Cam] constraints:", t.getConstraints());
+      }
+    } catch (_) {}
+
 
     currentStream = stream;
     $video.srcObject = stream;
@@ -1108,7 +1173,23 @@ async function startWith(deviceId){
 
   } catch(e) {
     setStatus('Erreur ou refus caméra', false);
-    showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
+      } catch(e) {
+    console.warn('[Scan] startWith error:', e);
+
+    setStatus('Erreur ou refus caméra', false);
+
+    const name = (e && e.name) ? e.name : '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      showScannerError("Accès caméra refusé. Autorisez la caméra dans Safari (Réglages).", true);
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      showScannerError("Caméra introuvable ou contraintes incompatibles. Essayez sans sélection caméra.", true);
+    } else if (name === 'NotReadableError') {
+      showScannerError("Caméra occupée par une autre app. Fermez les apps utilisant la caméra puis réessayez.", true);
+    } else {
+      showScannerError("Impossible d’ouvrir la caméra. Détail console: " + (name || 'Erreur inconnue'), true);
+    }
+  }
+
   }
 }
 
