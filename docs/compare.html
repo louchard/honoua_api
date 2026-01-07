@@ -1,0 +1,4836 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Honoua — Comparateur</title>
+
+  <!-- A33 — Resource Hints -->
+<link rel="preconnect" href="/" crossorigin> <!-- API même origine -->
+<link rel="dns-prefetch" href="//cdn.jsdelivr.net"> <!-- adapte si tu utilises un autre CDN -->
+<link rel="dns-prefetch" href="//unpkg.com">
+
+<!-- A33 — Performance budgets (LCP/CLS/TBT guard) -->
+<script>
+/* Mesure LCP, CLS, TBT et log si budget dépassé */
+(function(){
+  var B = { LCP:2500, CLS:0.1, TBT:200 }; // ms
+  // CLS via PerformanceObserver
+  try{
+    var cls=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){ if (!e.hadRecentInput) cls += e.value; });
+    }).observe({type:'layout-shift', buffered:true});
+    window.__getCLS = function(){ return cls; };
+  }catch(e){}
+  // LCP via PO
+  try{
+    var lcp=0; new PerformanceObserver(function(list){
+      var last = list.getEntries().pop(); if (last) lcp = last.renderTime || last.loadTime || 0;
+    }).observe({type:'largest-contentful-paint', buffered:true});
+    window.__getLCP = function(){ return Math.round(lcp); };
+  }catch(e){}
+  // TBT approx via Long Tasks
+  try{
+    var tbt=0; new PerformanceObserver(function(list){
+      list.getEntries().forEach(function(e){
+        var block = e.duration - 50; if (block>0) tbt += block;
+      });
+    }).observe({type:'longtask', buffered:true});
+    window.__getTBT = function(){ return Math.round(tbt); };
+  }catch(e){}
+  // Rapport à l'onglet DevTools (dev uniquement)
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var L = window.__getLCP?__getLCP():-1;
+      var C = window.__getCLS?__getCLS():-1;
+      var T = window.__getTBT?__getTBT():-1;
+      if (L>-1||C>-1||T>-1) {
+        console.log('[A33] Budgets perf → LCP:%sms CLS:%s TBT:%sms (budgets %s/%s/%s)',
+          L, C, T, B.LCP, B.CLS, B.TBT);
+      }
+      if ((L>0 && L>B.LCP) || (C>0 && C>B.CLS) || (T>0 && T>B.TBT)) {
+        console.warn('[A33] ⚠️ Budgets dépassés. Voir optimisations (lazy, preconnect, defers).');
+      }
+    }, 1500);
+  });
+})();
+</script>
+
+
+
+
+  <style>
+    :root{
+      --green:#2e7d32; --orange:#F5C147; --blue:#001D85;
+      --bg:#f7f7f8; --ink:#111; --muted:#70757a; --card:#fff; --line:#e6e6e9;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{
+      position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);
+      display:flex;align-items:center;gap:12px;padding:10px 14px;height:60px;
+    }
+    .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#062909,var(--blue));}
+    .titles{flex:1;min-width:0}
+    .titles h1{margin:0;font-size:18px;line-height:1.1;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .titles p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+    main{padding:12px}
+    .bar, .toolbar{
+      display:flex;gap:8px;align-items:center;padding:10px;background:var(--card);
+      border:1px solid var(--line);border-radius:14px;
+    }
+    .toolbar{margin-top:10px;flex-wrap:wrap}
+    input[type="text"]{
+      flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;outline:none;background:#fff;
+    }
+    select{
+      border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;background:#fff;min-width:180px;
+    }
+    label.switch{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+    label.switch input{accent-color:var(--blue)}
+    button{border:0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer}
+    .btn-primary{background:var(--blue);color:#fff}
+    .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+    .btn-danger{background:#111;color:#fff;border:1px solid #000}
+    .btn-muted{background:#e9eaee;color:#555;border:1px solid var(--line)}
+    .help{font-size:12px;color:var(--muted);margin:8px 2px}
+    .tracks{
+      margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;
+      display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;
+    }
+    .card{
+      min-width:220px;max-width:240px;background:#fff;border:1px solid var(--line);border-radius:16px;
+      padding:12px;scroll-snap-align:start;box-shadow:0 1px 0 rgba(0,0,0,.04);position:relative;
+    }
+    .card h3{margin:6px 0 4px;font-size:14px}
+    .meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+    .thumb{
+      width:100%;height:120px;border-radius:12px;background:#f2f3f5;border:1px dashed var(--line);
+      display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);
+    }
+    .row{display:flex;gap:8px;margin-top:10px}
+    .row button{flex:1}
+    .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px}
+    /* Badge + jauge */
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:6px 8px;border-radius:999px;
+      border:1px solid var(--line);background:#fafafa;margin-top:8px;
+    }
+    .badge .dot{width:10px;height:10px;border-radius:50%;background:var(--orange)}
+    .rank{
+      position:absolute;top:10px;left:10px;background:#111;color:#fff;border-radius:999px;
+      font-size:12px;padding:4px 8px;line-height:1;display:none;
+    }
+    .rank.show{display:inline-block}
+    .gauge{width:85%; height:10px; border-radius:999px; background:#eee; margin-top:8px; position:relative; overflow:hidden;border:1px solid var(--line)}
+    .gauge > i{content:""; position:absolute; left:0; top:0; height:100%; width:0%; border-radius:999px;background: linear-gradient(90deg, var(--green), var(--orange)); transition: width .35s ease}
+    .gauge-label{font-size:12px;color:var(--muted);margin-top:4px}
+    /* Skeleton simple */
+    .shimmer{background:linear-gradient(110deg,#eee 8%,#f5f5f7 18%,#eee 33%);background-size:200% 100%;animation:sh 1.2s linear infinite}
+    @keyframes sh{to{background-position-x:-200%}}
+  </style>
+  <style>
+/* ==========================================================================
+   A11 — Mini-CSS Historique comparateur (sobre + accessible)
+   - Scope strict: #compare-history pour éviter les collisions
+   - Palette discrète Honoua (#062909, #F5C147, #001D85)
+   - Compatibilité dark mode + focus visibles
+   ========================================================================== */
+
+#compare-history {
+  margin-top: 1.25rem;
+  padding-top: .5rem;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history { border-top-color: rgba(255,255,255,.12); }
+}
+
+/* Barre d’actions (Étape 3) */
+#compare-history .history-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: .25rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+/* Liste */
+#compare-history #compare-history-list {
+  display: grid;
+  gap: .5rem;
+}
+
+/* Item */
+#compare-history .history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .6rem .75rem;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: .6rem;
+  background: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-item {
+    background: #0e0f11;
+    border-color: rgba(255,255,255,.12);
+  }
+}
+
+/* Meta (date + compte) */
+#compare-history .history-meta {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .935rem;
+  line-height: 1.2;
+  color: #2a2a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-meta { color: #e6e6e6; }
+}
+
+#compare-history .history-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Actions par item */
+#compare-history .history-actions {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+/* Boutons — style minimal */
+#compare-history button {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  border: 1px solid rgba(0,0,0,.10);
+  background: #fff;
+  color: #001D85; /* bleu discret par défaut */
+  font: inherit;
+  font-size: .9rem;
+  padding: .4rem .6rem;
+  border-radius: .5rem;
+  cursor: pointer;
+  transition: transform .06s ease, background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history button {
+    background: #121316;
+    color: #c9d4ff;
+    border-color: rgba(255,255,255,.14);
+  }
+}
+
+#compare-history button:hover {
+  background: rgba(0,29,133,.06);
+}
+
+/* A33 — limiter les reflows : évite changements de taille inattendus */
+#compare-history button, #compare-export button {
+  will-change: background-color, color, border-color;
+}
+
+
+@media (prefers-color-scheme: dark) {
+  #compare-history button:hover {
+    background: rgba(201,212,255,.08);
+  }
+}
+
+/* Bouton principal: Recharger (accent vert) */
+#compare-history .history-reload {
+  color: #062909;
+  border-color: rgba(6,41,9,.25);
+}
+#compare-history .history-reload:hover {
+  background: rgba(6,41,9,.08);
+}
+
+/* Bouton secondaire: Épingler / Désépingler (accent orange) */
+#compare-history .history-pin {
+  color: #8a6200; /* dérivé de #F5C147 pour lisibilité */
+  border-color: rgba(245,193,71,.45);
+}
+#compare-history .history-pin:hover {
+  background: rgba(245,193,71,.12);
+}
+
+/* Bouton danger: Supprimer */
+#compare-history .history-delete {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history .history-delete:hover {
+  background: rgba(122,17,17,.08);
+}
+
+/* Barre d’actions : Vider + filtre épinglés */
+#compare-history #history-clear {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history #history-clear:hover {
+  background: rgba(122,17,17,.08);
+}
+
+/* Focus visibles (accessibilité) */
+#compare-history button:focus-visible {
+  outline: 2px solid #001D85;
+  outline-offset: 2px;
+}
+
+/* Small screens */
+@media (max-width: 520px) {
+  #compare-history .history-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #compare-history .history-actions {
+    justify-content: flex-end;
+  }
+}
+
+
+    
+#compare-export {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+#compare-export button {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgba(0,0,0,.2);
+  border-radius: 6px;
+  background: #f8f8f8;
+  cursor: pointer;
+}
+#compare-export button:hover {
+  background: rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  #compare-export button {
+    background: rgba(255,255,255,.1);
+    color: #eee;
+  }
+}
+
+
+/* A14 — Statistiques */
+#compare-stats {
+  margin-top: 1rem;
+  padding: .75rem;
+  border-top: 1px solid rgba(0,0,0,.1);
+}
+#compare-stats h2 {
+  margin-bottom: .5rem;
+  font-size: 1.1rem;
+}
+#compare-stats .stats-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: .9rem;
+}
+#compare-stats .stats-summary p {
+  margin: 0;
+}
+@media (prefers-color-scheme: dark){
+  #compare-stats {
+    border-color: rgba(255,255,255,.1);
+  }
+}
+
+/* Préférence utilisateur: réduire les animations */
+@media (prefers-reduced-motion: reduce) {
+  #compare-history button { transition: none; }
+}
+
+/* État épinglé (optionnel si tu veux un indicateur visuel)
+   — Ajoute .is-pinned à .history-item lors du rendu si nécessaire.
+*/
+#compare-history .history-item.is-pinned {
+  box-shadow: 0 0 0 2px rgba(245,193,71,.25) inset;
+  border-color: rgba(245,193,71,.55);
+}
+
+/* Badge “Épinglé” (compact, discret, accessible) */
+#compare-history .history-badge {
+  margin-left: .5rem;
+  padding: .1rem .4rem;
+  border-radius: .4rem;
+  font-size: .75rem;
+  line-height: 1.2;
+  background: rgba(245,193,71,.18); /* orange doux */
+  color: #8a6200;
+  border: 1px solid rgba(245,193,71,.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  #compare-history .history-badge {
+    background: rgba(245,193,71,.15);
+    color: #f6d686;
+    border-color: rgba(245,193,71,.45);
+  }
+}
+
+/* Pastille d’état (épinglée / actuelle / neutre) */
+#compare-history .history-dot {
+  width: .6rem; height: .6rem; border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.2);
+  margin-right: .4rem; flex: 0 0 auto;
+  background: #fff;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-dot { background: #0e0f11; border-color: rgba(255,255,255,.2); }
+}
+
+/* Couleurs d’état */
+#compare-history .history-item.is-pinned .history-dot { background: #F5C147; border-color: rgba(245,193,71,.7); }   /* épinglé (orange) */
+#compare-history .history-item.is-current .history-dot { background: #001D85; border-color: rgba(0,29,133,.65); }    /* actuelle (bleu) */
+#compare-history .history-item:not(.is-pinned):not(.is-current) .history-dot { background: #e9ecef; }
+
+/* Ligne meta > on aligne pastille + contenu */
+#compare-history .history-meta {
+  display: flex; align-items: center; gap: .35rem; flex-wrap: wrap;
+}
+#compare-history .history-meta .meta-row {
+  display: flex; align-items: center; gap: .35rem;
+}
+
+/* Badge “Actuelle” (différent du badge “Épinglé”) */
+#compare-history .history-badge-current {
+  margin-left: .25rem;
+  padding: .1rem .4rem;
+  border-radius: .4rem;
+  font-size: .75rem;
+  line-height: 1.2;
+  background: rgba(0,29,133,.12);
+  color: #001D85;
+  border: 1px solid rgba(0,29,133,.35);
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-badge-current {
+    background: rgba(0,29,133,.18);
+    color: #c9d4ff;
+    border-color: rgba(0,29,133,.45);
+  }
+}
+
+/* Mini-chips de récapitulatif (tri, ordre, filtres, recherche) */
+#compare-history .history-chips {
+  display: flex; gap: .25rem; flex-wrap: wrap; margin-top: .25rem;
+}
+#compare-history .chip {
+  padding: .15rem .45rem; font-size: .74rem; line-height: 1.2;
+  border-radius: .4rem; border: 1px solid rgba(0,0,0,.12);
+  background: #fff; color: #2a2a2a;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .chip {
+    background: #121316; color: #e6e6e6; border-color: rgba(255,255,255,.14);
+  }
+}
+#compare-history .chip-sort   { border-color: rgba(6,41,9,.25); }           /* léger accent vert */
+#compare-history .chip-order  { border-color: rgba(0,29,133,.35); }         /* léger accent bleu */
+#compare-history .chip-filter { border-color: rgba(245,193,71,.45); }       /* léger accent orange */
+#compare-history .chip-query  { border-style: dashed; }
+
+
+/* A15 — Évolution carbone */
+#compare-carbon {
+  margin-top: 1rem;
+  padding: .75rem;
+  border-top: 1px solid rgba(0,0,0,.1);
+}
+#compare-carbon h2 { margin-bottom: .5rem; font-size: 1.1rem; }
+#compare-carbon .carbon-summary, 
+#compare-carbon .carbon-controls {
+  display: flex; flex-wrap: wrap; gap: 1rem; font-size: .9rem; align-items: center;
+}
+#compare-carbon .carbon-summary p { margin: 0; }
+#compare-carbon .carbon-note { font-size: .8rem; opacity: .8; margin-top: .5rem; }
+@media (prefers-color-scheme: dark){
+  #compare-carbon { border-color: rgba(255,255,255,.1); }
+}
+
+#compare-history #carbon-cache-clear {
+  color: #7a1111;
+  border-color: rgba(122,17,17,.28);
+}
+#compare-history #carbon-cache-clear:hover {
+  background: rgba(122,17,17,.08);
+}
+
+
+/* A17 — Toast de confirmation */
+#compare-history #history-toast{
+  position: fixed; right: 1rem; bottom: 1rem;
+  background: #0b5; color: #fff; padding: .5rem .75rem;
+  border-radius: .5rem; box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  font-size: .9rem; z-index: 9999;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history #history-toast{ background:#0a7a4f; }
+}
+/* Bouton “Copier” (utilise styles boutons existants) */
+#compare-history .history-copy{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-copy:hover{ background: rgba(0,29,133,.08); }
+
+#compare-history #history-toast{
+  position: fixed; right: 1rem; bottom: 1rem;
+  background: #0b5; color:#fff; padding:.5rem .75rem;
+  border-radius:.5rem; box-shadow:0 6px 20px rgba(0,0,0,.15);
+  font-size:.9rem; z-index:9999;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history #history-toast{ background:#0a7a4f; }
+}
+#compare-history .history-copy{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-copy:hover{ background: rgba(0,29,133,.08); }
+
+
+/* A18 — Styles pour le badge de nom et le bouton Renommer */
+#compare-history .history-name{
+  margin-left:.5rem; padding:.1rem .45rem; border-radius:.4rem;
+  font-size:.78rem; line-height:1.2; background:#fff;
+  border:1px solid rgba(0,0,0,.15); color:#2a2a2a;
+}
+@media (prefers-color-scheme: dark){
+  #compare-history .history-name{
+    background:#121316; border-color:rgba(255,255,255,.14); color:#e6e6e6;
+  }
+}
+#compare-history .history-rename{
+  color:#001D85; border-color: rgba(0,29,133,.35);
+}
+#compare-history .history-rename:hover{
+  background: rgba(0,29,133,.08);
+}
+
+/* A19 — Styles légers pour les boutons Cloud (cohérents avec l'existant) */
+#compare-history #cloud-signin,
+#compare-history #cloud-sync-up,
+#compare-history #cloud-sync-down{
+  border:1px solid rgba(0,0,0,.2);
+  background:#f7f7f7;
+  padding:.35rem .7rem;
+  border-radius:6px;
+}
+#compare-history #cloud-signin:hover,
+#compare-history #cloud-sync-up:hover,
+#compare-history #cloud-sync-down:hover{
+  background:rgba(0,0,0,.05);
+}
+#compare-history button:disabled{ opacity:.5; cursor:not-allowed; }
+@media (prefers-color-scheme: dark){
+  #compare-history #cloud-signin,
+  #compare-history #cloud-sync-up,
+  #compare-history #cloud-sync-down{
+    background:rgba(255,255,255,.08);
+    color:#eee;
+    border-color:rgba(255,255,255,.18);
+  }
+}
+
+/* A21 — Badge écart carbone */
+.delta-badge{
+  display:inline-block;
+  margin-top:6px;
+  padding:.15rem .45rem;
+  border-radius:.5rem;
+  font-size:.78rem;
+  border:1px solid rgba(0,0,0,.15);
+  background:#fff;
+  color:#333;
+}
+@media (prefers-color-scheme: dark){
+  .delta-badge{
+    background:#121316; border-color:rgba(255,255,255,.14); color:#eee;
+  }
+}
+/* états */
+.delta-good   { border-color:rgba(33,150,83,.35);  background:rgba(33,150,83,.08);  }
+.delta-mid    { border-color:rgba(245,193,71,.35); background:rgba(245,193,71,.12); }
+.delta-bad    { border-color:rgba(193, 39,45,.35); background:rgba(193, 39,45,.10); }
+
+/* A22 — Encart “Alternative bas carbone” */
+.alt-suggest{
+  margin-top:8px; padding:8px; border:1px dashed rgba(0,0,0,.2);
+  border-radius:8px; background:#fff;
+}
+.alt-suggest .alt-text{ font-size:.9rem; margin-bottom:6px; }
+.alt-suggest .alt-actions{ display:flex; gap:8px; }
+@media (prefers-color-scheme: dark){
+  .alt-suggest{ background:#121316; border-color:rgba(255,255,255,.18); }
+}
+
+/* A23 — Badge "au-dessus du seuil" + état visuel */
+.card.over-threshold{
+  outline: 2px dashed rgba(193,39,45,.45);
+  outline-offset: 3px;
+}
+.threshold-badge{
+  display:inline-block;
+  margin-top:6px;
+  padding:.15rem .45rem;
+  border-radius:.5rem;
+  font-size:.78rem;
+  border:1px solid rgba(193,39,45,.35);
+  background:rgba(193,39,45,.10);
+  color:#b02328;
+}
+@media (prefers-color-scheme: dark){
+  .threshold-badge{
+    background:rgba(193,39,45,.15);
+    border-color:rgba(193,39,45,.45);
+    color:#ffb3b6;
+  }
+}
+/* A26 — panneau cloud discret */
+#cloud-panel input[type="password"]{
+  padding:.2rem .4rem; border-radius:6px; border:1px solid rgba(0,0,0,.15);
+}
+
+  /* A27 — couleurs du pill selon l’état */
+  .pill-ok    { background:#2e7d32 !important; }  /* OK */
+  .pill-warn  { background:#f5c147 !important; }  /* attente/retry */
+  .pill-err   { background:#c62828 !important; }  /* erreur */
+  .pill-off   { background:#9e9e9e !important; }  /* hors ligne/inactif */
+
+
+/* A30 — focus visibles (clavier) */
+:focus {
+  outline: 2px solid #2e7d32;
+  outline-offset: 2px;
+}
+
+/* Lien d'évitement (visible seulement au focus) */
+.skip-link {
+  position: absolute; left: -9999px; top: 8px;
+  background: #111; color: #fff; padding: 8px 12px; border-radius: 8px;
+  z-index: 1000;
+}
+.skip-link:focus { left: 8px; }
+
+/* Respecte prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Thème sombre natif si tu as un thème : exemple minimal */
+@media (prefers-color-scheme: dark) {
+  body { background: #0f1113; color: #e6e6e6; }
+  .card { background: #16181b; }
+}
+
+/* États visuels des badges A27 (si présents) — contraste renforcé */
+.pill-ok   { background: #2e7d32 !important; }
+.pill-warn { background: #f5c147 !important; }
+.pill-err  { background: #c62828 !important; }
+.pill-off  { background: #9e9e9e !important; }
+
+/* Utilitaire écran lecteur : contenu uniquement pour SR */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+:focus { outline:2px solid #2e7d32; outline-offset:2px; }
+.skip-link{ position:absolute; left:-9999px; top:8px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000; }
+.skip-link:focus{ left:8px; }
+
+/* A32 — Accessibilité : focus visibles + skip-link */
+:focus-visible { outline: 2px solid #001D85; outline-offset: 2px; }
+.skip-link{
+  position:absolute; left:-9999px; top:8px;
+  background:#111; color:#fff; padding:8px 12px; border-radius:8px; z-index:1000;
+}
+.skip-link:focus-visible{ left:8px; }
+
+/* A32 — classe utilitaire pour contenu accessible mais invisible visuellement */
+.visually-hidden {
+  position:absolute!important; width:1px!important; height:1px!important;
+  padding:0!important; margin:-1px!important; overflow:hidden!important;
+  clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important;
+}
+
+
+
+
+/* A33 — micro-optims : éviter le coût des sections hors-écran */
+#leaderboard { 
+  content-visibility: auto; 
+  contain-intrinsic-size: 600px 800px; /* réserve un gabarit pour éviter CLS à l'apparition */
+}
+
+/* Respecte les utilisateurs sensibles au mouvement (↓ coûte GPU/CPU) */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* A33 — fallback police système pour éviter FOIT */
+:root {
+  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol", sans-serif;
+}
+body { font-family: var(--font-stack); }
+
+/* A33 — limiter recalculs/reflows sur interactions */
+button, [role="button"] {
+  will-change: background-color, color, border-color;
+}
+
+
+
+</style>
+
+</head>
+<body>
+
+  <!-- A30 — Lien d'évitement pour clavier/lecteur d'écran -->
+<a href="#main" class="skip-link">Aller au contenu principal</a>
+
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div class="titles">
+      <h1>Comparateur carbone</h1>
+      <p>A4–A6 — Tri, rang, partage, compteur, retirer tout</p>
+    </div>
+    <div style="width:40px"></div>
+    <button id="export-pdf" class="btn-ghost" title="Exporter un résumé PDF">Exporter PDF (Résumé)</button>
+
+  </header>
+
+  <main>
+    <div class="bar" role="region" aria-label="Ajout de produits">
+      <input id="eanInput" type="text" inputmode="numeric" placeholder="Ajouter un EAN (ex : 3017620422003)" aria-label="EAN à ajouter" />
+      <button id="addBtn" class="btn-primary" aria-label="Ajouter le produit">Ajouter</button>
+      <button id="clearBtn" class="btn-ghost" title="Réinitialiser le champ">↺</button>
+
+      <!-- A30 — Point d'ancrage du contenu principal -->
+       <div id="main" role="main">
+  <!-- ... contenu existant ... -->
+        </div>
+
+
+
+    </div>
+
+    <div class="toolbar" role="region" aria-label="Outils de comparaison">
+      <select id="sortSelect" aria-label="Trier par">
+        <option value="best">Trier : Meilleure empreinte d’abord</option>
+        <option value="worst">Trier : Pire empreinte d’abord</option>
+        <option value="brand">Trier : Marque (A→Z)</option>
+        <option value="name">Trier : Nom (A→Z)</option>
+        <option value="ean">Trier : EAN</option>
+      </select>
+
+      <label class="switch" title="Afficher le rang sur chaque carte">
+        <input id="toggleRank" type="checkbox" /> Afficher le rang
+      </label>
+      <button id="importUrlBtn" class="btn-ghost" aria-label="Importer depuis l’URL">Importer URL</button>
+      <button id="resetBtn" class="btn-danger" aria-label="Tout effacer">Tout effacer</button>
+
+      <!-- A5 : Bouton de partage -->
+      <button id="shareBtn" class="btn-primary" aria-label="Copier le lien de comparaison">🔗 Copier le lien</button>
+    
+
+      <!-- A9 START: Bouton de copie de l’état complet -->
+<button id="copyStateBtn" class="btn-primary" aria-label="Copier l’état complet">📋 État complet</button>
+<!-- A9 END -->
+      <button id="refreshBtn" class="btn-muted" aria-label="Rafraîchir les calculs">↻ Recalculer</button>
+
+      <!-- A30 — Sélecteur de langue -->
+       <label for="i18n-select" class="sr-only">Langue</label>
+       <select id="i18n-select" aria-label="Langue">
+       <option value="fr">Français</option>
+       <option value="en">English</option>
+       </select>
+
+
+         <!-- =======================================================================
+     A11 — Historique des comparaisons (Étape 2 : affichage + rechargement)
+     Section à placer sous le comparateur
+     ======================================================================= -->
+<section id="compare-history" aria-labelledby="compare-history-title" hidden>
+  <h2 id="compare-history-title">Historique des comparaisons</h2>
+  <div id="compare-history-list" role="list" aria-live="polite"></div>
+
+  <!-- A19 — Boutons Cloud -->
+<button type="button" id="cloud-signin">Connexion</button>
+<button type="button" id="cloud-sync-up"  disabled>Sync → Cloud</button>
+<button type="button" id="cloud-sync-down" disabled>Sync ← Cloud</button>
+
+<!-- A26 — Panneau Cloud (opt-in + sync) -->
+<div id="cloud-panel" class="row" style="gap:8px; align-items:center; margin-top:8px">
+  <label style="opacity:.85">Cloud Sync</label>
+  <input id="cloud-token" type="password" placeholder="Bearer token" style="width:220px">
+  <button id="cloud-toggle" class="btn-ghost">Activer</button>
+  <button id="cloud-pull"   class="btn-ghost">Importer</button>
+  <button id="cloud-push"   class="btn-ghost">Exporter</button>
+  <button id="cloud-sync"   class="btn-ghost" title="Importer puis Exporter">Forcer sync</button>
+  <span id="cloud-status" style="opacity:.7"></span>
+</div>
+
+
+<!-- A29 — Export/Import sécurisé (.honoua) -->
+<div id="secure-transfer" class="row" style="gap:8px; align-items:center; margin-top:6px">
+  <button id="honoua-export" class="btn-ghost" title="Exporter .honoua (chiffré)">Exporter .honoua</button>
+  <input  id="honoua-import-file" type="file" accept=".honoua,application/octet-stream" style="display:none">
+  <button id="honoua-import" class="btn-ghost" title="Importer .honoua (chiffré)">Importer .honoua</button>
+  <span id="secure-transfer-status" style="opacity:.7"></span>
+</div>
+
+
+
+<!-- A27 — Bandeau d’état Cloud -->
+<div id="cloud-banner" aria-live="polite" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+  <span id="cloud-pill" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#bbb" aria-hidden="true"></span>
+  <span id="cloud-msg" style="font-size:.95rem;opacity:.9">Cloud : inactif</span>
+</div>
+
+<!-- A28 — Sécurité du token (chiffrement + rotation) -->
+<div id="cloud-security" class="row" style="gap:8px; align-items:center; margin-top:6px">
+  <input id="cloud-passphrase" type="password" placeholder="Phrase secrète (A28)" style="width:220px">
+  <button id="cloud-lock"   class="btn-ghost" title="Chiffrer/Mettre à jour le token">Protéger</button>
+  <button id="cloud-reveal" class="btn-ghost" title="Déchiffrer pour vérif locale">Révéler</button>
+  <button id="cloud-rotate" class="btn-ghost" title="Rotation du token">Rotation</button>
+  <span id="cloud-sec-status" style="opacity:.7"></span>
+</div>
+
+
+
+
+
+  <!-- Barre d’actions (optionnelle, style minimal) -->
+<div id="compare-history-actions" class="history-actions-bar" hidden>
+  <button type="button" id="history-clear">Vider l’historique</button>
+  <label style="margin-left:.5rem;">
+    <input type="checkbox" id="history-show-pinned" />
+    Afficher uniquement les épinglés
+  </label>
+  <button type="button" id="carbon-cache-clear">Purger cache carbone</button>
+</div>
+<div id="history-toast" aria-live="polite" hidden>—</div>
+<!-- A30 — Toast accessible -->
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+
+</section>
+
+   <!-- =======================================================================
+     A14 — Section statistiques de l'historique
+     ======================================================================= -->
+<section id="compare-stats" hidden>
+  <h2>Statistiques d’utilisation</h2>
+  <div class="stats-summary">
+    <p><strong>Total :</strong> <span id="stat-total">0</span> sessions</p>
+    <p><strong>7 derniers jours :</strong> <span id="stat-week">0</span></p>
+    <p><strong>Épinglées :</strong> <span id="stat-pinned">0</span></p>
+    <p><strong>Moyenne produits/session :</strong> <span id="stat-avg">0</span></p>
+  </div>
+
+  <canvas id="stat-chart" width="350" height="180" aria-label="Historique des sessions par jour"></canvas>
+</section>
+     
+
+     <!-- A25 — jsPDF CDN -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+
+     <!-- =======================================================================
+     A15 — Évolution carbone
+     ======================================================================= -->
+<section id="compare-carbon" hidden>
+  <h2>Évolution carbone</h2>
+
+  <div class="carbon-summary">
+    <p><strong>Sessions comptabilisées :</strong> <span id="carbon-sessions">0</span></p>
+    <p><strong>Moyenne globale :</strong> <span id="carbon-global-avg">—</span> gCO₂e/session</p>
+  </div>
+
+  <div class="carbon-controls">
+    <label>Mode :
+      <select id="carbon-mode">
+        <option value="avg_per_session" selected>Moyenne par session (gCO₂e/session)</option>
+        <option value="sum_per_session">Total par session (gCO₂e)</option>
+      </select>
+    </label>
+  </div>
+
+  <canvas id="carbon-chart" width="350" height="180" aria-label="Évolution carbone (journalier)"></canvas>
+  <p class="carbon-note">NB : seules les sessions avec au moins une émission connue sont prises en compte.</p>
+</section>
+
+
+      <!-- =======================================================================
+     A16 — Export CSV
+     ======================================================================= -->
+    <div id="compare-export">
+       <button id="export-stats-csv">Exporter stats (CSV)</button>
+        <button id="export-carbon-csv">Exporter carbone (CSV)</button>
+    </div>
+     
+     <div id="history-toast" aria-live="polite" hidden>—</div>
+
+
+
+
+      <!-- A6 : Compteur + Retirer tout -->
+      <span id="counter" class="help" aria-live="polite" style="margin-left:auto">0 article</span>
+
+<button id="helpBtn" class="btn-ghost" type="button" aria-describedby="helpBtnHint">Aide ?</button>
+<span id="helpBtnHint" class="visually-hidden">Ouvrir le tutoriel guidé</span>
+
+<button id="removeAllBtn" class="btn-ghost" aria-label="Retirer tous les produits">Retirer tout</button>
+<input id="searchInput" type="text" placeholder="Rechercher (nom, marque, EAN)" aria-label="Rechercher dans la liste" style="min-width:240px">
+
+      <button id="clearFilterBtn" class="btn-ghost" aria-label="Effacer le filtre">Effacer filtre</button>
+<!-- A7 END -->
+
+
+
+    </div>
+
+    <p class="help">Astuce : vous pouvez passer plusieurs EAN via l’URL, ex. <code>?eans=123,456,789</code>. Le tri, l’option rang et l’URL partagée sont sauvegardés localement.</p>
+
+    <section id="track" class="tracks" aria-live="polite">
+      <div class="empty">Aucun produit pour l’instant. Ajoutez un EAN pour commencer.</div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;transition:.25s"></div>
+
+  <!-- A24+ — Classements mensuels -->
+<section id="leaderboard" style="margin-top:18px" aria-labelledby="lb-title">
+  <h3 id="lb-title" style="margin:0 0 8px">Classements mensuels</h3>
+
+  <div style="display:flex;gap:8px;align-items:center">
+    <label for="lb-scope" class="visually-hidden">Portée du classement</label>
+    <select id="lb-scope" name="lb-scope" aria-describedby="lb-hint-scope">
+      <option value="country">National</option>
+      <option value="region">Régional</option>
+    </select>
+    <span id="lb-hint-scope" class="visually-hidden">Choisissez national ou régional</span>
+
+    <label for="lb-month" class="visually-hidden">Mois</label>
+    <input id="lb-month" name="lb-month" type="month" inputmode="numeric" aria-describedby="lb-hint-month"/>
+
+    <button id="lb-refresh" type="button" aria-describedby="lb-hint-refresh">Voir</button>
+    <span id="lb-hint-month" class="visually-hidden">Format AAAA-MM</span>
+    <span id="lb-hint-refresh" class="visually-hidden">Mettre à jour le tableau</span>
+
+    <span id="lb-status" role="status" aria-live="polite" style="opacity:.7"></span>
+  </div>
+
+  <div id="lb-table" style="margin-top:10px"></div>
+</section>
+
+
+
+
+<script>
+(function(){
+  const $ = s=>document.querySelector(s);
+  const $scope=$("#lb-scope"), $month=$("#lb-month"), $btn=$("#lb-refresh");
+  const $status=$("#lb-status"), $table=$("#lb-table");
+  const $section = document.getElementById('leaderboard');
+
+  function throttle(fn, wait){ let t=0; return (...a)=>{ const n=Date.now(); if(n-t>=wait){ t=n; fn(...a); } }; }
+
+  // A32 — Étape 2 : navigation clavier & focus
+// 1) Activer "Voir" au clavier (Enter/Espace)
+$btn.setAttribute('type','button');
+$btn.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $btn.click(); }
+});
+
+// 2) Auto-refresh accessible sur changement (sélecteur + mois)
+$scope.addEventListener('change', ()=> $btn.click());
+$month.addEventListener('change', ()=> $btn.click());
+
+// 3) Enter dans le champ month déclenche la mise à jour
+$month.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter') { e.preventDefault(); $btn.click(); }
+});
+
+// 4) Raccourci clavier global Alt+R pour "Voir"
+document.addEventListener('keydown', (e)=>{
+  if (e.altKey && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    $btn.focus();
+    $btn.click();
+  }
+});
+
+
+
+
+
+  async function fetchLeaderboard(scope, month){
+    const token = sessionStorage.getItem('honoua_token');
+    const res = await fetch(`/api/leaderboard?scope=${encodeURIComponent(scope)}&month=${encodeURIComponent(month)}`, {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (!res.ok) throw new Error('Leaderboard fetch failed');
+    return await res.json();
+  }
+
+ function renderRows(rows){
+  if(!rows.length){ 
+    $table.innerHTML = "<p>Aucun participant ce mois.</p>";
+    return;
+  }
+
+  // A33 — micro-optims : build en une passe + assignation unique
+  const chunks = [
+    '<table style="width:100%;border-collapse:collapse" aria-describedby="lb-title">',
+    '<caption class="visually-hidden">Classement mensuel</caption>',
+    '<thead><tr>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">#</th>',
+    '<th scope="col" style="text-align:left;padding:6px;border-bottom:1px solid #ddd">Pseudo</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Score (gCO₂e / session / pers.)</th>',
+    '<th scope="col" style="text-align:right;padding:6px;border-bottom:1px solid #ddd">Sessions</th>',
+    '</tr></thead><tbody>'
+  ];
+
+  for (const r of rows){
+    chunks.push(
+      '<tr>',
+        `<td style="padding:6px">${r.rank}</td>`,
+        `<td style="padding:6px">${r.pseudo}</td>`,
+        `<td style="padding:6px;text-align:right">${r.score}</td>`,
+        `<td style="padding:6px;text-align:right">${r.n}</td>`,
+      '</tr>'
+    );
+  }
+  chunks.push('</tbody></table>');
+
+  // Une seule écriture dans le DOM → moins de reflows
+  $table.innerHTML = chunks.join('');
+}
+
+  async function refresh(){
+    const scope=$scope.value, month=$month.value;
+  $status.textContent="Chargement…";
+/* A33 — micro-optims : éviter un saut de mise en page */
+$table.style.minHeight = '240px';  // ~10 lignes × hauteur moyenne
+try{
+  const rows = await fetchLeaderboard(scope, month);
+  renderRows(rows);
+  $status.textContent = `${rows.length} entrées`;
+  $table.style.minHeight = '';     // retire la contrainte après rendu
+    }catch(e){
+      console.warn(e); $status.textContent="Erreur de chargement.";
+    }
+  }
+}
+ 
+  $btn.addEventListener('click', refresh);
+  document.addEventListener('DOMContentLoaded', refresh);
+})();
+</script>
+
+
+
+  <script>
+  // ===== Utilitaires UI =====
+  const $ = (s)=>document.querySelector(s);
+  const track = $("#track");
+  const input = $("#eanInput");
+  const addBtn = $("#addBtn");
+  const clearBtn = $("#clearBtn");
+  const importUrlBtn = $("#importUrlBtn");
+  const resetBtn = $("#resetBtn");
+  const sortSelect = $("#sortSelect");
+  const toggleRank = $("#toggleRank");
+  const refreshBtn = $("#refreshBtn");
+  const toast = $("#toast");
+  const shareBtn = document.getElementById("shareBtn");
+  const counter = document.getElementById("counter");
+  const removeAllBtn = document.getElementById("removeAllBtn");
+
+  const STORAGE_KEY = "honoua:compare:eanList";
+  const PREF_KEY = "honoua:compare:prefs";
+
+  // A7: références filtre
+  const searchInput = document.getElementById("searchInput");
+  const clearFilterBtn = document.getElementById("clearFilterBtn");
+
+  // A9: bouton “état complet”
+  const copyStateBtn = document.getElementById("copyStateBtn");
+
+  // A8: contrôles ordre / départage
+  const orderSelect = document.getElementById("orderSelect");
+  const tiebreakSelect = document.getElementById("tiebreakSelect");
+
+  // État
+  let eans = loadEans();
+  let prefs = loadPrefs(); // { sort, showRank, order, tiebreak, filter }
+  let compareCache = {};   // { ean: {raw:number, norm:number} }
+  // A23: champ seuil carbone (injecté dynamiquement)
+  let threshInput = null;
+
+
+  // A10 — Restauration automatique de l’état depuis l’URL
+  function restoreStateFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const hasRank = params.has("rank");
+    // A23 — seuil carbone (gCO2e)
+    const tmax = params.get("tmax");
+
+    const fromUrl = {
+      eans: params.get("eans"),
+      sort: params.get("sort"),
+      rank: hasRank ? (params.get("rank") === "1" || params.get("rank")==="true") : null,
+      order: params.get("order"),
+      tiebreak: params.get("tiebreak"),
+      filter: params.get("filter")
+    };
+
+   // A23 — appliquer tmax si fourni (nombre > 0)
+if (tmax != null) {
+  const n = Number(tmax);
+  if (!isNaN(n) && n > 0) prefs.carbonThreshold = n;
+}
+ 
+
+
+    // EANs depuis URL
+    if (fromUrl.eans) {
+      eans = fromUrl.eans.split(",").map(s => s.trim()).filter(Boolean);
+      saveEans();
+    }
+    // Prefs depuis URL (si présents)
+    if (fromUrl.sort) prefs.sort = fromUrl.sort;
+    if (fromUrl.rank !== null) prefs.showRank = !!fromUrl.rank;
+    if (fromUrl.order) prefs.order = fromUrl.order;
+    if (fromUrl.tiebreak) prefs.tiebreak = fromUrl.tiebreak;
+    if (typeof fromUrl.filter === "string") prefs.filter = fromUrl.filter;
+
+    savePrefs();
+  }
+
+  // Mettre à jour l’URL quand l’état change
+  function syncUrlState() {
+    const params = new URLSearchParams();
+    if (eans.length) params.set("eans", eans.join(","));
+    if (prefs.sort) params.set("sort", prefs.sort);
+    if (typeof prefs.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+    if (prefs.order) params.set("order", prefs.order);
+    if (prefs.tiebreak) params.set("tiebreak", prefs.tiebreak);
+    if (prefs.filter) params.set("filter", prefs.filter);
+    // A23 — seuil carbone
+   if (typeof prefs.carbonThreshold === "number" && prefs.carbonThreshold > 0) {
+  params.set("tmax", String(prefs.carbonThreshold));
+}
+
+    const newUrl = `${location.pathname}?${params.toString()}`;
+    history.replaceState({}, "", newUrl);
+  }
+
+  restoreStateFromUrl();
+
+  // Init UI
+  if (!prefs) prefs = {};
+  if (!prefs.sort) prefs.sort = "best";
+  if (typeof prefs.showRank !== "boolean") prefs.showRank = false;
+  if (!prefs.order) prefs.order = "asc";               // A8
+  if (!prefs.tiebreak) prefs.tiebreak = "name";        // A8
+  if (typeof prefs.filter !== "string") prefs.filter = "";
+
+  if (sortSelect) sortSelect.value = prefs.sort;
+  if (toggleRank) toggleRank.checked = !!prefs.showRank;
+  if (orderSelect) orderSelect.value = prefs.order;
+  if (tiebreakSelect) tiebreakSelect.value = prefs.tiebreak;
+  if (searchInput) searchInput.value = prefs.filter;
+
+  // A23 — init seuil carbone (valeur par défaut : none)
+if (typeof prefs.carbonThreshold !== "number") prefs.carbonThreshold = 0;
+
+// A23 — injecter le champ "Seuil gCO2e"
+(function injectThresholdField(){
+  // On va mettre le champ juste après sortSelect s'il existe, sinon on le met discrètement près du refreshBtn
+  const anchor = sortSelect || refreshBtn || document.body;
+  const wrapper = document.createElement('span');
+  wrapper.style.marginLeft = '8px';
+  wrapper.style.display = 'inline-flex';
+  wrapper.style.alignItems = 'center';
+  wrapper.style.gap = '6px';
+
+  const label = document.createElement('label');
+  label.textContent = 'Seuil (gCO₂e) :';
+  label.style.fontSize = '.9rem';
+
+  const inputEl = document.createElement('input');
+  inputEl.type = 'number';
+  inputEl.min = '0';
+  inputEl.step = '1';
+  inputEl.style.width = '7.5rem';
+  inputEl.value = (prefs.carbonThreshold > 0) ? String(prefs.carbonThreshold) : '';
+  inputEl.placeholder = 'ex: 200';
+
+  threshInput = inputEl;
+
+  inputEl.addEventListener('change', ()=>{
+    const v = Number(inputEl.value);
+    prefs.carbonThreshold = (!isNaN(v) && v > 0) ? v : 0;
+    savePrefs();
+    applyThresholdStyles(); // met à jour les badges
+    syncUrlState();
+  });
+
+  label.htmlFor = ''; // (pas d’id nécessaire)
+  wrapper.appendChild(label);
+  wrapper.appendChild(inputEl);
+
+  // Insertion dans le flux UI
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
+  } else {
+    // fallback très discret
+    document.body.appendChild(wrapper);
+    wrapper.style.position = 'fixed';
+    wrapper.style.bottom = '1rem';
+    wrapper.style.right = '1rem';
+    wrapper.style.background = 'rgba(255,255,255,.9)';
+    wrapper.style.padding = '.4rem .6rem';
+    wrapper.style.borderRadius = '.5rem';
+    wrapper.style.boxShadow = '0 8px 24px rgba(0,0,0,.15)';
+  }
+})();
+
+
+  // Rendu initial
+  render();
+  refreshCompare();
+  updateCounter();
+  applyFilter();     // appliquer le filtre au démarrage
+  syncUrlState();    // A10: synchroniser l’URL après premier rendu
+
+  // ---- Events
+  addBtn.addEventListener("click", ()=> {
+    const val = (input.value||"").replace(/\s+/g,"");
+    if(!val){ notify("Entrez un EAN."); input.focus(); return; }
+    if(addEAN(val)){ input.value=""; input.focus(); refreshCompare(); syncUrlState(); }
+  });
+  input.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ addBtn.click(); }});
+  clearBtn.addEventListener("click", ()=>{ input.value=""; notify("Champ vidé."); input.focus(); });
+
+  importUrlBtn.addEventListener("click", importFromUrl);
+
+  resetBtn.addEventListener("click", ()=>{
+    if(confirm("Tout effacer de la comparaison ?")){
+      eans = []; saveEans(); compareCache={}; render(); updateCounter(); syncUrlState();
+      notify("Comparateur réinitialisé."); input.focus();
+    }
+  });
+
+  sortSelect.addEventListener("change", ()=>{
+    prefs.sort = sortSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+  toggleRank.addEventListener("change", ()=>{
+    prefs.showRank = toggleRank.checked; savePrefs(); paintRanks(); syncUrlState();
+  });
+
+  // A8: ordre / départage
+  orderSelect?.addEventListener("change", ()=>{
+    prefs.order = orderSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+  tiebreakSelect?.addEventListener("change", ()=>{
+    prefs.tiebreak = tiebreakSelect.value; savePrefs(); sortCards(); paintRanks(); syncUrlState();
+  });
+
+  refreshBtn.addEventListener("click", ()=>{ refreshCompare(true); });
+
+  // A5 — Partage (minimal)
+  shareBtn?.addEventListener("click", async ()=>{
+    const url = buildShareUrl();
+    try{
+      await copyToClipboard(url);
+      notify("Lien copié dans le presse-papiers !");
+    }catch{
+      notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+      prompt("Copiez cette URL :", url);
+    }
+  });
+
+  // A9 — Copier l’état complet
+  copyStateBtn?.addEventListener("click", async ()=>{
+    const url = buildShareUrl(true); // inclut order/tiebreak/filter
+    try{
+      await copyToClipboard(url);
+      notify("Lien (état complet) copié !");
+    }catch{
+      notify("Impossible de copier. Sélectionnez l’URL manuellement.");
+      prompt("Copiez cette URL :", url);
+    }
+  });
+
+  // A6 — Retirer tout
+  removeAllBtn?.addEventListener("click", () => {
+    if (!eans.length) { notify("Rien à retirer."); input.focus(); return; }
+    if (confirm(`Retirer ${eans.length} produit(s) de la comparaison ?`)) {
+      eans = [];
+      saveEans();
+      compareCache = {};
+      render();
+      updateCounter();
+      syncUrlState();
+      notify("Tous les produits ont été retirés.");
+      input.focus();
+    }
+  });
+
+  // A7 — filtre temps réel
+  searchInput?.addEventListener("input", () => {
+    prefs.filter = searchInput.value || "";
+    savePrefs();
+    applyFilter();
+    updateCounter();
+    syncUrlState();
+  });
+  clearFilterBtn?.addEventListener("click", () => {
+    if (!searchInput) return;
+    searchInput.value = "";
+    prefs.filter = "";
+    savePrefs();
+    applyFilter();
+    updateCounter();
+    syncUrlState();
+    input.focus();
+  });
+         /* A22 — makeCardSkeleton : carte produit + badge A21 + encart alternative */
+function makeCardSkeleton(code){
+  const el = document.createElement("article");
+  el.className = "card";
+  el.dataset.ean = code;
+
+  el.innerHTML = `
+    <span class="rank" aria-hidden="true" data-role="rank">#—</span>
+    <div class="meta">EAN : <strong>${code}</strong></div>
+    <div class="thumb shimmer" data-role="thumb" aria-busy="true">Chargement…</div>
+    <h3 data-role="title">—</h3>
+    <div class="meta" data-role="brand">—</div>
+
+    <span class="badge" title="Empreinte normalisée sur la sélection">
+      <span class="dot" data-role="dot"></span>
+      <span data-role="fp-label">Empreinte : —</span>
+    </span>
+    <div class="gauge" aria-label="niveau d'empreinte"><i data-role="bar"></i></div>
+    <div class="gauge-label" data-role="glabel">—</div>
+
+    <!-- A21 — Badge d’écart carbone vs meilleur -->
+    <span class="delta-badge" data-role="delta" title="Écart carbone vs meilleur">—</span>
+
+    <!-- A23 — Badge "au-dessus du seuil" -->
+<span class="threshold-badge" data-role="tbadge" hidden>Au-dessus du seuil</span>
+
+
+    <!-- A22 — Zone suggestion “Alternative bas carbone” -->
+    <div class="alt-suggest" data-role="alt-box" hidden>
+      <div class="alt-text" data-role="alt-text">—</div>
+      <div class="alt-actions">
+        <button class="btn-ghost" data-action="alt-replace">Remplacer</button>
+        <button class="btn-ghost" data-action="alt-dismiss">Masquer</button>
+      </div>
+    </div>
+
+    <!-- A22 — rangée d’actions : Retirer + Alternative bas carbone -->
+    <div class="row" style="margin-top:12px">
+      <button class="btn-ghost" data-action="remove" aria-label="Retirer ce produit">Retirer</button>
+      <button class="btn-ghost" data-action="alt-suggest" aria-label="Proposer une alternative bas carbone">
+        Alternative bas carbone
+      </button>
+    </div>
+  `;
+
+  // Retirer
+  const btnRemove = el.querySelector('[data-action="remove"]');
+  if (btnRemove) {
+    btnRemove.addEventListener("click", ()=>{
+      eans = eans.filter(v => v !== code);
+      saveEans();
+      delete compareCache[code];
+      render();
+      updateCounter();
+      refreshCompare();
+      syncUrlState();
+      notify("Produit retiré.");
+      if (typeof input !== "undefined" && input?.focus) input.focus();
+    });
+  }
+
+  // A22 — Alternative bas carbone
+  const btnSuggest = el.querySelector('[data-action="alt-suggest"]');
+  if (btnSuggest) {
+    btnSuggest.addEventListener("click", ()=>{
+      if (typeof suggestAlternativeFor === "function") {
+        suggestAlternativeFor(code, el);
+      } else {
+        const box  = el.querySelector('[data-role="alt-box"]');
+        const text = el.querySelector('[data-role="alt-text"]');
+        if (box && text) {
+          box.hidden = false;
+          text.textContent = "La suggestion n’est pas encore disponible.";
+          box.dataset.altEan = "";
+        }
+      }
+    });
+  }
+
+  // Encart : Remplacer
+  const btnReplace = el.querySelector('[data-action="alt-replace"]');
+  if (btnReplace) {
+    btnReplace.addEventListener("click", ()=>{
+      const target = el.querySelector('[data-role="alt-box"]')?.dataset.altEan || "";
+      if (!target) { notify("Aucune alternative disponible."); return; }
+      if (typeof replaceEAN === "function") {
+        replaceEAN(code, target);
+      } else {
+        notify("Fonction de remplacement indisponible.");
+      }
+    });
+  }
+
+  // Encart : Masquer
+  const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", ()=>{
+      const box = el.querySelector('[data-role="alt-box"]');
+      if (box) { box.hidden = true; box.dataset.altEan = ""; }
+    });
+  }
+
+  return el;
+}
+
+           
+
+  // Retirer
+  el.querySelector('[data-action="remove"]').addEventListener("click", ()=>{
+    eans = eans.filter(v => v !== code);
+    saveEans();
+    delete compareCache[code];
+    render();
+    updateCounter();
+    refreshCompare();
+    syncUrlState();
+    notify("Produit retiré.");
+    input?.focus();
+  });
+
+  // A22 — Alternative bas carbone (si les fonctions existent)
+  const btnSuggest = el.querySelector('[data-action="alt-suggest"]');
+  const btnReplace = el.querySelector('[data-action="alt-replace"]');
+  const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+
+  if (btnSuggest) {
+    btnSuggest.addEventListener("click", ()=>{
+      if (typeof suggestAlternativeFor === "function") {
+        suggestAlternativeFor(code, el);
+      } else {
+        const box = el.querySelector('[data-role="alt-box"]');
+        const text = el.querySelector('[data-role="alt-text"]');
+        if (box && text) {
+          box.hidden = false;
+          text.textContent = "La suggestion n’est pas encore disponible.";
+          box.dataset.altEan = "";
+        }
+      }
+    });
+  }
+
+  if (btnReplace) {
+    btnReplace.addEventListener("click", ()=>{
+      const target = el.querySelector('[data-role="alt-box"]')?.dataset.altEan;
+      if (!target) { notify("Aucune alternative disponible."); return; }
+      if (typeof replaceEAN === "function") {
+        replaceEAN(code, target);
+      } else {
+        notify("Fonction de remplacement indisponible.");
+      }
+    });
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener("click", ()=>{
+      const box = el.querySelector('[data-role="alt-box"]');
+      if (box){ box.hidden = true; box.dataset.altEan = ""; }
+    });
+  }
+
+  return el; // ✅ important
+}
+     
+
+
+
+        /* A22 — bouton “Alternative bas carbone” */
+    el.querySelector('[data-action="alt-suggest"]').addEventListener("click", ()=>{
+      suggestAlternativeFor(code, el);
+    });
+
+   // Gestion des actions de l’encart (Remplacer / Masquer)
+const btnReplace = el.querySelector('[data-action="alt-replace"]');
+if (btnReplace) {
+  btnReplace.addEventListener("click", () => {
+    const box = el.querySelector('[data-role="alt-box"]');
+    const target = box?.dataset.altEan || "";
+    if (!target) { notify("Aucune alternative disponible."); return; }
+    if (typeof replaceEAN === "function") {
+      replaceEAN(code, target);
+    } else {
+      notify("Fonction de remplacement indisponible.");
+    }
+  });
+}
+
+const btnDismiss = el.querySelector('[data-action="alt-dismiss"]');
+if (btnDismiss) {
+  btnDismiss.addEventListener("click", () => {
+    const box = el.querySelector('[data-role="alt-box"]');
+    if (box) { box.hidden = true; box.dataset.altEan = ""; }
+  });
+}
+
+return el;
+}
+
+
+  async function hydrateCard(card, code){
+    const $t = (sel)=>card.querySelector(sel);
+    let data=null;
+    try{
+      let r = await fetch(`/products/${encodeURIComponent(code)}`);
+      if(r.ok){ data = await r.json(); }
+      if(!data || data.error){
+        const q = await fetch(`/products?ean=${encodeURIComponent(code)}`);
+        if(q.ok){
+          const list = await q.json();
+          data = Array.isArray(list) ? list[0] : list;
+        }
+      }
+    }catch(e){}
+    const th = $t('[data-role="thumb"]');
+    th.classList.remove("shimmer"); th.removeAttribute("aria-busy");
+    if(!data){
+      th.textContent = "Introuvable";
+      $t('[data-role="title"]').textContent = "Produit non trouvé";
+      $t('[data-role="brand"]').textContent = "—";
+      applyFilter();
+      return;
+    }
+    const title = data.name || data.product_name || data.title || "Produit";
+    const brand = data.brand || data.brands || "—";
+    const image = data.image_url || data.image || data.thumbnail || null;
+    $t('[data-role="title"]').textContent = title;
+    $t('[data-role="brand"]').textContent = brand;
+    if (image) {
+  const img = new Image();
+  img.alt = title;
+
+  // A33 — anti-CLS + perf
+  img.loading  = "lazy";
+  img.decoding = "async";
+  // Réserve un gabarit pour éviter les sauts de mise en page
+  img.width  = 300;   // adapte à ton layout si besoin
+  img.height = 120;   // idem
+
+  // Booster LCP uniquement pour la toute première image rendue
+  if (!document.querySelector('[data-lcp-mark]')) {
+    img.setAttribute('fetchpriority','high');
+    img.setAttribute('data-lcp-mark','1');
+  }
+
+  // Styles existants
+  img.style.width = "100%";
+  img.style.height = "120px";
+  img.style.objectFit = "contain";
+  img.style.borderRadius = "10px";
+
+  img.src = image;
+  th.replaceWith(img);
+} else {
+  th.textContent = "Pas d’image";
+}
+
+
+    // re-appliquer le filtre/surbrillance après hydratation des textes
+    applyFilter();
+  }
+
+  // A30 — a11y : relie l’article à son titre pour les lecteurs d'écran
+const h3 = $t('[data-role="title"]');
+if (h3 && !h3.id) {
+  h3.id = 'card-title-' + code;
+  card.setAttribute('aria-labelledby', h3.id);
+}
+
+
+  // ===== Calculs + tri/rang =====
+  async function refreshCompare(force=false){
+    if(!eans.length) return;
+    if(!force && Object.keys(compareCache).length && eans.every(e=>compareCache[e])){
+      sortCards(); paintRanks();     // A23 — appliquer l’état seuil après calcul/tri
+    applyThresholdStyles();
+ return;
+    }
+    let table=null;
+    try{
+      const url = `/compare?eans=${encodeURIComponent(eans.join(','))}`;
+      const r = await fetch(url);
+      if(r.ok){ table = await r.json(); }
+    }catch(e){ table=null; }
+
+    const byEan = {};
+    if(Array.isArray(table)){
+      for(const row of table){
+        const ean = (row.ean || row.code || row.id || "").toString();
+        const fp = pickFootprint(row);
+        if(ean && fp!=null && !isNaN(fp)){ byEan[ean] = Number(fp); }
+      }
+    }
+
+    const vals = Object.values(byEan);
+    const min = vals.length ? Math.min(...vals) : 0;
+    const max = vals.length ? Math.max(...vals) : 1;
+        // A21 — meilleur absolu (gCO2e) pour les deltas
+    const bestRaw = vals.length ? min : null;
+
+    const span = Math.max(1e-9, max - min);
+
+    compareCache = {};
+    for(const e of eans){
+      if(byEan[e]!=null){
+        const raw = byEan[e];
+        const norm = (raw - min)/span; // 0 meilleur → 1 pire
+        compareCache[e] = { raw, norm };
+      }
+    }
+
+    document.querySelectorAll('.card').forEach(card=>{
+      const ean = card.dataset.ean;
+      const bar = card.querySelector('[data-role="bar"]');
+      const dot = card.querySelector('[data-role="dot"]');
+      const lab = card.querySelector('[data-role="fp-label"]');
+      const glb = card.querySelector('[data-role="glabel"]');
+            // A21 — badge delta
+      const deltaEl = card.querySelector('[data-role="delta"]');
+
+      if(!compareCache[ean]){
+        bar.style.width='0%'; dot.style.background='#bbb'; lab.textContent='Empreinte : —'; glb.textContent='—';
+                bar.style.width='0%';
+        dot.style.background='#bbb';
+        lab.textContent='Empreinte : —';
+        glb.textContent='—';
+        if (deltaEl){
+          deltaEl.textContent = '—';
+          deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+          deltaEl.title = 'Écart carbone vs meilleur';
+        }
+        return;
+
+      }
+      const {raw, norm} = compareCache[ean];
+      const pct = Math.round(norm*100);
+      bar.style.width = Math.max(6,pct)+'%';
+      dot.style.background = mixColor('#2e7d32','#F5C147', norm);
+      lab.textContent = `Empreinte : ${fmt(raw)}`;
+            // A21 — Calculs d'écart vs meilleur (en % et en absolu gCO2e)
+      if (deltaEl && bestRaw != null && isFinite(raw)) {
+        const diffAbs = raw - bestRaw;                 // gCO2e au-dessus du meilleur (>= 0)
+        const diffPct = (bestRaw > 0) ? (diffAbs / bestRaw) * 100 : 0; // %
+        const pctTxt  = (diffPct >= 0 ? '+' : '') + diffPct.toFixed(0) + '%';
+        const absTxt  = (diffAbs >= 1000) ? (diffAbs/1000).toFixed(2)+'k' : diffAbs.toFixed(0);
+        deltaEl.textContent = `${pctTxt} (${absTxt} g)`;
+        deltaEl.title = `Écart vs meilleur : ${diffPct.toFixed(1)}% • ${diffAbs.toFixed(0)} gCO₂e`;
+
+        // couleur (seuils ajustables)
+        deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+        if (diffPct <= 10) {
+          deltaEl.classList.add('delta-good');
+        } else if (diffPct <= 35) {
+          deltaEl.classList.add('delta-mid');
+        } else {
+          deltaEl.classList.add('delta-bad');
+        }
+      } else if (deltaEl) {
+        deltaEl.textContent = '—';
+        deltaEl.classList.remove('delta-good','delta-mid','delta-bad');
+        deltaEl.title = 'Écart carbone vs meilleur';
+      }
+
+      glb.textContent = (pct<=25?'Très faible':pct<=50?'Faible':pct<=75?'Moyenne':'Élevée');
+    });
+
+    sortCards(); paintRanks();
+  }
+
+  function sortCards(){
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const sort = prefs.sort || 'best';
+    const order = (prefs.order === 'desc') ? -1 : 1; // asc=1, desc=-1
+    const tiebreak = prefs.tiebreak || 'name';
+    const collator = new Intl.Collator('fr',{sensitivity:'base',numeric:true});
+
+    const items = cards.map(c=>{
+      const ean = c.dataset.ean;
+      const title = (c.querySelector('[data-role="title"]')?.textContent||'').trim();
+      const brand = (c.querySelector('[data-role="brand"]')?.textContent||'').trim();
+      const fp = compareCache[ean]?.raw;
+      const norm = compareCache[ean]?.norm;
+      return {el:c, ean, title, brand, fp, norm};
+    });
+
+    const cmpText = (a,b,field)=>{
+      const A = (field==='ean') ? a.ean : (field==='brand' ? a.brand||'' : a.title||'');
+      const B = (field==='ean') ? b.ean : (field==='brand' ? b.brand||'' : b.title||'');
+      return collator.compare(A, B);
+    };
+
+    items.sort((a,b)=>{
+      if (sort==='best' || sort==='worst'){
+        const dir = (sort==='best') ? 1 : -1;
+        const A = (a.norm==null) ? Infinity : a.norm;
+        const B = (b.norm==null) ? Infinity : b.norm;
+        if (A !== B) return dir * (A - B);
+        const Afp = (a.fp==null) ? Infinity : a.fp;
+        const Bfp = (b.fp==null) ? Infinity : b.fp;
+        if (Afp !== Bfp) return dir * (Afp - Bfp);
+        const t = cmpText(a,b,tiebreak);
+        if (t !== 0) return t;
+        return collator.compare(a.ean, b.ean);
+      }
+      if (sort==='brand'){
+        const r = cmpText(a,b,'brand'); if (r!==0) return order*r;
+        const r2 = cmpText(a,b,'name'); if (r2!==0) return order*r2;
+        return order*collator.compare(a.ean, b.ean);
+      }
+      if (sort==='name'){
+        const r = cmpText(a,b,'name'); if (r!==0) return order*r;
+        const r2 = cmpText(a,b,'brand'); if (r2!==0) return order*r2;
+        return order*collator.compare(a.ean, b.ean);
+      }
+      if (sort==='ean'){
+        return order*collator.compare(a.ean, b.ean);
+      }
+      return 0;
+    });
+
+    items.forEach(i=>track.appendChild(i.el));
+  }
+
+  function paintRanks(){
+    const show = !!prefs.showRank;
+    const cards = Array.from(document.querySelectorAll('.card'));
+    cards.forEach((c,idx)=>{
+      const rk = c.querySelector('[data-role="rank"]');
+      rk.textContent = `#${idx+1}`;
+      rk.classList.toggle('show', show);
+      rk.style.background = idx===0 ? '#2e7d32' : '#111';
+    });
+  }
+
+  /* ============================================================================
+   A22 — Suggestion d’alternative bas carbone (locale)
+   - Cherche, parmi les EANs affichés, celui avec l’empreinte la plus basse
+     (compareCache) et différent du produit courant.
+   - Si trouvé et meilleur, propose “Remplacer” (swap d’EAN in-place).
+   ============================================================================ */
+
+/** Trouve l’EAN le plus bas carbone dans la sélection courante (hors `exclude`) */
+function findBestAlternative(exclude){
+  if (!eans.length) return null;
+  // On cherche le plus bas raw connu
+  let best = null;
+  for (const e of eans){
+    if (e === exclude) continue;
+    const fp = compareCache[e]?.raw;
+    if (typeof fp !== "number" || !isFinite(fp)) continue;
+    if (!best || fp < best.fp) best = { ean: e, fp };
+  }
+  return best; // {ean, fp} ou null
+}
+
+/** Affiche l’encart de suggestion pour la carte `cardEl` */
+function showAlternative(cardEl, currentEan, alt){
+  const box = cardEl.querySelector('[data-role="alt-box"]');
+  const text = cardEl.querySelector('[data-role="alt-text"]');
+  if (!box || !text) return;
+
+  if (!alt){
+    box.hidden = false;
+    box.dataset.altEan = "";
+    text.textContent = "Aucune alternative plus bas carbone n’a été trouvée dans la sélection.";
+    return;
+  }
+
+  const cur = compareCache[currentEan]?.raw;
+  const diff = (typeof cur === "number" && isFinite(cur)) ? (cur - alt.fp) : null;
+
+  box.hidden = false;
+  box.dataset.altEan = alt.ean;
+
+  if (diff != null && diff > 0){
+    const pct = cur > 0 ? Math.round((diff / cur) * 100) : 0;
+    text.textContent = `Suggestion : ${alt.ean} — environ ${diff.toFixed(0)} gCO₂e de moins (~${pct}%).`;
+  } else {
+    text.textContent = `Déjà le meilleur choix carbone de la sélection.`;
+  }
+}
+
+/** Logique de suggestion déclenchée par le bouton */
+function suggestAlternativeFor(currentEan, cardEl){
+  // Conditions minimales
+  if (!eans || eans.length < 2) {
+    const box = cardEl.querySelector('[data-role="alt-box"]');
+    const text = cardEl.querySelector('[data-role="alt-text"]');
+    if (box && text){ box.hidden = false; text.textContent = "Ajoutez un autre produit pour proposer une alternative."; box.dataset.altEan=""; }
+    return;
+  }
+  // Besoin des empreintes actualisées
+  if (!compareCache || !Object.keys(compareCache).length){
+    refreshCompare(true);
+  }
+
+  const best = findBestAlternative(currentEan);
+  // Si pas d’empreinte pour le courant, on propose simplement le meilleur global
+  if (!compareCache[currentEan] && best){
+    showAlternative(cardEl, currentEan, best);
+    return;
+  }
+  // Si courant est le meilleur (ou égal), aucune alternative
+  const curRaw = compareCache[currentEan]?.raw;
+  if (best && typeof curRaw === "number" && best.fp < curRaw){
+    showAlternative(cardEl, currentEan, best);
+  } else {
+    showAlternative(cardEl, currentEan, null);
+  }
+}
+
+/** Remplace `oldEan` par `newEan` dans la sélection (swap in-place) */
+function replaceEAN(oldEan, newEan){
+  if (!newEan || newEan === oldEan) return;
+  const idx = eans.indexOf(oldEan);
+  if (idx === -1) return;
+
+  // Si la cible existe déjà, on retire simplement l’ancien
+  const exists = eans.includes(newEan);
+  if (exists){
+    eans = eans.filter(v => v !== oldEan);
+  } else {
+    eans.splice(idx, 1, newEan);
+  }
+
+  saveEans();
+  compareCache = {}; // force recalcul
+  render();
+  updateCounter();
+  refreshCompare(true);
+  syncUrlState();
+  notify("Produit remplacé par une alternative plus bas carbone.");
+}
+
+
+  // ---- Helpers
+  // A9 — import enrichi depuis l’URL (inclut tri/ordre/départage/filtre)
+  function importFromUrl(){
+    const params = new URLSearchParams(location.search);
+
+    // EANs
+    const csv = (params.get("eans")||"").trim();
+    let added=0;
+    if(csv){
+      const list = csv.split(",").map(s=>s.trim()).filter(Boolean);
+      list.forEach(v=> { if(addEAN(v,true)) added++; });
+    }
+
+    // Préférences : sort, rank, order, tiebreak, filter
+    const incoming = {
+      sort: params.get("sort"),
+      rank: params.get("rank"),
+      order: params.get("order"),
+      tiebreak: params.get("tiebreak"),
+      filter: params.get("filter"),
+    };
+
+    let changed = false;
+
+    if(incoming.sort && incoming.sort !== prefs.sort){ prefs.sort = incoming.sort; changed = true; }
+    if(incoming.rank!=null){
+      const val = incoming.rank === "1" || incoming.rank === "true";
+      if(val !== !!prefs.showRank){ prefs.showRank = val; changed = true; }
+    }
+    if(incoming.order && incoming.order !== prefs.order){ prefs.order = incoming.order; changed = true; }
+    if(incoming.tiebreak && incoming.tiebreak !== prefs.tiebreak){ prefs.tiebreak = incoming.tiebreak; changed = true; }
+    if(typeof incoming.filter === "string"){
+      const q = (incoming.filter||"").trim();
+      if(q !== (prefs.filter||"")){ prefs.filter = q; changed = true; }
+    }
+
+    // Répercuter dans l’UI
+    if(changed){
+      savePrefs();
+      if(sortSelect && prefs.sort) sortSelect.value = prefs.sort;
+      if(toggleRank) toggleRank.checked = !!prefs.showRank;
+      if(orderSelect && prefs.order) orderSelect.value = prefs.order;
+      if(tiebreakSelect && prefs.tiebreak) tiebreakSelect.value = prefs.tiebreak;
+      if(searchInput && typeof prefs.filter === "string") searchInput.value = prefs.filter;
+    }
+
+    if(added>0){ saveEans(); render(); notify(`${added} EAN importé(s).`); }
+    else if(!changed){ notify("Aucun paramètre nouveau à importer."); }
+
+    // Toujours recalculer/synchroniser l’affichage
+    updateCounter();
+    refreshCompare(true);
+    applyFilter();
+    sortCards();
+    paintRanks();
+    syncUrlState();   // <— sync à la fin, une seule fois
+        // A23 — premier passage
+    applyThresholdStyles();
+
+  }
+
+  function pickFootprint(row){
+    const map = {}; for(const k of Object.keys(row)){ map[k.toLowerCase()] = k; }
+    const candidates = ['footprint','co2e','co2eq','carbon','ghg','score','value'];
+    for(const c of candidates){ if(map[c]) return toNumber(row[map[c]]); }
+    return null;
+  }
+  function toNumber(v){
+    if(v==null) return null;
+    if(typeof v === 'number') return v;
+    const s = String(v).replace(',', '.').replace(/[^\d.\-eE]/g,'');
+    const n = parseFloat(s); return isNaN(n) ? null : n;
+  }
+  function fmt(v){
+    if(v>=1000) return (v/1000).toFixed(2)+'k';
+    if(v>=100) return v.toFixed(0);
+    if(v>=10) return v.toFixed(1);
+    return v.toFixed(2);
+  }
+  function mixColor(hexA, hexB, t){
+    const a = hexToRgb(hexA), b = hexToRgb(hexB);
+    const m = {r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t)};
+    return `rgb(${m.r},${m.g},${m.b})`;
+  }
+  function hexToRgb(h){
+    const x = h.replace('#','');
+    const n = parseInt(x.length===3 ? x.split('').map(c=>c+c).join('') : x, 16);
+    return {r:(n>>16)&255, g:(n>>8)&255, b:(n)&255};
+  }
+  function notify(msg){
+    toast.textContent = msg; toast.style.opacity=1;
+    setTimeout(()=>toast.style.opacity=0, 1400);
+  }
+
+  /* ============================================================================
+   A22 — Suggestion d’alternative bas carbone (locale)
+   - Cherche, parmi les EANs affichés, celui avec l’empreinte la plus basse
+     (compareCache) et différent du produit courant.
+   - Si trouvé et meilleur, propose “Remplacer” (swap d’EAN in-place).
+   ============================================================================ */
+
+/** Trouve l’EAN le plus bas carbone dans la sélection courante (hors `exclude`) */
+function findBestAlternative(exclude){
+  if (!eans.length) return null;
+  // On cherche le plus bas raw connu
+  let best = null;
+  for (const e of eans){
+    if (e === exclude) continue;
+    const fp = compareCache[e]?.raw;
+    if (typeof fp !== "number" || !isFinite(fp)) continue;
+    if (!best || fp < best.fp) best = { ean: e, fp };
+  }
+  return best; // {ean, fp} ou null
+}
+
+/** Affiche l’encart de suggestion pour la carte `cardEl` */
+function showAlternative(cardEl, currentEan, alt){
+  const box = cardEl.querySelector('[data-role="alt-box"]');
+  const text = cardEl.querySelector('[data-role="alt-text"]');
+  if (!box || !text) return;
+
+  if (!alt){
+    box.hidden = false;
+    box.dataset.altEan = "";
+    text.textContent = "Aucune alternative plus bas carbone n’a été trouvée dans la sélection.";
+    return;
+  }
+
+  const cur = compareCache[currentEan]?.raw;
+  const diff = (typeof cur === "number" && isFinite(cur)) ? (cur - alt.fp) : null;
+
+  box.hidden = false;
+  box.dataset.altEan = alt.ean;
+
+  if (diff != null && diff > 0){
+    const pct = cur > 0 ? Math.round((diff / cur) * 100) : 0;
+    text.textContent = `Suggestion : ${alt.ean} — environ ${diff.toFixed(0)} gCO₂e de moins (~${pct}%).`;
+  } else {
+    text.textContent = `Déjà le meilleur choix carbone de la sélection.`;
+  }
+}
+
+/** Logique de suggestion déclenchée par le bouton */
+function suggestAlternativeFor(currentEan, cardEl){
+  // Conditions minimales
+  if (!eans || eans.length < 2) {
+    const box = cardEl.querySelector('[data-role="alt-box"]');
+    const text = cardEl.querySelector('[data-role="alt-text"]');
+    if (box && text){ box.hidden = false; text.textContent = "Ajoutez un autre produit pour proposer une alternative."; box.dataset.altEan=""; }
+    return;
+  }
+  // Besoin des empreintes actualisées
+  if (!compareCache || !Object.keys(compareCache).length){
+    refreshCompare(true);
+  }
+
+  const best = findBestAlternative(currentEan);
+  // Si pas d’empreinte pour le courant, on propose simplement le meilleur global
+  if (!compareCache[currentEan] && best){
+    showAlternative(cardEl, currentEan, best);
+    return;
+  }
+  // Si courant est le meilleur (ou égal), aucune alternative
+  const curRaw = compareCache[currentEan]?.raw;
+  if (best && typeof curRaw === "number" && best.fp < curRaw){
+    showAlternative(cardEl, currentEan, best);
+  } else {
+    showAlternative(cardEl, currentEan, null);
+  }
+}
+
+/** Remplace `oldEan` par `newEan` dans la sélection (swap in-place) */
+function replaceEAN(oldEan, newEan){
+  if (!newEan || newEan === oldEan) return;
+  const idx = eans.indexOf(oldEan);
+  if (idx === -1) return;
+
+  // Si la cible existe déjà, on retire simplement l’ancien
+  const exists = eans.includes(newEan);
+  if (exists){
+    eans = eans.filter(v => v !== oldEan);
+  } else {
+    eans.splice(idx, 1, newEan);
+  }
+
+  saveEans();
+  compareCache = {}; // force recalcul
+  render();
+  updateCounter();
+  refreshCompare(true);
+  syncUrlState();
+  notify("Produit remplacé par une alternative plus bas carbone.");
+}
+
+
+  // A5 — helpers partage + A9 (état complet)
+  function buildShareUrl(full=false){
+    const base = location.origin + location.pathname;
+    const params = new URLSearchParams();
+
+    if(eans.length) params.set("eans", eans.join(","));
+    if(prefs?.sort) params.set("sort", prefs.sort);
+    if(typeof prefs?.showRank === "boolean") params.set("rank", prefs.showRank ? "1" : "0");
+
+    if(full){
+      if(prefs?.order) params.set("order", prefs.order);
+      if(prefs?.tiebreak) params.set("tiebreak", prefs.tiebreak);
+      if(prefs?.filter){ const q=(prefs.filter||"").trim(); if(q) params.set("filter", q); }
+    }
+
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+
+  // A7 — filtre & surbrillance
+  function normalize(s) { return (s||"").toString().toLowerCase(); }
+  function highlightText(el, text, q) {
+    if (!q) { el.innerHTML = escapeHtml(text); return; }
+    const t = text || "";
+    const idx = t.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) { el.innerHTML = escapeHtml(t); return; }
+    const before = escapeHtml(t.slice(0, idx));
+    const match  = escapeHtml(t.slice(idx, idx + q.length));
+    const after  = escapeHtml(t.slice(idx + q.length));
+    el.innerHTML = `${before}<mark>${match}</mark>${after}`;
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => (
+      m === '&' ? '&amp;' :
+      m === '<' ? '&lt;'  :
+      m === '>' ? '&gt;'  :
+      m === '"' ? '&quot;': '&#39;'
+    ));
+  }
+  function applyFilter() {
+    const q = (prefs.filter || "").trim();
+    const cards = Array.from(document.querySelectorAll('.card'));
+    let visible = 0;
+
+    for (const c of cards) {
+      const ean = c.dataset.ean || "";
+      const titleEl = c.querySelector('[data-role="title"]');
+      const brandEl = c.querySelector('[data-role="brand"]');
+
+      const title = (titleEl?.textContent || "").trim();
+      const brand = (brandEl?.textContent || "").trim();
+      const hay = `${title} ${brand} ${ean}`;
+
+      const match = !q || normalize(hay).includes(normalize(q));
+      c.style.display = match ? "" : "none";
+      if (match) visible++;
+
+      if (match) {
+        if (titleEl) highlightText(titleEl, title, q);
+        if (brandEl) highlightText(brandEl, brand, q);
+      } else {
+        if (titleEl) titleEl.innerHTML = escapeHtml(title);
+        if (brandEl) brandEl.innerHTML = escapeHtml(brand);
+      }
+    }
+
+    const empty = document.querySelector('.tracks .empty');
+    if (cards.length && visible === 0) {
+      if (!empty) {
+        const d = document.createElement("div");
+        d.className = "empty";
+        d.textContent = "Aucun résultat pour ce filtre.";
+        document.querySelector('.tracks')?.appendChild(d);
+      } else {
+        empty.textContent = "Aucun résultat pour ce filtre.";
+        empty.style.display = "";
+      }
+    } else if (empty) {
+      empty.style.display = "none";
+    }
+  }
+
+  // A6/A7 — compteur (prend en compte le filtre actif)
+  function updateCounter() {
+    const hasFilter = !!(prefs.filter && prefs.filter.trim());
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const visible = cards.filter(c => c.style.display !== 'none').length;
+
+    const n = hasFilter ? visible : eans.length;
+    if (counter) {
+      counter.textContent = `${n} ${n > 1 ? "articles" : "article"}`;
+    }
+  }
+
+/* =========================================================================
+     A19 — Sauvegarde Cloud (opt-in)
+     - Connexion (token) → stockage local (sessionStorage)
+     - Sync → Cloud : envoie l’historique local (fusion côté client)
+     - Sync ← Cloud : récupère l’historique cloud (fusion côté client)
+     - Fusion non destructive : dédup par "id" puis par "params"
+     - Ne casse pas A11–A16. Pas de sync auto, tout est manuel et opt-in.
+     ========================================================================= */
+
+
+(function(){
+  // ----- Constantes API (adapter les routes si besoin) -----------------------
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var CLOUD_BASE  = '/api/history';   // ex: /api/history
+  var EP_LOGIN    = CLOUD_BASE + '/login';   // POST {email,password} -> {token}
+  var EP_PULL     = CLOUD_BASE + '/pull';    // GET  -> {history:[...]}
+  var EP_PUSH     = CLOUD_BASE + '/push';    // POST {history:[...]} -> {ok:true}
+
+  // ----- UI refs --------------------------------------------------------------
+  var $btnLogin, $btnUp, $btnDown;
+
+  // ----- Token en session (éphémère et simple) -------------------------------
+  function getToken(){ try{ return sessionStorage.getItem('honoua_token') || null; }catch{ return null; } }
+  function setToken(t){ try{ t?sessionStorage.setItem('honoua_token', t):sessionStorage.removeItem('honoua_token'); }catch{} }
+
+  // ----- LS helpers (réutilisés) ---------------------------------------------
+  function readHistory(){
+    try {
+      var arr = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+      arr.forEach(function(e){
+        if (typeof e.pinned !== 'boolean') e.pinned = false;
+        if (!('name' in e)) e.name = null;
+      });
+      return arr;
+    }catch{ return []; }
+  }
+  function writeHistory(arr){
+    try{
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      window.dispatchEvent(new StorageEvent('storage', {key:HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    }catch(e){ console.warn('[A19] writeHistory:', e); }
+  }
+
+  // ----- Fusion non destructive ----------------------------------------------
+  /* Commentaire :
+     - Déduplication par "id" si identiques.
+     - Si ids différents mais "params" identiques → on conserve le plus récent (ts max).
+     - Les épinglés (pinned=true) sont conservés.
+     - Borne finale ≤ 50 en préservant épinglés (même logique que A11-E3).
+  */
+  function shallowParams(e){
+    return JSON.stringify(e && e.params ? e.params : {});
+  }
+  function mergeHistories(local, remote, max){
+    var mapById = new Map();
+    var mapByParams = new Map();
+
+    function add(e){
+      if (!e || !e.ts) return;
+      // normalisation minimale
+      if (typeof e.pinned !== 'boolean') e.pinned = false;
+      if (!('name' in e)) e.name = null;
+
+      // par id
+      if (e.id != null && !mapById.has(e.id)) {
+        mapById.set(e.id, e);
+      } else if (e.id == null){
+        // si pas d'id (edge rare), génère un id basé sur ts
+        e.id = new Date(e.ts).getTime();
+        if (!mapById.has(e.id)) mapById.set(e.id, e);
+      }
+
+      // par params → on garde le plus récent
+      var key = shallowParams(e);
+      var cur = mapByParams.get(key);
+      if (!cur || new Date(e.ts) > new Date(cur.ts)) {
+        mapByParams.set(key, e);
+      }
+    }
+
+    local.forEach(add);
+    remote.forEach(add);
+
+    // Concat du “meilleur par params” pour éviter doublons logiques
+    var merged = Array.from(mapByParams.values());
+
+    // Préserver borne ≤ max avec priorité aux épinglés + plus récents
+    merged.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); }); // ordre chronologique
+    if (merged.length > max) {
+      var pinned = merged.filter(function(e){ return e.pinned; });
+      var others = merged.filter(function(e){ return !e.pinned; });
+      var keepOthers = Math.max(0, max - pinned.length);
+      if (others.length > keepOthers) {
+        others = others.slice(others.length - keepOthers);
+      }
+      // recomposition (ordre chrono conservé)
+      var keepSet = new Set(pinned.concat(others).map(function(x){ return x.id; }));
+      merged = merged.filter(function(e){ return keepSet.has(e.id); });
+    }
+
+    return merged;
+  }
+
+  // ----- API calls ------------------------------------------------------------
+  async function apiLogin(){
+    // Simple prompt (remplacer par vrai formulaire si besoin)
+    var email = prompt('Email :');
+    if (email === null) return null;
+    var pass = prompt('Mot de passe :');
+    if (pass === null) return null;
+
+    var res = await fetch(EP_LOGIN, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: email.trim(), password: String(pass) })
+    });
+    if (!res.ok) throw new Error('Login échoué');
+    var data = await res.json();
+    return data && data.token ? data.token : null;
+  }
+
+  async function apiPull(){
+    var t = getToken(); if (!t) throw new Error('Non authentifié');
+    var res = await fetch(EP_PULL, { headers:{ 'Authorization':'Bearer '+t } });
+    if (!res.ok) throw new Error('Pull échoué');
+    var data = await res.json();
+    var arr = Array.isArray(data.history) ? data.history : [];
+    return arr;
+  }
+
+  async function apiPush(history){
+    var t = getToken(); if (!t) throw new Error('Non authentifié');
+    var res = await fetch(EP_PUSH, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+t },
+      body: JSON.stringify({ history })
+    });
+    if (!res.ok) throw new Error('Push échoué');
+    return await res.json();
+  }
+
+  // ----- UI state -------------------------------------------------------------
+  function updateButtons(){
+    var logged = !!getToken();
+    if ($btnUp)   $btnUp.disabled   = !logged;
+    if ($btnDown) $btnDown.disabled = !logged;
+    if ($btnLogin){
+      $btnLogin.textContent = logged ? 'Déconnexion' : 'Connexion';
+      $btnLogin.setAttribute('aria-pressed', logged ? 'true' : 'false');
+    }
+  }
+
+  // ----- Handlers -------------------------------------------------------------
+  async function onLoginClick(){
+    try{
+      if (getToken()){
+        // Déconnexion
+        setToken(null);
+        notify('Déconnecté du cloud.');
+        updateButtons();
+        return;
+      }
+      var t = await apiLogin();
+      if (!t) { alert('Impossible de se connecter.'); return; }
+      setToken(t);
+      notify('Connecté ✅');
+      updateButtons();
+    }catch(e){
+      console.warn('[A19] login:', e);
+      alert('Connexion échouée.');
+    }
+  }
+
+  async function onSyncUp(){
+    try{
+      var local = readHistory();
+      if (!local.length){ alert('Aucune donnée locale à envoyer.'); return; }
+      // Pull d’abord pour fusionner avant d’écraser
+      var remote = await apiPull();
+      var merged = mergeHistories(local, remote, 50);
+      await apiPush(merged);
+      notify('Sync → Cloud terminée ✅');
+    }catch(e){
+      console.warn('[A19] sync up:', e);
+      alert('Sync → Cloud échouée.');
+    }
+  }
+
+  async function onSyncDown(){
+    try{
+      var local = readHistory();
+      var remote = await apiPull();
+      var merged = mergeHistories(local, remote, 50);
+      writeHistory(merged); // met à jour local + notifie UI
+      notify('Sync ← Cloud terminée ✅');
+    }catch(e){
+      console.warn('[A19] sync down:', e);
+      alert('Sync ← Cloud échouée.');
+    }
+  }
+
+  // ----- Boot ----------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    $btnLogin = document.getElementById('cloud-signin');
+    $btnUp    = document.getElementById('cloud-sync-up');
+    $btnDown  = document.getElementById('cloud-sync-down');
+
+    if ($btnLogin) $btnLogin.addEventListener('click', onLoginClick);
+    if ($btnUp)    $btnUp.addEventListener('click',    onSyncUp);
+    if ($btnDown)  $btnDown.addEventListener('click',  onSyncDown);
+
+    updateButtons();
+  });
+})();
+
+</script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 1 : stockage auto de la session)
+   - Non intrusif : écoute des changements d’URL + événement custom optionnel
+   - Clair et commenté en FR
+   - Rétro-compatible (aucune dépendance CSS/HTML)
+   ============================================================================ */
+
+/** Clé localStorage dédiée à l'historique */
+const HONOUA_HISTORY_KEY = 'honoua_compare_history_v1';
+
+/** Paramètres : adapte si besoin le nom des query params utilisés par A8–A10 */
+const HISTORY_MAX_ENTRIES = 50; // borne de sécurité
+const URL_PARAM_EANS       = 'eans';   // e.g. "123,456,789"
+const URL_PARAM_SORT       = 'sort';   // e.g. "score" | "name" | ...
+const URL_PARAM_ORDER      = 'order';  // e.g. "asc" | "desc"
+const URL_PARAM_FILTERS    = 'filters';// e.g. "vegan,local" (ou JSON encodé)
+const URL_PARAM_QUERY      = 'q';      // optionnel : mot-clé / recherche
+
+/** Utilitaire sûr : lecture JSON dans localStorage */
+function lsReadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    console.warn('[A11] Lecture JSON LS échouée:', e);
+    return fallback;
+  }
+}
+
+/** Utilitaire sûr : écriture JSON dans localStorage */
+function lsWriteJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn('[A11] Écriture JSON LS échouée:', e);
+  }
+}
+
+/** Parse l'état courant depuis l'URL (source de vérité depuis A8–A10) */
+function getCompareStateFromURL() {
+  const u = new URL(window.location.href);
+  const p = u.searchParams;
+
+  const rawEans   = (p.get(URL_PARAM_EANS) || '').trim();
+  const eans      = rawEans ? rawEans.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const sort      = (p.get(URL_PARAM_SORT)  || '').trim() || null;
+  const order     = (p.get(URL_PARAM_ORDER) || '').trim() || null;
+  const query     = (p.get(URL_PARAM_QUERY) || '').trim() || null;
+
+  // Filtres : laisse souple; si c'est un CSV => array ; si JSON encodé => objet
+  let filtersRaw  = (p.get(URL_PARAM_FILTERS) || '').trim();
+  let filters     = null;
+  if (filtersRaw) {
+    try {
+      // Essaye de décoder du JSON si ça ressemble à du JSON
+      if (filtersRaw.startsWith('{') || filtersRaw.startsWith('[')) {
+        filters = JSON.parse(filtersRaw);
+      } else {
+        // sinon CSV => tableau
+        filters = filtersRaw.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    } catch {
+      // fallback brut : on conserve la chaîne
+      filters = filtersRaw;
+    }
+  }
+
+  return {
+    eans,
+    sort,
+    order,
+    filters,
+    query,
+    // On garde l’URL complète pour restauration/affichage ultérieur
+    url: u.toString()
+  };
+}
+
+/** Crée un enregistrement "session" prêt pour l'historique */
+function buildHistoryEntryFromState(state) {
+  const now = new Date();
+  return {
+    id: now.getTime(),               // identifiant simple (timestamp)
+    ts: now.toISOString(),           // ISO pour affichage futur
+    productCount: state.eans.length, // nombre de produits
+    params: {
+      eans: state.eans,
+      sort: state.sort,
+      order: state.order,
+      filters: state.filters,
+      query: state.query
+    },
+    url: state.url
+  };
+}
+
+/** Compare deux sessions (pour déduplication basique) */
+function shallowEqualSession(a, b) {
+  if (!a || !b) return false;
+  const A = a.params, B = b.params;
+  try {
+    return JSON.stringify(A) === JSON.stringify(B);
+  } catch {
+    return false;
+  }
+}
+
+/** Enregistre la session courante dans l'historique (avec dédup + borne) */
+function saveCurrentSessionToHistory() {
+  const state   = getCompareStateFromURL();
+  const entry   = buildHistoryEntryFromState(state);
+  const history = lsReadJSON(HONOUA_HISTORY_KEY, []);
+
+  // déduplication: si la dernière entrée a le même état, on ne pousse pas
+  const last = history[history.length - 1];
+  if (shallowEqualSession(last, entry)) {
+    // Rien à faire — on ne spam pas l'historique
+    return;
+  }
+
+  history.push(entry);
+
+  // borne de sécurité
+  if (history.length > HISTORY_MAX_ENTRIES) {
+    history.splice(0, history.length - HISTORY_MAX_ENTRIES);
+  }
+
+  lsWriteJSON(HONOUA_HISTORY_KEY, history);
+  // (Étape 2 utilisera cette base pour l’affichage de la liste + bouton "Recharger")
+}
+
+/* ------------------------------
+   Déclencheurs d’enregistrement
+   ------------------------------
+   1) Changements d’URL (pushState / replaceState / popstate) — car A8–A10
+      synchronisent l’état via l’URL.
+   2) Événement personnalisé "honoua:compare:updated" — que tu peux
+      déclencher à la fin de ton cycle de rendu si nécessaire.
+*/
+
+// Patch léger pour émettre un event quand pushState/replaceState sont appelés
+(function patchHistoryMethods(){
+  const _pushState    = history.pushState;
+  const _replaceState = history.replaceState;
+
+  function emitURLChanged() {
+    // On enregistre en léger différé pour laisser l'URL se stabiliser
+    clearTimeout(emitURLChanged._t);
+    emitURLChanged._t = setTimeout(saveCurrentSessionToHistory, 50);
+  }
+
+  history.pushState = function() {
+    const r = _pushState.apply(this, arguments);
+    window.dispatchEvent(new Event('honoua:urlchange'));
+    emitURLChanged();
+    return r;
+  };
+  history.replaceState = function() {
+    const r = _replaceState.apply(this, arguments);
+    window.dispatchEvent(new Event('honoua:urlchange'));
+    emitURLChanged();
+    return r;
+  };
+
+  window.addEventListener('popstate', emitURLChanged);
+  window.addEventListener('honoua:urlchange', emitURLChanged);
+})();
+
+// Écoute d’un éventuel événement applicatif (optionnel mais pratique)
+window.addEventListener('honoua:compare:updated', () => {
+  // debounce léger pour éviter d’écrire trop souvent
+  clearTimeout(window.__honouaHistoryDebounce__);
+  window.__honouaHistoryDebounce__ = setTimeout(saveCurrentSessionToHistory, 100);
+});
+
+// Premier snapshot au chargement si l'URL contient déjà un état
+document.addEventListener('DOMContentLoaded', () => {
+  saveCurrentSessionToHistory();
+});
+</script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 2)
+   - Affiche la liste des sessions sauvegardées (date, nb produits)
+   - Bouton "Recharger" pour restaurer une session (navigation vers l'URL)
+   - Aucun style imposé, rétro-compatible
+   ============================================================================ */
+
+(function(){
+  // --- Constantes & utilitaires (sans redéclarer celles de l'Étape 1) -------
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var $section = null, $list = null;
+
+  function lsReadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      console.warn('[A11:E2] Lecture JSON LS échouée:', e);
+      return fallback;
+    }
+  }
+
+  function formatDateTime(tsISO) {
+    // Affichage local FR court : 17/10/2025 14:32
+    try {
+      var d = new Date(tsISO);
+      return d.toLocaleString('fr-FR', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return tsISO;
+    }
+  }
+
+  function pluralizeProduit(n) {
+    return n + ' produit' + (n > 1 ? 's' : '');
+  }
+/* A18 — Helper : renommer une entrée d'historique par son id
+   - Met à jour entry.name (string ou null)
+   - Écrit dans localStorage + notifie l’UI (storage + honoua:compare:updated)
+*/
+function renameEntryById(id, newName){
+  try {
+    var HISTORY_KEY = 'honoua_compare_history_v1';
+    var h = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return false;
+    var val = (typeof newName === 'string') ? newName.trim() : '';
+    if (!('name' in h[i])) h[i].name = null; // migration douce
+    h[i].name = val || null;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+    // Notifie le reste de l’app (Étapes 2/3/14/15 écoutent déjà ces events)
+    window.dispatchEvent(new StorageEvent('storage', { key: HISTORY_KEY }));
+    window.dispatchEvent(new Event('honoua:compare:updated'));
+    return true;
+  } catch(e){
+    console.warn('[A18] renameEntryById error:', e);
+    return false;
+  }
+}
+
+
+
+
+  // --- Rendu de la liste -----------------------------------------------------
+  function renderHistory() {
+    if (!$section || !$list) return;
+
+    var history = lsReadJSON(HISTORY_KEY, []);
+
+    // Afficher/masquer la section selon contenu
+    $section.hidden = !history || history.length === 0;
+
+    // Vider la liste
+    $list.innerHTML = '';
+
+    if (!history || history.length === 0) {
+      // Message simple, style minimaliste
+      var empty = document.createElement('p');
+      empty.textContent = 'Aucun historique pour le moment.';
+      $list.appendChild(empty);
+      return;
+    }
+
+    // On affiche du plus récent au plus ancien
+    var items = history.slice().reverse();
+
+ // … (le reste du code Étape 3 inchangé au-dessus)
+
+function render() {
+  if (!$section || !$list || !$bar) return;
+
+  pruneIfNeeded();
+  var history = readHistory();
+  var showPinnedOnly = !!($chkPinnedOnly && $chkPinnedOnly.checked);
+
+  var hasItems = history.length > 0;
+  $section.hidden = !hasItems;
+  $bar.hidden = !hasItems;
+
+  $list.innerHTML = '';
+  if (!hasItems) {
+    var empty = document.createElement('p');
+    empty.textContent = 'Aucun historique pour le moment.';
+    $list.appendChild(empty);
+    return;
+  }
+
+  // État courant depuis l’URL (fonction dispo en Étape 1)
+  var currentState = (typeof getCompareStateFromURL === 'function') ? getCompareStateFromURL() : null;
+  function isCurrent(entry){
+    if (!currentState || !entry || !entry.params) return false;
+    try {
+      // Comparaison des paramètres principaux ; ajuste si tu ajoutes d’autres clés
+      return JSON.stringify(entry.params) === JSON.stringify({
+        eans:   currentState.eans,
+        sort:   currentState.sort,
+        order:  currentState.order,
+        filters:currentState.filters,
+        query:  currentState.query
+      });
+    } catch { return false; }
+  }
+
+  var items = history.slice().reverse();
+  if (showPinnedOnly) items = items.filter(function(e){ return e.pinned; });
+
+  if (items.length === 0) {
+    var none = document.createElement('p');
+    none.textContent = 'Aucun élément épinglé.';
+    $list.appendChild(none);
+    return;
+  }
+
+  items.forEach(function(entry){
+    var item = document.createElement('div');
+    item.setAttribute('role','listitem');
+    item.className = 'history-item';
+
+    var current = isCurrent(entry);                  // [NOUVEAU]
+    item.classList.toggle('is-pinned', !!entry.pinned);
+    item.classList.toggle('is-current', !!current);  // [NOUVEAU]
+
+    var meta = document.createElement('div');
+    meta.className = 'history-meta';
+
+    // [NOUVEAU] — Pastille d’état
+    var dot = document.createElement('span');
+    dot.className = 'history-dot';
+    dot.setAttribute('aria-hidden','true');
+
+    // Ligne principale (pastille + date + nb produits + badges)
+    var row1 = document.createElement('div');
+    row1.className = 'meta-row';
+
+    var time = document.createElement('time');
+    time.setAttribute('datetime', entry.ts);
+    time.textContent = formatDateTime(entry.ts);
+
+    var count = document.createElement('span');
+    count.className = 'history-count';
+    count.textContent = ' • ' + pluralizeProduit(entry.productCount);
+
+    row1.appendChild(dot);
+    row1.appendChild(time);
+    row1.appendChild(count);
+
+    // Badge “Épinglé” (si épinglé) — déjà implémenté auparavant
+    if (entry.pinned) {
+      var badgePinned = document.createElement('span');
+      badgePinned.className = 'history-badge';
+      badgePinned.textContent = 'Épinglé';
+      row1.appendChild(badgePinned);
+    }
+
+    // [NOUVEAU] — Badge “Actuelle”
+    if (current) {
+      var badgeCurrent = document.createElement('span');
+      badgeCurrent.className = 'history-badge-current';
+      badgeCurrent.textContent = 'Actuelle';
+      row1.appendChild(badgeCurrent);
+    }
+
+    // [NOUVEAU] — Ligne des chips (tri/ordre/filtre/query)
+    var row2 = document.createElement('div');
+    row2.className = 'history-chips';
+
+    var p = entry.params || {};
+    if (p.sort) {
+      var c1 = document.createElement('span');
+      c1.className = 'chip chip-sort';
+      c1.textContent = 'Tri: ' + p.sort;
+      row2.appendChild(c1);
+    }
+    if (p.order) {
+      var c2 = document.createElement('span');
+      c2.className = 'chip chip-order';
+      c2.textContent = 'Ordre: ' + (p.order === 'desc' ? '↓ desc' : '↑ asc');
+      row2.appendChild(c2);
+    }
+    if (p.filters && (Array.isArray(p.filters) ? p.filters.length : String(p.filters).length)) {
+      var countFilters = Array.isArray(p.filters) ? p.filters.length : 1;
+      var c3 = document.createElement('span');
+      c3.className = 'chip chip-filter';
+      c3.textContent = 'Filtres: ' + countFilters;
+      c3.title = Array.isArray(p.filters) ? p.filters.join(', ') : String(p.filters);
+      row2.appendChild(c3);
+    }
+    if (p.query) {
+      var c4 = document.createElement('span');
+      c4.className = 'chip chip-query';
+      c4.textContent = 'Recherche: "' + p.query + '"';
+      row2.appendChild(c4);
+    }
+
+    meta.appendChild(row1);
+    if (row2.childElementCount > 0) meta.appendChild(row2);
+
+    // Actions
+    var actions = document.createElement('div');
+    actions.className = 'history-actions';
+
+    var btnReload = document.createElement('button');
+    btnReload.type = 'button';
+    btnReload.className = 'history-reload';
+    btnReload.textContent = 'Recharger';
+    btnReload.addEventListener('click', function(){
+      if (!entry || !entry.url) return;
+      window.location.href = entry.url;
+    });
+
+    var btnPin = document.createElement('button');
+    btnPin.type = 'button';
+    btnPin.className = 'history-pin';
+    btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+    btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
+    btnPin.addEventListener('click', function(){ togglePin(entry.id); });
+
+    var btnDelete = document.createElement('button');
+    btnDelete.type = 'button';
+    btnDelete.className = 'history-delete';
+    btnDelete.textContent = 'Supprimer';
+    btnDelete.addEventListener('click', function(){
+      if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
+    });
+
+    actions.appendChild(btnReload);
+    actions.appendChild(btnPin);
+    actions.appendChild(btnDelete);
+
+    item.appendChild(meta);
+    item.appendChild(actions);
+    $list.appendChild(item);
+  });
+}
+
+// … (le reste du code Étape 3 inchangé en dessous)
+
+  // --- Synchronisation avec les changements d'état ---------------------------
+  // On re-render quand:
+  //  - l’URL change (A8–A10)
+  //  - l’app émet "honoua:compare:updated" (si tu l’utilises)
+  //  - un autre onglet modifie le localStorage (événement "storage")
+
+  function requestRender() {
+    clearTimeout(requestRender._t);
+    requestRender._t = setTimeout(renderHistory, 50);
+  }
+
+  window.addEventListener('honoua:urlchange', requestRender);
+  window.addEventListener('honoua:compare:updated', requestRender);
+  window.addEventListener('storage', function(ev){
+    if (ev && ev.key === HISTORY_KEY) requestRender();
+  });
+
+  // --- Boot ------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', function(){
+    $section = document.getElementById('compare-history');
+    $list    = document.getElementById('compare-history-list');
+    if (!$section || !$list) return;
+    renderHistory();
+  });
+})();
+</script>
+<script>
+/* ============================================================================
+   A11 — Historique des comparaisons (Étape 3 : actions) + A18 (Favoris nommés)
+   - Vider l’historique
+   - Épingler / Désépingler une session
+   - Supprimer une entrée
+   - Renommer une session (A18) → entry.name (affiché en badge dans la meta)
+   - Respect de la borne max en préservant les entrées épinglées
+   ============================================================================ */
+
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var HISTORY_MAX_ENTRIES = 50; // même borne que l’Étape 1
+
+  var $section, $list, $bar, $btnClear, $chkPinnedOnly;
+
+  // -------- LS utils --------
+  function readHistory() {
+    try {
+      var raw = localStorage.getItem(HISTORY_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      // Migration douce : ajoute pinned=false / name=null si absent
+      arr.forEach(function(e){
+        if (typeof e.pinned !== 'boolean') e.pinned = false;
+        if (!('name' in e)) e.name = null;
+      });
+      return arr;
+    } catch(e){
+      console.warn('[A11:E3] readHistory:', e);
+      return [];
+    }
+  }
+  function writeHistory(arr) {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+      // notifie l’UI (A11-E2/A14/A15 écoutent déjà)
+      window.dispatchEvent(new StorageEvent('storage', {key: HISTORY_KEY}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    } catch(e){
+      console.warn('[A11:E3] writeHistory:', e);
+    }
+  }
+
+  // -------- Actions --------
+  function clearHistory() {
+    if (!confirm('Confirmer la suppression de tout l’historique ?')) return;
+    writeHistory([]);
+    render();
+  }
+
+  function togglePin(id) {
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return;
+    h[i].pinned = !h[i].pinned;
+    writeHistory(h);
+    render();
+  }
+
+  function deleteEntry(id) {
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return;
+    h.splice(i,1);
+    writeHistory(h);
+    render();
+  }
+
+  /* A18 — Helper : renommer une entrée d'historique par son id
+     - Met à jour entry.name (string ou null)
+     - Persiste dans localStorage + notifie l’UI */
+  function renameEntryById(id, newName){
+    var h = readHistory();
+    var i = h.findIndex(function(e){ return e.id === id; });
+    if (i === -1) return false;
+    var val = (typeof newName === 'string') ? newName.trim() : '';
+    h[i].name = val || null;
+    writeHistory(h);
+    return true;
+  }
+
+  // Coupe en respectant les épinglés
+  function pruneIfNeeded() {
+    var h = readHistory();
+    if (h.length <= HISTORY_MAX_ENTRIES) return;
+    // Conserve tous les épinglés, puis les plus récents non épinglés
+    var pinned = h.filter(function(e){ return e.pinned; });
+    var others = h.filter(function(e){ return !e.pinned; });
+    var keepOthers = Math.max(0, HISTORY_MAX_ENTRIES - pinned.length);
+    if (others.length > keepOthers) {
+      others = others.slice(others.length - keepOthers);
+    }
+    var kept = h.filter(function(e){
+      return pinned.includes(e) || others.includes(e);
+    });
+    writeHistory(kept);
+  }
+
+  // -------- Rendu --------
+  function formatDateTime(tsISO) {
+    try {
+      var d = new Date(tsISO);
+      return d.toLocaleString('fr-FR', {
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit'
+      });
+    } catch { return tsISO; }
+  }
+  function pluralizeProduit(n) {
+    return n + ' produit' + (n>1?'s':'');
+  }
+
+  function render() {
+    if (!$section || !$list || !$bar) return;
+
+    pruneIfNeeded();
+    var history = readHistory();
+    var showPinnedOnly = !!($chkPinnedOnly && $chkPinnedOnly.checked);
+
+    var hasItems = history.length > 0;
+    $section.hidden = !hasItems;
+    $bar.hidden = !hasItems;
+
+    $list.innerHTML = '';
+    if (!hasItems) {
+      var empty = document.createElement('p');
+      empty.textContent = 'Aucun historique pour le moment.';
+      $list.appendChild(empty);
+      return;
+    }
+
+    var items = history.slice().reverse();
+    if (showPinnedOnly) items = items.filter(function(e){ return e.pinned; });
+
+    if (items.length === 0) {
+      var none = document.createElement('p');
+      none.textContent = 'Aucun élément épinglé.';
+      $list.appendChild(none);
+      return;
+    }
+
+    items.forEach(function(entry){
+      var item = document.createElement('div');
+      item.setAttribute('role','listitem');
+      item.className = 'history-item';
+      item.classList.toggle('is-pinned', !!entry.pinned);
+
+      // --- Meta (date + nb produits + badges) ---
+      var meta = document.createElement('div');
+      meta.className = 'history-meta';
+
+      var time = document.createElement('time');
+      time.setAttribute('datetime', entry.ts);
+      time.textContent = formatDateTime(entry.ts);
+
+      var count = document.createElement('span');
+      count.className = 'history-count';
+      count.textContent = ' • ' + pluralizeProduit(entry.productCount);
+
+      meta.appendChild(time);
+      meta.appendChild(count);
+
+             if (entry.name) {
+             var badgeName = document.createElement('span');
+            badgeName.className = 'history-name';
+            badgeName.textContent = entry.name;
+            meta.appendChild(badgeName);
+            }
+
+
+
+      // [A18 — AJOUT 1] : badge nom si présent
+      // (ligne juste AVANT : meta.appendChild(count);)
+      // (ligne juste APRÈS : badge "Épinglé" éventuel)
+      if (entry.name) {
+        var badgeName = document.createElement('span');
+        badgeName.className = 'history-name';
+        badgeName.textContent = entry.name;
+        meta.appendChild(badgeName);
+      }
+
+      // Badge “Épinglé”
+      if (entry.pinned) {
+        var badge = document.createElement('span');
+        badge.className = 'history-badge';
+        badge.textContent = 'Épinglé';
+        meta.appendChild(badge);
+      }
+
+      // --- Actions ---
+      var actions = document.createElement('div');
+      actions.className = 'history-actions';
+
+      // Recharger
+      var btnReload = document.createElement('button');
+      btnReload.type = 'button';
+      btnReload.className = 'history-reload';
+      btnReload.textContent = 'Recharger';
+      btnReload.addEventListener('click', function(){
+        if (!entry || !entry.url) return;
+        window.location.href = entry.url;
+      });
+
+      // Épingler
+      var btnPin = document.createElement('button');
+      btnPin.type = 'button';
+      btnPin.className = 'history-pin';
+      btnPin.textContent = entry.pinned ? 'Désépingler' : 'Épingler';
+      btnPin.setAttribute('aria-pressed', String(!!entry.pinned));
+      btnPin.addEventListener('click', function(){ togglePin(entry.id); });
+
+      // Supprimer
+      var btnDelete = document.createElement('button');
+      btnDelete.type = 'button';
+      btnDelete.className = 'history-delete';
+      btnDelete.textContent = 'Supprimer';
+      btnDelete.addEventListener('click', function(){
+        if (confirm('Supprimer cette entrée ?')) deleteEntry(entry.id);
+      });
+
+      // [A18 — AJOUT 2] : bouton "Renommer"
+      // (ligne juste AVANT : définition de btnDelete)
+      // (ligne juste APRÈS : actions.appendChild(...))
+      var btnRename = document.createElement('button');
+      btnRename.type = 'button';
+      btnRename.className = 'history-rename';
+      btnRename.textContent = 'Renommer';
+      btnRename.addEventListener('click', function(){
+        var current = entry.name || '';
+        var val = prompt('Nom de la session :', current);
+        if (val === null) return; // annulé
+        if (renameEntryById(entry.id, val)) {
+          // MAJ visuelle immédiate
+          var badge = item.querySelector('.history-name');
+          var clean = (val || '').trim();
+          if (clean) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'history-name';
+              meta.appendChild(badge);
+            }
+            badge.textContent = clean;
+          } else if (badge) {
+            badge.remove();
+          }
+        } else {
+          alert('Impossible de renommer cette entrée.');
+        }
+      });
+        
+        var btnRename = document.createElement('button');
+btnRename.className = 'history-rename';
+btnRename.textContent = 'Renommer';
+btnRename.addEventListener('click', () => {
+  var val = prompt('Nom de la session :', entry.name || '');
+  if (val === null) return;
+  if (renameEntryById(entry.id, val)) { /* MAJ du badge */ }
+});
+actions.appendChild(btnRename);
+
+
+
+      actions.appendChild(btnReload);
+      actions.appendChild(btnPin);
+      actions.appendChild(btnDelete);
+      actions.appendChild(btnRename); // ← A18
+
+      // Assemblage
+      item.appendChild(meta);
+      item.appendChild(actions);
+      $list.appendChild(item);
+    });
+  }
+
+  // -------- Sync évènements --------
+  function requestRender(){ clearTimeout(requestRender._t); requestRender._t = setTimeout(render, 50); }
+  window.addEventListener('honoua:urlchange', requestRender);
+  window.addEventListener('honoua:compare:updated', requestRender);
+  window.addEventListener('storage', function(ev){ if (!ev || ev.key === HISTORY_KEY) requestRender(); });
+
+  // -------- Boot --------
+  document.addEventListener('DOMContentLoaded', function(){
+    $section      = document.getElementById('compare-history');
+    $list         = document.getElementById('compare-history-list');
+    $bar          = document.getElementById('compare-history-actions');
+    $btnClear     = document.getElementById('history-clear');
+    $chkPinnedOnly= document.getElementById('history-show-pinned');
+
+    if (!$section || !$list || !$bar) return;
+
+    if ($btnClear)     $btnClear.addEventListener('click', clearHistory);
+    if ($chkPinnedOnly)$chkPinnedOnly.addEventListener('change', render);
+
+    render();
+  });
+})();
+</script>
+
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+/* ============================================================================
+   A20 — Source carbone (hook connecté à l’API Honoua) + cache TTL
+   - Remplace les anciens hooks A15 (supprime les 2 scripts qui redéfinissaient
+     window.honouaCarbonLookup).
+   - Utilise /api/honoua/emissions?ean=... (JSON attendu: { ean, gco2e:number })
+   - Met en cache local (clé: honoua_carbon_cache_v1) avec TTL (jours)
+   - Si A19 (auth cloud) est en place, ajoute le header Bearer (sessionStorage)
+   - Rétro-compatible: A15 consomme ce hook sans autre changement.
+   ============================================================================ */
+
+(function(){
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+  var TTL_DAYS = 7;                 // durée de vie du cache (jours)
+  var ENDPOINT = '/api/honoua/emissions?ean='; // adapter si besoin
+
+  // ----- Cache helpers (avec horodatage) ------------------------------------
+  function readCache(){
+    try { return JSON.parse(localStorage.getItem(CARBON_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function writeCache(obj){
+    try {
+      localStorage.setItem(CARBON_CACHE_KEY, JSON.stringify(obj));
+      // notifie A15 pour re-render éventuel
+      window.dispatchEvent(new StorageEvent('storage', { key: CARBON_CACHE_KEY }));
+    } catch(e){ console.warn('[A20] writeCache:', e); }
+  }
+  function isFresh(entry){
+    if (!entry || typeof entry !== 'object') return false;
+    if (!('ts' in entry)) return false;
+    var ageMs = Date.now() - Number(entry.ts || 0);
+    var ttlMs = TTL_DAYS * 24 * 60 * 60 * 1000;
+    return ageMs >= 0 && ageMs <= ttlMs;
+  }
+
+  // ----- Fetch util (timeout + Bearer optionnel si A19 actif) ----------------
+  async function fetchJSON(url, opts){
+    var ctrl = new AbortController();
+    var t = setTimeout(()=>ctrl.abort(), 8000); // 8s timeout
+    var headers = Object.assign({ 'Accept':'application/json' }, (opts && opts.headers) || {});
+    // Si A19 connecté, on propage le token
+    try {
+      var token = sessionStorage.getItem('honoua_token');
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+    } catch {}
+    try{
+      var res = await fetch(url, { signal: ctrl.signal, headers: headers });
+      clearTimeout(t);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      return await res.json();
+    }catch(e){
+      clearTimeout(t);
+      throw e;
+    }
+  }
+
+  // ----- Hook global consommé par A15 ---------------------------------------
+  window.honouaCarbonLookup = async function(ean){
+    if (!ean) return null;
+    ean = String(ean);
+
+    // 1) Cache (fresh → retourne direct; stale → tente réseau, sinon valeur stale)
+    var cache = readCache();
+    var entry = cache[ean]; // { v: number|null, ts: epoch }
+    if (isFresh(entry)) {
+      return (typeof entry.v === 'number') ? entry.v : null;
+    }
+
+    // 2) Réseau
+    try{
+      var data = await fetchJSON(ENDPOINT + encodeURIComponent(ean));
+      var val = (data && typeof data.gco2e === 'number' && isFinite(data.gco2e)) ? data.gco2e : null;
+
+      // 3) Écrit cache + notifie
+      cache[ean] = { v: val, ts: Date.now() };
+      writeCache(cache);
+
+      return val;
+    } catch(err){
+      console.warn('[A20] lookup fail for', ean, err);
+
+      // Fallback: si on a une valeur en cache (même périmée), on la rend.
+      if (entry && ('v' in entry)) {
+        return (typeof entry.v === 'number') ? entry.v : null;
+      }
+      // Sinon: inconnu
+      return null;
+    }
+  };
+
+  // ----- Pré-chauffage facultatif: EANs affichés à l’écran -------------------
+  // On pré-remplit le cache pour améliorer le premier rendu de A15.
+  document.addEventListener('DOMContentLoaded', function(){
+    var cards = Array.from(document.querySelectorAll('.card[data-ean]'));
+    var eans = cards.map(function(c){ return c.getAttribute('data-ean'); }).filter(Boolean);
+    if (!eans.length) return;
+    // On déclenche en arrière-plan sans bloquer l’UI
+    setTimeout(async function(){
+      for (const e of eans) {
+        try { await window.honouaCarbonLookup(e); } catch {}
+      }
+    }, 0);
+  });
+
+})();
+</script>
+
+
+
+
+
+
+<script>
+/* ============================================================================
+   A14 — Statistiques et graphiques d'utilisation
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var $section, $chart, $total, $week, $pinned, $avg;
+  var chartInstance = null;
+
+  function readHistory(){
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+  }
+
+  // Calcule les stats de base
+  function computeStats(list){
+    var now = Date.now();
+    var weekAgo = now - 7*24*60*60*1000;
+    var total = list.length;
+    var pinned = list.filter(e => e.pinned).length;
+    var week = list.filter(e => new Date(e.ts).getTime() >= weekAgo).length;
+    var avgProducts = 0;
+    if (total > 0) {
+      avgProducts = list.reduce((sum, e) => sum + (e.productCount || 0), 0) / total;
+      avgProducts = avgProducts.toFixed(1);
+    }
+    return { total, pinned, week, avgProducts };
+  }
+
+  // Prépare les données pour le graphique (sessions/jour)
+  function groupByDay(list){
+    var map = {};
+    list.forEach(e => {
+      var d = new Date(e.ts);
+      var key = d.toISOString().slice(0,10);
+      map[key] = (map[key] || 0) + 1;
+    });
+    var keys = Object.keys(map).sort();
+    return {
+      labels: keys,
+      data: keys.map(k => map[k])
+    };
+  }
+
+  function renderChart(list){
+    var ctx = $chart.getContext('2d');
+    var g = groupByDay(list);
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: g.labels,
+        datasets: [{
+          label: 'Sessions par jour',
+          data: g.data,
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#333' } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#333' } }
+        }
+      }
+    });
+  }
+
+  function renderStats(){
+    var list = readHistory();
+    if (!list.length) { $section.hidden = true; return; }
+    var s = computeStats(list);
+    $section.hidden = false;
+    $total.textContent = s.total;
+    $pinned.textContent = s.pinned;
+    $week.textContent = s.week;
+    $avg.textContent = s.avgProducts;
+    renderChart(list);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    $section = document.getElementById('compare-stats');
+    $chart   = document.getElementById('stat-chart');
+    $total   = document.getElementById('stat-total');
+    $week    = document.getElementById('stat-week');
+    $pinned  = document.getElementById('stat-pinned');
+    $avg     = document.getElementById('stat-avg');
+
+    if (!$section || !$chart) return;
+    renderStats();
+
+    // Mettre à jour en live quand l’historique change
+    window.addEventListener('storage', function(e){
+      if (e.key === HISTORY_KEY) renderStats();
+    });
+    window.addEventListener('honoua:compare:updated', renderStats);
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A15 — Évolution carbone (moyenne/somme par session, regroupée par jour)
+   - Hook extensible: window.honouaCarbonLookup(ean) -> Promise<number|null> en gCO2e
+   - Cache local pour accélérer: honoua_carbon_cache_v1
+   ============================================================================ */
+(function(){
+  var HISTORY_KEY = 'honoua_compare_history_v1';
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+
+  var $section, $chart, $sessions, $globalAvg, $modeSel;
+  var chartInstance = null;
+
+  // ---------- Hook de résolution d'émissions par EAN ----------
+  // Surchargable par l'app : window.honouaCarbonLookup = async (ean) => number|null
+  if (typeof window.honouaCarbonLookup !== 'function') {
+    // Stub : renvoie null (inconnu). À remplacer par ta logique.
+    window.honouaCarbonLookup = async function(ean){
+      // Exemple (à adapter) :
+      // return await fetch('/api/emissions?ean='+encodeURIComponent(ean)).then(r=>r.json()).then(o=>o.gco2e ?? null);
+      return null;
+    };
+  }
+
+  // ---------- Cache simple localStorage ----------
+  function readCarbonCache(){
+    try { return JSON.parse(localStorage.getItem(CARBON_CACHE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function writeCarbonCache(obj){
+    try { localStorage.setItem(CARBON_CACHE_KEY, JSON.stringify(obj)); }
+    catch(e){ console.warn('[A15] writeCarbonCache:', e); }
+  }
+
+  async function carbonForEAN(ean) {
+    if (!ean) return null;
+    var cache = readCarbonCache();
+    if (Object.prototype.hasOwnProperty.call(cache, ean)) {
+      return cache[ean]; // peut être number ou null (inconnu)
+    }
+    // lookup via hook
+    var val = null;
+    try { val = await window.honouaCarbonLookup(String(ean)); }
+    catch(e){ console.warn('[A15] Lookup error for EAN', ean, e); val = null; }
+    cache[ean] = (typeof val === 'number' && isFinite(val)) ? val : null;
+    writeCarbonCache(cache);
+    return cache[ean];
+  }
+
+  // Calcule les émissions d'une session (avg ou sum) sur les EANs connus
+  async function computeSessionMetric(entry, mode){
+    var eans = (entry && entry.params && Array.isArray(entry.params.eans)) ? entry.params.eans : [];
+    if (!eans.length) return null;
+    var vals = await Promise.all(eans.map(carbonForEAN));
+    var known = vals.filter(v => typeof v === 'number' && isFinite(v));
+    if (!known.length) return null;
+    var sum = known.reduce((a,b)=>a+b, 0);
+    if (mode === 'sum_per_session') return sum;
+    // default: avg per session (gCO2e/session)
+    return sum / known.length;
+  }
+
+  // Agrège par jour: { 'YYYY-MM-DD': [metrics...] }
+  function groupByDay(values){
+    var map = {};
+    values.forEach(v => {
+      var day = v.day;
+      if (!map[day]) map[day] = [];
+      map[day].push(v.value);
+    });
+    var labels = Object.keys(map).sort();
+    var data = labels.map(d => {
+      var arr = map[d];
+      var avg = arr.reduce((a,b)=>a+b,0)/arr.length;
+      return Math.round(avg); // arrondi propre pour l'affichage
+    });
+    return { labels, data, countsByDay: map };
+  }
+
+  function renderChart(series, mode){
+    var ctx = $chart.getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: series.labels,
+        datasets: [{
+          label: (mode === 'sum_per_session' ? 'Total par session (gCO₂e)' : 'Moyenne par session (gCO₂e)'),
+          data: series.data,
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#333' } },
+          y: { beginAtZero: true, ticks: { color: '#333' } }
+        }
+      }
+    });
+  }
+
+  async function renderCarbon(){
+    var history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch{ history = []; }
+
+    if (!history.length) { $section.hidden = true; return; }
+    var mode = $modeSel?.value || 'avg_per_session';
+
+    // Calcule métrique par session (async, respect du cache)
+    // On limite prudemment à 200 sessions pour éviter un premier rendu trop long.
+    var slice = history.slice(-200); 
+    // Convertit en [{day:'YYYY-MM-DD', value:number}, ...] en série
+    var points = [];
+    for (let i=0; i<slice.length; i++){
+      var e = slice[i];
+      var v = await computeSessionMetric(e, mode);
+      if (v == null) continue; // on ignore les sessions sans émission connue
+      var day = new Date(e.ts).toISOString().slice(0,10);
+      points.push({ day, value: v });
+    }
+
+    if (!points.length) {
+      // rien d'exploitable (pas d'émissions connues) -> on masque
+      $section.hidden = true;
+      return;
+    }
+
+    var grouped = groupByDay(points);
+    $section.hidden = false;
+    // sessions comptabilisées = nb de sessions avec au moins 1 émission connue (dans le slice)
+    document.getElementById('carbon-sessions').textContent = String(points.length);
+
+    // moyenne globale des points (moyennes journalières déjà calculées)
+    var globalAvg = 0;
+    if (grouped.data.length) {
+      globalAvg = Math.round(grouped.data.reduce((a,b)=>a+b,0) / grouped.data.length);
+    }
+    document.getElementById('carbon-global-avg').textContent = String(globalAvg);
+
+    renderChart(grouped, mode);
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    $section   = document.getElementById('compare-carbon');
+    $chart     = document.getElementById('carbon-chart');
+    $sessions  = document.getElementById('carbon-sessions');
+    $globalAvg = document.getElementById('carbon-global-avg');
+    $modeSel   = document.getElementById('carbon-mode');
+
+    if (!$section || !$chart) return;
+
+    // premier rendu
+    renderCarbon();
+
+    // re-rendu: changements d'historique, mise à jour compare, changement de mode
+    window.addEventListener('storage', function(e){ if (e.key === HISTORY_KEY || e.key === CARBON_CACHE_KEY) renderCarbon(); });
+    window.addEventListener('honoua:compare:updated', renderCarbon);
+    if ($modeSel) $modeSel.addEventListener('change', renderCarbon);
+  });
+})();
+</script>
+
+<script>
+/* A15.bis — Purge du cache carbone */
+(function(){
+  var CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+  document.addEventListener('DOMContentLoaded', function(){
+    var btn = document.getElementById('carbon-cache-clear');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      try {
+        localStorage.removeItem(CARBON_CACHE_KEY);
+        // Notifie les listeners (A14/A15 écoutent 'storage')
+        window.dispatchEvent(new StorageEvent('storage', { key: CARBON_CACHE_KEY }));
+        alert('Cache carbone purgé ✅');
+      } catch(e){
+        console.warn('[A15.bis] Purge cache carbone échouée:', e);
+        alert('Impossible de purger le cache carbone ❌');
+      }
+    });
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A16 — Export CSV des séries (stats et carbone)
+   ============================================================================ */
+(function(){
+  const HISTORY_KEY = 'honoua_compare_history_v1';
+  const CARBON_CACHE_KEY = 'honoua_carbon_cache_v1';
+
+  // Utilitaires CSV
+  function downloadCSV(filename, rows) {
+    const processRow = (row) => row.map(v => `"${(v ?? '').toString().replace(/"/g, '""')}"`).join(',');
+    const csv = rows.map(processRow).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function groupSessionsByDay(list){
+    const map = {};
+    list.forEach(e => {
+      const d = new Date(e.ts).toISOString().slice(0,10);
+      map[d] = (map[d] || 0) + 1;
+    });
+    return Object.entries(map).map(([day, count]) => [day, count]);
+  }
+
+  async function exportStatsCSV(){
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch {}
+    if (!history.length) return alert("Aucune donnée à exporter.");
+    const grouped = groupSessionsByDay(history);
+    const rows = [["Date", "Nombre de sessions"], ...grouped];
+    downloadCSV("sessions_par_jour.csv", rows);
+  }
+
+  async function exportCarbonCSV(){
+    if (typeof window.honouaCarbonLookup !== "function") {
+      return alert("Le module carbone (A15) n’est pas actif.");
+    }
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch {}
+    if (!history.length) return alert("Aucune donnée carbone.");
+    const cache = JSON.parse(localStorage.getItem(CARBON_CACHE_KEY) || "{}");
+    const dayMap = {};
+    for (const e of history) {
+      const eans = (e.params?.eans) || [];
+      const day = new Date(e.ts).toISOString().slice(0,10);
+      const vals = eans.map(x => cache[x]).filter(v => typeof v === "number");
+      if (!vals.length) continue;
+      const avg = vals.reduce((a,b)=>a+b,0) / vals.length;
+      if (!dayMap[day]) dayMap[day] = [];
+      dayMap[day].push(avg);
+    }
+    const rows = [["Date", "Moyenne gCO2e/session"]];
+    for (const day of Object.keys(dayMap).sort()) {
+      const arr = dayMap[day];
+      const mean = arr.reduce((a,b)=>a+b,0)/arr.length;
+      rows.push([day, mean.toFixed(1)]);
+    }
+    downloadCSV("carbone_journalier.csv", rows);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const btnStats = document.getElementById("export-stats-csv");
+    const btnCarbon = document.getElementById("export-carbon-csv");
+    if (btnStats) btnStats.addEventListener("click", exportStatsCSV);
+    if (btnCarbon) btnCarbon.addEventListener("click", exportCarbonCSV);
+  });
+})();
+</script>
+<script>
+/* ============================================================================
+   A25 — Export PDF (Résumé comparateur)
+   - Génère un PDF local avec contexte (tri/filtre/seuil/budget) + graphiques A14/A15
+   - Rétro-compatible : si un élément manque (chart, budget…), on passe outre proprement
+   ============================================================================ */
+(function(){
+  const BTN_ID = "export-pdf";
+  document.addEventListener("DOMContentLoaded", ()=>{
+    const btn = document.getElementById(BTN_ID);
+    if (!btn) return;
+    btn.addEventListener("click", exportPdfSummary);
+  });
+
+  function getPrefsSafe(){
+    try { return JSON.parse(localStorage.getItem("honoua:compare:prefs")||"{}"); }
+    catch { return {}; }
+  }
+  function getHistorySafe(){
+    try { return JSON.parse(localStorage.getItem("honoua_compare_history_v1")||"[]"); }
+    catch { return []; }
+  }
+  function fmtInt(n){ return (n==null?0:n).toLocaleString('fr-FR'); }
+
+  function grabCanvasDataURL(id){
+    const el = document.getElementById(id);
+    if (!el || el.tagName !== "CANVAS") return null;
+    try { return el.toDataURL("image/png"); } catch { return null; }
+  }
+
+  async function exportPdfSummary(){
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) { alert("jsPDF introuvable."); return; }
+
+    const prefs = getPrefsSafe();
+    const history = getHistorySafe();
+    const now = new Date();
+
+    // Contexte
+    const eans = (Array.isArray(window.eans) ? window.eans.length : null);
+    const tri  = prefs.sort || "best";
+    const ordre= prefs.order || "asc";
+    const tieb = prefs.tiebreak || "name";
+    const filt = (prefs.filter||"").trim() || "—";
+    const seuil= (typeof prefs.carbonThreshold==="number" && prefs.carbonThreshold>0) ? prefs.carbonThreshold : 0;
+    const adults = prefs.householdAdults|0, kids = prefs.householdKids|0;
+    const hhSize = Math.max(0, adults)+Math.max(0, kids);
+    const hhBudget = hhSize ? hhSize * 2_000_000 : 0; // gCO2e/an
+
+    // Stats simples
+    const totalSessions = history.length;
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    const weekCount = history.filter(e => new Date(e.ts).getTime() >= weekAgo).length;
+    const avgProducts = totalSessions ? (
+      (history.reduce((s,e)=> s + (e.productCount||0), 0) / totalSessions).toFixed(1)
+    ) : "0.0";
+
+    // Graphiques (si présents)
+    const statPNG   = grabCanvasDataURL("stat-chart");    // A14
+    const carbonPNG = grabCanvasDataURL("carbon-chart");  // A15
+
+    // PDF
+    const doc = new jsPDF({ unit:"pt", format:"a4" });
+    let y = 48, left = 48, right = 547; // 595-48
+    doc.setFont("helvetica","bold"); doc.setFontSize(16);
+    doc.text("Honoua — Résumé de comparaison", left, y); y += 18;
+    doc.setFont("helvetica","normal"); doc.setFontSize(10);
+    doc.text(`Généré le : ${now.toLocaleString('fr-FR')}`, left, y); y += 18;
+    doc.text(`Articles comparés (actuels) : ${eans ?? "—"}`, left, y); y += 14;
+    doc.text(`Tri / Ordre / Départage : ${tri} / ${ordre} / ${tieb}`, left, y); y += 14;
+    doc.text(`Filtre : ${filt}`, left, y); y += 14;
+
+    if (seuil>0) { doc.text(`Seuil perso (A23) : ${fmtInt(seuil)} gCO₂e`, left, y); y += 14; }
+    if (hhSize>0) {
+      doc.text(`Foyer (A24) : ${adults} adulte(s), ${kids} enfant(s) — Budget annuel : ${fmtInt(hhBudget)} gCO₂e`, left, y);
+      y += 14;
+    }
+
+    y += 6;
+    doc.setLineWidth(.5); doc.line(left, y, right, y); y += 16;
+    doc.setFont("helvetica","bold"); doc.text("Historique (A11–A16)", left, y);
+    doc.setFont("helvetica","normal");
+    y += 14;
+    doc.text(`Total sessions : ${fmtInt(totalSessions)}  •  7 derniers jours : ${fmtInt(weekCount)}  •  Moyenne produits/session : ${avgProducts}`, left, y);
+    y += 18;
+
+    if (statPNG) {
+      doc.setFont("helvetica","bold"); doc.text("Sessions par jour", left, y); y += 10;
+      const w = 480, h = 220;
+      doc.addImage(statPNG, "PNG", left, y, w, h, undefined, "FAST");
+      y += h + 16;
+    }
+
+    if (carbonPNG) {
+      doc.setFont("helvetica","bold"); doc.text("Évolution carbone", left, y); y += 10;
+      const w = 480, h = 220;
+      doc.addImage(carbonPNG, "PNG", left, y, w, h, undefined, "FAST");
+      y += h + 16;
+    }
+
+    // Pied
+    if (y > 760) { doc.addPage(); y = 48; }
+    doc.setLineWidth(.2); doc.line(left, 812, right, 812);
+    doc.setFontSize(9);
+    doc.text("Honoua — Export PDF local (A25). Données locales, à usage informatif.", left, 826);
+
+    // Nom de fichier
+    const fname = `honoua_resume_${now.toISOString().slice(0,10)}.pdf`;
+    doc.save(fname);
+  }
+})();
+</script>
+<script>
+/* ============================================================================
+   A26 — Cloud Sync multi-device (opt-in, merge non destructif)
+   - Endpoints configurables via window.HONOUA_CLOUD
+   - Jamais d'écrasement de la version locale: merge + LWW
+   ============================================================================ */
+
+/* === 2.1 Endpoints (adapter si besoin) ===================================== */
+window.HONOUA_CLOUD = Object.assign({
+  baseUrl:   "/api/cloud",           // racine API (à adapter)
+  getHistory:"/history",             // GET
+  putHistory:"/history",             // PUT
+  getPrefs:  "/prefs",               // GET
+  putPrefs:  "/prefs"                // PUT
+}, window.HONOUA_CLOUD||{});
+
+/* === 2.2 Stockage config locale =========================================== */
+const CLOUD_CFG_KEY = "honoua:cloud:cfg_v1"; // { enabled:boolean, token:string }
+function readCloudCfg(){
+  try { return JSON.parse(localStorage.getItem(CLOUD_CFG_KEY)||"{}"); } catch { return {}; }
+}
+function writeCloudCfg(cfg){
+  try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(cfg||{})); } catch {}
+}
+
+/* === 2.3 Accès données locales (history/prefs) ============================= */
+const HISTORY_KEY = 'honoua_compare_history_v1';
+const PREF_KEY    = 'honoua:compare:prefs';
+
+function readHistorySafe(){ try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]"); } catch { return []; } }
+function writeHistorySafe(v){ try { localStorage.setItem(HISTORY_KEY, JSON.stringify(v||[])); } catch {} }
+
+function readPrefsSafe(){ try { return JSON.parse(localStorage.getItem(PREF_KEY)||"{}"); } catch { return {}; } }
+function writePrefsSafe(v){ try { localStorage.setItem(PREF_KEY, JSON.stringify(v||{})); } catch {} }
+
+/* === 2.4 Merge non destructif ============================================= */
+/* Historique: union par id ; si même id -> garde l'entrée au ts max (LWW).
+   Jamais de suppression du local; on renvoie la fusion. */
+function mergeHistory(localArr, remoteArr){
+  const byId = new Map();
+  const push = (e, src) => {
+    if(!e || typeof e!=='object' || e.id==null) return;
+    const prev = byId.get(e.id);
+    if (!prev) { byId.set(e.id, e); return; }
+    try{
+      const tPrev = new Date(prev.ts||0).getTime()||0;
+      const tNew  = new Date(e.ts||0).getTime()||0;
+      // LWW: garde le plus récent
+      if (tNew >= tPrev) byId.set(e.id, e);
+    }catch{ /* si doute, conserve prev (local) */ }
+  };
+  (localArr||[]).forEach(e=>push(e,'local'));
+  (remoteArr||[]).forEach(e=>push(e,'remote'));
+  // trie par ts croissant (cohérent avec A11)
+  return Array.from(byId.values()).sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+}
+
+/* Prefs: merge clé à clé ; priorité aux valeurs "récentes" si on trouve un champ ts.
+   À défaut de ts, on NE REMPLACE PAS une valeur locale déjà présente.
+   (=> évite d’écraser l’utilisateur) */
+function mergePrefs(localObj, remoteObj){
+  const out = Object.assign({}, localObj||{});
+  const src = remoteObj||{};
+  for (const k of Object.keys(src)){
+    if (out[k] === undefined || out[k] === null) {
+      out[k] = src[k]; // complète sans écraser
+    } else {
+      // si ts présent sous forme prefs._ts : compare
+      // (tu peux poser out._ts et src._ts si tu veux suivre l'antériorité)
+    }
+  }
+  return out;
+}
+
+/* === 2.5 Fetch helpers ===================================================== */
+function cloudHeaders(token){
+  const h = { 'Content-Type':'application/json' };
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
+async function apiGet(path, token){
+  const url = (window.HONOUA_CLOUD.baseUrl + path);
+  const r = await fetch(url, { headers: cloudHeaders(token) });
+  if (!r.ok) throw new Error('GET '+path+' '+r.status);
+  return await r.json();
+}
+async function apiPut(path, token, body){
+  const url = (window.HONOUA_CLOUD.baseUrl + path);
+  const r = await fetch(url, { method:'PUT', headers: cloudHeaders(token), body: JSON.stringify(body||{}) });
+  if (!r.ok) throw new Error('PUT '+path+' '+r.status);
+  return await r.json().catch(()=> ({}));
+}
+
+/* === 2.6 Actions Cloud ===================================================== */
+async function cloudPull(cfg, $status){
+  if (!cfg?.enabled) { $status.textContent='Cloud: inactif'; return; }
+  $status.textContent='Import…';
+  try{
+    const remoteHistory = await apiGet(window.HONOUA_CLOUD.getHistory, cfg.token).catch(()=>[]);
+    const remotePrefs   = await apiGet(window.HONOUA_CLOUD.getPrefs, cfg.token).catch(()=> ({}));
+
+    const mergedH = mergeHistory(readHistorySafe(), Array.isArray(remoteHistory)?remoteHistory:[]);
+    writeHistorySafe(mergedH);
+
+    const mergedP = mergePrefs(readPrefsSafe(), remotePrefs||{});
+    writePrefsSafe(mergedP);
+
+    // notifie l'app
+    window.dispatchEvent(new StorageEvent('storage', {key:HISTORY_KEY}));
+    window.dispatchEvent(new StorageEvent('storage', {key:PREF_KEY}));
+    window.dispatchEvent(new Event('honoua:compare:updated'));
+
+    $status.textContent='Import OK';
+    notify?.('Cloud import terminé.');
+  }catch(e){
+    console.warn('[A26] pull error', e);
+    $status.textContent='Import échec';
+    notify?.('Cloud import: erreur.');
+  }
+}
+
+async function cloudPush(cfg, $status){
+  if (!cfg?.enabled) { $status.textContent='Cloud: inactif'; return; }
+  $status.textContent='Export…';
+  try{
+    const payloadH = readHistorySafe();
+    const payloadP = readPrefsSafe();
+    await apiPut(window.HONOUA_CLOUD.putHistory, cfg.token, payloadH);
+    await apiPut(window.HONOUA_CLOUD.putPrefs,   cfg.token, payloadP);
+    $status.textContent='Export OK';
+    notify?.('Cloud export terminé.');
+  }catch(e){
+    console.warn('[A26] push error', e);
+    $status.textContent='Export échec';
+    notify?.('Cloud export: erreur.');
+  }
+}
+
+async function cloudSync(cfg, $status){
+  // Pour éviter d’écraser: PULL -> merge local -> PUSH
+  await cloudPull(cfg, $status);
+  await cloudPush(cfg, $status);
+}
+
+/* === 2.7 Auto-push (debounce) quand historique/prefs changent ============== */
+function setupAutoPush(cfg, $status){
+  if (!cfg?.enabled) return;
+  const debounced = (()=> {
+    let t; return ()=>{ clearTimeout(t); t = setTimeout(()=>cloudPush(cfg,$status), 2000); };
+  })();
+  window.addEventListener('storage', (ev)=>{
+    if (ev && (ev.key===HISTORY_KEY || ev.key===PREF_KEY)) debounced();
+  });
+  window.addEventListener('honoua:compare:updated', debounced);
+}
+
+/* === 2.8 UI wiring ========================================================= */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const $token  = document.getElementById('cloud-token');
+  const $toggle = document.getElementById('cloud-toggle');
+  const $pull   = document.getElementById('cloud-pull');
+  const $push   = document.getElementById('cloud-push');
+  const $sync   = document.getElementById('cloud-sync');
+  const $status = document.getElementById('cloud-status');
+  if (!$token || !$toggle || !$pull || !$push || !$sync) return;
+
+  let cfg = readCloudCfg();
+  $token.value = cfg.token || '';
+  $toggle.textContent = cfg.enabled ? 'Désactiver' : 'Activer';
+  $status.textContent = cfg.enabled ? 'Actif' : 'Inactif';
+
+  $toggle.addEventListener('click', ()=>{
+    cfg.enabled = !cfg.enabled;
+    if (cfg.enabled && !$token.value.trim()){
+      cfg.enabled = false;
+      notify?.('Renseigne d’abord ton token.');
+    }
+    writeCloudCfg(cfg);
+    $toggle.textContent = cfg.enabled ? 'Désactiver' : 'Activer';
+    $status.textContent = cfg.enabled ? 'Actif' : 'Inactif';
+    if (cfg.enabled) setupAutoPush(cfg, $status);
+  });
+
+  $token.addEventListener('change', ()=>{
+    cfg.token = $token.value.trim();
+    writeCloudCfg(cfg);
+  });
+
+  $pull.addEventListener('click', ()=> cloudPull(cfg, $status));
+  $push.addEventListener('click', ()=> cloudPush(cfg, $status));
+  $sync.addEventListener('click', ()=> cloudSync(cfg, $status));
+
+  // auto-push si déjà actif
+  if (cfg.enabled) setupAutoPush(cfg, $status);
+});
+</script>
+
+<script>
+/* ============================================================================
+   A27 — Bandeau d’état Cloud + reprise automatique
+   - Backoff progressif, file d’attente locale, gestion offline/online
+   - S’appuie sur cloudPush / cloudPull / cloudSync d’A26 si présents
+   - Jamais destructif : n’écrase pas A26, merge non destructif conservé
+   ============================================================================ */
+
+(function(){
+  const QKEY   = "honoua:cloud:queue_v1";   // [{type:'push'|'sync', ts:number}]
+  const CFGKEY = "honoua:cloud:cfg_v1";     // A26
+  const HK     = "honoua_compare_history_v1";
+  const PK     = "honoua:compare:prefs";
+
+  const $pill = document.getElementById('cloud-pill');
+  const $msg  = document.getElementById('cloud-msg');
+  const $ban  = document.getElementById('cloud-banner');
+
+  if (!$ban || !$pill || !$msg) return; // UI absente => no-op
+
+  // --- Utils storage ---------------------------------------------------------
+  function readJSON(k, fb){ try { return JSON.parse(localStorage.getItem(k)||JSON.stringify(fb)); } catch { return fb; } }
+  function writeJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+
+  function readCfg(){ return readJSON(CFGKEY, {}); }
+  function isEnabled(){ const c = readCfg(); return !!c.enabled && !!(c.token||"").trim(); }
+
+  function readQ(){ return readJSON(QKEY, []); }
+  function writeQ(arr){ writeJSON(QKEY, Array.isArray(arr)?arr:[]); }
+
+  // --- UI status -------------------------------------------------------------
+  function setPill(cls){
+    $pill.classList.remove('pill-ok','pill-warn','pill-err','pill-off');
+    $pill.classList.add(cls);
+  }
+  function setStatus(text, cls){
+    $msg.textContent = text;
+    setPill(cls);
+  }
+
+  // --- File d’attente --------------------------------------------------------
+  function enqueue(opType){
+    if (!opType) return;
+    const q = readQ();
+    q.push({ type: opType, ts: Date.now() });
+    writeQ(q);
+    // feedback visuel
+    setStatus(`Cloud : en attente (${q.length})`, 'pill-warn');
+  }
+  function dequeue(){
+    const q = readQ();
+    q.shift();
+    writeQ(q);
+  }
+
+  // --- Backoff/retry scheduler ----------------------------------------------
+  let retryTimer = null;
+  let retryCount = 0;
+  const STEPS = [5, 15, 45, 90, 180]; // secondes (progressif)
+  function scheduleRetry(label){
+    clearTimeout(retryTimer);
+    const delaySec = STEPS[Math.min(retryCount, STEPS.length-1)];
+    const eta = new Date(Date.now() + delaySec*1000);
+    setStatus(`${label} — reprise dans ${delaySec}s`, 'pill-warn');
+    retryTimer = setTimeout(processQueue, delaySec*1000);
+    retryCount++;
+  }
+  function resetBackoff(){ retryCount = 0; clearTimeout(retryTimer); retryTimer = null; }
+
+  // --- Wrappers sûrs autour d’A26 -------------------------------------------
+  const hasPush = (typeof window.cloudPush === 'function');
+  const hasSync = (typeof window.cloudSync === 'function');
+
+  async function safePush(){
+    if (!hasPush) throw new Error('cloudPush indisponible');
+    const cfg = readCfg();
+    if (!cfg.enabled) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) throw new Error('offline');
+    setStatus('Cloud : export…', 'pill-warn');
+    await window.cloudPush(cfg, $msg); // A26 accepte (cfg, $status)
+  }
+
+  async function safeSync(){
+    if (!hasSync) {
+      // fallback : push simple si sync indispo
+      return safePush();
+    }
+    const cfg = readCfg();
+    if (!cfg.enabled) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) throw new Error('offline');
+    setStatus('Cloud : synchronisation…', 'pill-warn');
+    await window.cloudSync(cfg, $msg);
+  }
+
+  // --- Moteur de traitement de la file --------------------------------------
+  async function processQueue(){
+    if (!isEnabled()) { setStatus('Cloud : inactif', 'pill-off'); return; }
+    if (!navigator.onLine) { setStatus('Cloud : hors ligne', 'pill-off'); return; }
+
+    const q = readQ();
+    if (!q.length) {
+      setStatus('Cloud : sync OK', 'pill-ok');
+      resetBackoff();
+      return;
+    }
+
+    try {
+      const item = q[0];
+      if (item.type === 'push') await safePush(); else await safeSync();
+      dequeue();
+      resetBackoff();
+      // Chain: continue si d’autres ops en attente
+      processQueue();
+    } catch (e){
+      // Erreur réseau ou 5xx : replanifier
+      if (String(e||'').includes('offline')) {
+        setStatus('Cloud : hors ligne', 'pill-off');
+      } else {
+        scheduleRetry('Cloud : erreur réseau');
+      }
+    }
+  }
+
+  // --- Abonnements aux évènements locaux (déclencheurs) ---------------------
+  // Quand l’historique/prefs changent et que le cloud est actif → on file un push
+  function armProducers(){
+    const prod = ()=>{
+      if (!isEnabled()) return;
+      enqueue('push');
+      // petit “auto-kick” si rien ne tourne
+      if (!retryTimer) processQueue();
+    };
+    window.addEventListener('storage', (ev)=>{
+      if (ev && (ev.key===HK || ev.key===PK)) prod();
+    });
+    window.addEventListener('honoua:compare:updated', prod);
+  }
+
+  // Online/offline pour reprise auto
+  window.addEventListener('online',  ()=>{ if (isEnabled()) processQueue(); });
+  window.addEventListener('offline', ()=>{ setStatus('Cloud : hors ligne', 'pill-off'); });
+
+  // --- Boot ------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // État initial
+    if (!isEnabled()) setStatus('Cloud : inactif', 'pill-off');
+    else if (!navigator.onLine) setStatus('Cloud : hors ligne', 'pill-off');
+    else setStatus('Cloud : prêt', 'pill-ok');
+
+    // Armer les déclencheurs si A26 est là
+    if (hasPush || hasSync) armProducers();
+
+    // Relance douce au démarrage s’il y a une file
+    if (isEnabled()) processQueue();
+  });
+
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A28 — Sécurisation du token Cloud (AES-GCM + PBKDF2) + rotation
+   - Stocke le token uniquement chiffré en localStorage
+   - Nécessite une "phrase secrète" côté utilisateur (ne sort jamais du device)
+   - Compatibles A26/A27 : on fournit un getter "getDecryptedToken()"
+   ============================================================================ */
+
+(function(){
+  const CFG_KEY   = "honoua:cloud:cfg_v1";          // { enabled, token? (legacy), enc? }
+  const ENC_KEY   = "honoua:cloud:enc_v1";          // { v:1, salt, iv, ct }  (token chiffré)
+  const STATUS    = document.getElementById('cloud-sec-status');
+  const $pass     = document.getElementById('cloud-passphrase');
+  const $lock     = document.getElementById('cloud-lock');
+  const $reveal   = document.getElementById('cloud-reveal');
+  const $rotate   = document.getElementById('cloud-rotate');
+  const $cfgToken = document.getElementById('cloud-token'); // champ A26 existant (peut être vide)
+
+  if (!$pass || !$lock || !$reveal || !$rotate) return;
+
+  // ---- Utils JSON LS
+  const J = {
+    read(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } },
+    write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k){ try { localStorage.removeItem(k); } catch{} }
+  };
+
+  // ---- WebCrypto helpers
+  async function importKeyFromPass(pass, salt){
+    const enc = new TextEncoder();
+    const keyMat = await crypto.subtle.importKey(
+      "raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 120_000, hash: "SHA-256" },
+      keyMat,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt","decrypt"]
+    );
+  }
+  function randBytes(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  function b64(a){ return btoa(String.fromCharCode(...a)); }
+  function ub64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+
+  async function encryptToken(token, pass){
+    const salt = randBytes(16), iv = randBytes(12);
+    const key = await importKeyFromPass(pass, salt);
+    const ct = new Uint8Array(await crypto.subtle.encrypt(
+      { name:"AES-GCM", iv }, key, new TextEncoder().encode(token)
+    ));
+    return { v:1, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  }
+  async function decryptToken(encObj, pass){
+    const salt = ub64(encObj.salt), iv = ub64(encObj.iv), ct = ub64(encObj.ct);
+    const key = await importKeyFromPass(pass, salt);
+    const pt  = await crypto.subtle.decrypt({ name:"AES-GCM", iv }, key, ct);
+    return new TextDecoder().decode(pt);
+  }
+
+  function setStatus(msg){ if (STATUS) STATUS.textContent = msg; }
+
+  // ---- API publique pour A26 : résolution du token déchiffré si besoin
+  window.getDecryptedToken = async function(){
+    const cfg = J.read(CFG_KEY, {});
+    // priorité au token chiffré
+    const enc = J.read(ENC_KEY, null);
+    if (enc) {
+      const pass = ($pass.value || "").trim();
+      if (!pass) return null; // l’utilisateur doit fournir la phrase
+      try { return await decryptToken(enc, pass); }
+      catch { return null; }
+    }
+    // fallback legacy (A26 avant A28)
+    return (cfg.token || "").trim() || null;
+  };
+
+  // ---- Branche A26 pour utiliser getDecryptedToken() automatiquement
+  // Remplace l’accès direct cfg.token par une résolution à la volée.
+  const _cloudHeadersOrig = (typeof window.cloudHeaders === 'function') ? window.cloudHeaders : null;
+  window.cloudHeaders = async function(tokenMaybe){
+    let token = tokenMaybe;
+    if (!token) token = await window.getDecryptedToken();
+    const h = { 'Content-Type':'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  };
+  // Adapte aussi apiGet/apiPut d’A26 si présents
+  const _apiGet = window.apiGet, _apiPut = window.apiPut;
+  if (typeof _apiGet === 'function') {
+    window.apiGet = async function(path, _token){
+      const token = _token || await window.getDecryptedToken();
+      const url = (window.HONOUA_CLOUD.baseUrl + path);
+      const r = await fetch(url, { headers: await window.cloudHeaders(token) });
+      if (!r.ok) throw new Error('GET '+path+' '+r.status);
+      return await r.json();
+    };
+  }
+  if (typeof _apiPut === 'function') {
+    window.apiPut = async function(path, _token, body){
+      const token = _token || await window.getDecryptedToken();
+      const url = (window.HONOUA_CLOUD.baseUrl + path);
+      const r = await fetch(url, { method:'PUT', headers: await window.cloudHeaders(token), body: JSON.stringify(body||{}) });
+      if (!r.ok) throw new Error('PUT '+path+' '+r.status);
+      return await r.json().catch(()=> ({}));
+    };
+  }
+
+  // ---- Bouton "Protéger" : chiffrer/mettre à jour le token
+  $lock.addEventListener('click', async ()=>{
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+
+    const cfg = J.read(CFG_KEY, {});
+    // Source du token : champ A26 si valeur présente, sinon legacy cfg.token (si encore là)
+    let token = ($cfgToken?.value || "").trim();
+    if (!token) token = (cfg.token || "").trim();
+
+    if (!token) { alert("Colle d’abord ton token (champ Cloud)."); return; }
+
+    try{
+      const enc = await encryptToken(token, pass);
+      J.write(ENC_KEY, enc);
+      // Efface l’ancien token en clair (sécurité)
+      if (cfg.token) { delete cfg.token; J.write(CFG_KEY, cfg); }
+      if ($cfgToken) $cfgToken.value = ""; // vider l’UI
+      setStatus("Token chiffré ✅");
+    }catch(e){
+      console.warn("[A28] encrypt error:", e);
+      setStatus("Erreur de chiffrement ❌");
+    }
+  });
+
+  // ---- Bouton "Révéler" : déchiffre pour inspection locale (jamais stocké)
+  $reveal.addEventListener('click', async ()=>{
+    const enc = J.read(ENC_KEY, null);
+    if (!enc) { alert("Aucun token chiffré."); return; }
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+    try{
+      const token = await decryptToken(enc, pass);
+      // Affiche de façon non persistante
+      prompt("Token (copie locale, non stockée):", token);
+      setStatus("Déchiffrement OK");
+    }catch(e){
+      setStatus("Phrase secrète invalide ❌");
+    }
+  });
+
+  // ---- Bouton "Rotation" : remplace proprement le token
+  $rotate.addEventListener('click', async ()=>{
+    const pass = ($pass.value || "").trim();
+    if (!pass) { alert("Saisis ta phrase secrète."); return; }
+    // on demande le nouveau token (fourni par l’API / portail)
+    const newTok = prompt("Nouveau token (coller ici) :");
+    if (!newTok) return;
+    try{
+      const enc = await encryptToken(newTok.trim(), pass);
+      J.write(ENC_KEY, enc);
+      // purge de tout résidu legacy
+      const cfg = J.read(CFG_KEY, {});
+      if (cfg.token) { delete cfg.token; J.write(CFG_KEY, cfg); }
+      if ($cfgToken) $cfgToken.value = "";
+      setStatus("Rotation effectuée ✅");
+      // Optionnel: déclenche une sync (A27)
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+    }catch(e){
+      setStatus("Rotation échouée ❌");
+    }
+  });
+
+  // ---- Indication d’état au chargement
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const enc = J.read(ENC_KEY, null);
+    if (enc) setStatus("Token protégé (A28)");
+    else     setStatus("Pas de token protégé");
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A29 — Export/Import sécurisé (.honoua)
+   - Exporte {prefs, history} en JSON, puis chiffre (AES-GCM, PBKDF2 120k)
+   - Import: déchiffre + MERGE non destructif (priorité local si conflit)
+   - Réutilise la phrase secrète A28 (champ #cloud-passphrase)
+   ============================================================================ */
+(function(){
+  const STATUS = document.getElementById('secure-transfer-status');
+  const $btnExp = document.getElementById('honoua-export');
+  const $btnImp = document.getElementById('honoua-import');
+  const $file   = document.getElementById('honoua-import-file');
+  const $pass   = document.getElementById('cloud-passphrase'); // A28
+
+  if (!$btnExp || !$btnImp || !$file) return;
+
+  const HK = 'honoua_compare_history_v1';
+  const PK = 'honoua:compare:prefs';
+
+  const J = {
+    read(k, fb){ try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(fb)); } catch { return fb; } },
+    write(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+
+  function setStatus(msg){ if (STATUS) STATUS.textContent = msg; }
+
+  // ---- Crypto utils (identiques à A28) -------------------------------------
+  function randBytes(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+  function b64(a){ return btoa(String.fromCharCode(...a)); }
+  function ub64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+
+  async function importKeyFromPass(pass, salt){
+    const enc = new TextEncoder();
+    const keyMat = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name:"PBKDF2", salt, iterations:120_000, hash:"SHA-256" },
+      keyMat,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["encrypt","decrypt"]
+    );
+  }
+  async function encryptBytes(plainBytes, pass){
+    const salt = randBytes(16), iv = randBytes(12);
+    const key = await importKeyFromPass(pass, salt);
+    const ct  = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, plainBytes));
+    return { v:1, salt:b64(salt), iv:b64(iv), ct:b64(ct) };
+  }
+  async function decryptToBytes(encObj, pass){
+    const salt = ub64(encObj.salt), iv = ub64(encObj.iv), ct = ub64(encObj.ct);
+    const key  = await importKeyFromPass(pass, salt);
+    const pt   = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    return new Uint8Array(pt);
+  }
+
+  // ---- Merge non destructif (réutilise A26 si dispo, sinon fallback) -------
+  function fallbackMergeHistory(localArr, remoteArr){
+    const byId = new Map();
+    const push = (e, from) => {
+      if(!e || typeof e!=='object' || e.id==null) return;
+      const prev = byId.get(e.id);
+      if (!prev) { byId.set(e.id, e); return; }
+      // LWW : on garde le plus récent ; si doute -> garder local (prev)
+      try{
+        const tPrev = new Date(prev.ts||0).getTime()||0;
+        const tNew  = new Date(e.ts||0).getTime()||0;
+        if (tNew >= tPrev) byId.set(e.id, e);
+      }catch{}
+    };
+    (localArr||[]).forEach(e=>push(e,'local'));
+    (remoteArr||[]).forEach(e=>push(e,'remote'));
+    return Array.from(byId.values()).sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+  }
+  function fallbackMergePrefs(localObj, remoteObj){
+    const out = Object.assign({}, localObj||{});
+    const src = remoteObj||{};
+    for(const k of Object.keys(src)){
+      if (out[k]===undefined || out[k]===null) out[k] = src[k]; // ne pas écraser une valeur locale existante
+    }
+    return out;
+  }
+  const mergeHistory = (window.mergeHistory || fallbackMergeHistory);
+  const mergePrefs   = (window.mergePrefs   || fallbackMergePrefs);
+
+  // ---- Export sécurisé ------------------------------------------------------
+  $btnExp.addEventListener('click', async ()=>{
+    const pass = ($pass?.value||"").trim();
+    if (!pass) { alert("Saisis ta phrase secrète (A28) pour chiffrer l’export."); return; }
+
+    // snapshot
+    const payload = {
+      kind: "honoua.backup",
+      version: 1,
+      ts: new Date().toISOString(),
+      prefs:   J.read(PK, {}),
+      history: J.read(HK, [])
+      // (optionnel) tu peux ajouter d’autres clés plus tard (ex: budget calculé)
+    };
+    const json = new TextEncoder().encode(JSON.stringify(payload));
+    try{
+      const enc = await encryptBytes(json, pass);
+      const blob = new Blob([JSON.stringify(enc)], { type: "application/octet-stream" });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const d = payload.ts.slice(0,10);
+      a.download = `honoua_${d}.honoua`; // extension dédiée
+      document.body.appendChild(a); a.click(); a.remove();
+      setStatus("Export .honoua généré ✅");
+    }catch(e){
+      console.warn("[A29] export error:", e);
+      setStatus("Export échoué ❌");
+    }
+  });
+
+  // ---- Import sécurisé ------------------------------------------------------
+  $btnImp.addEventListener('click', ()=> $file.click());
+  $file.addEventListener('change', async ()=>{
+    const f = $file.files && $file.files[0];
+    if (!f) return;
+    const pass = ($pass?.value||"").trim();
+    if (!pass) { alert("Saisis ta phrase secrète (A28) pour déchiffrer l’import."); $file.value=""; return; }
+
+    try{
+      const text = await f.text();
+      const encObj = JSON.parse(text);
+      const bytes  = await decryptToBytes(encObj, pass);
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+
+      if (payload.kind !== "honoua.backup") throw new Error("Fichier non reconnu");
+      // Merge non destructif
+      const localH = J.read(HK, []);
+      const localP = J.read(PK, {});
+      const mergedH = mergeHistory(localH, payload.history||[]);
+      const mergedP = mergePrefs(localP, payload.prefs||{});
+      J.write(HK, mergedH);
+      J.write(PK, mergedP);
+
+      // notifier l’app
+      window.dispatchEvent(new StorageEvent('storage', {key:HK}));
+      window.dispatchEvent(new StorageEvent('storage', {key:PK}));
+      window.dispatchEvent(new Event('honoua:compare:updated'));
+
+      setStatus("Import .honoua appliqué (fusion) ✅");
+      notify?.("Import terminé. Vos données locales ont été conservées.");
+    }catch(e){
+      console.warn("[A29] import error:", e);
+      setStatus("Import échoué ❌ (phrase ou fichier invalide)");
+      alert("Impossible de lire le fichier .honoua : phrase secrète ou fichier invalide.");
+    }finally{
+      $file.value = ""; // reset input
+    }
+  });
+})();
+</script>
+
+<script>
+/* ============================================================================
+   A30 — i18n minimal (FR/EN) + améliorations ARIA
+   - Détecte navigator.language au premier chargement
+   - Expose window.i18n.t(key) et applique les libellés dynamiques clés
+   - Enveloppe notify() pour traduire les toasts
+   ============================================================================ */
+(function(){
+  // 1) Dictionnaire
+  const DICT = {
+    fr: {
+      'ui.add_ean': 'Entrez un EAN.',
+      'ui.invalid_ean': 'EAN invalide.',
+      'ui.already_present': 'Déjà présent.',
+      'ui.added': 'Produit ajouté.',
+      'ui.removed': 'Produit retiré.',
+      'ui.reset_done': 'Comparateur réinitialisé.',
+      'ui.copied_url': 'Lien copié dans le presse-papiers !',
+      'ui.copy_fail': 'Impossible de copier. Sélectionnez l’URL manuellement.',
+      'ui.copied_state': 'Lien (état complet) copié !',
+      'ui.no_results_filter': 'Aucun résultat pour ce filtre.',
+      'ui.nothing_to_remove': 'Rien à retirer.',
+      'ui.all_removed': 'Tous les produits ont été retirés.',
+      'ui.articles_one': '1 article',
+      'ui.articles_many': '{n} articles',
+      'lbl.share': 'Partager',
+      'lbl.copy_state': 'Copier l’état',
+      'lbl.reload': 'Recharger',
+      'lbl.remove': 'Retirer',
+      'lbl.alt_low_carbon': 'Alternative bas carbone',
+      'lbl.alt_replace': 'Remplacer',
+      'lbl.alt_hide': 'Masquer',
+      'lbl.rank': 'Rang',
+      'lbl.footprint': 'Empreinte',
+      'lbl.filter_placeholder': 'Rechercher…',
+      'lbl.language': 'Langue',
+      'toast.imported_n': '{n} EAN importé(s).',
+      'toast.no_new_params': 'Aucun paramètre nouveau à importer.',
+      'toast.cloud_import_ok': 'Cloud import terminé.',
+      'toast.cloud_import_err': 'Cloud import: erreur.',
+      'toast.cloud_export_ok': 'Cloud export terminé.',
+      'toast.cloud_export_err': 'Cloud export: erreur.',
+    },
+    en: {
+      'ui.add_ean': 'Enter an EAN.',
+      'ui.invalid_ean': 'Invalid EAN.',
+      'ui.already_present': 'Already present.',
+      'ui.added': 'Product added.',
+      'ui.removed': 'Product removed.',
+      'ui.reset_done': 'Comparator reset.',
+      'ui.copied_url': 'Link copied to clipboard!',
+      'ui.copy_fail': 'Unable to copy. Select the URL manually.',
+      'ui.copied_state': 'Full state link copied!',
+      'ui.no_results_filter': 'No results for this filter.',
+      'ui.nothing_to_remove': 'Nothing to remove.',
+      'ui.all_removed': 'All products have been removed.',
+      'ui.articles_one': '1 item',
+      'ui.articles_many': '{n} items',
+      'lbl.share': 'Share',
+      'lbl.copy_state': 'Copy full state',
+      'lbl.reload': 'Reload',
+      'lbl.remove': 'Remove',
+      'lbl.alt_low_carbon': 'Low-carbon alternative',
+      'lbl.alt_replace': 'Replace',
+      'lbl.alt_hide': 'Hide',
+      'lbl.rank': 'Rank',
+      'lbl.footprint': 'Footprint',
+      'lbl.filter_placeholder': 'Search…',
+      'lbl.language': 'Language',
+      'toast.imported_n': '{n} EAN(s) imported.',
+      'toast.no_new_params': 'No new parameter to import.',
+      'toast.cloud_import_ok': 'Cloud import completed.',
+      'toast.cloud_import_err': 'Cloud import: error.',
+      'toast.cloud_export_ok': 'Cloud export completed.',
+      'toast.cloud_export_err': 'Cloud export: error.',
+    }
+  };
+
+  // 2) Langue courante (persistée)
+  const LANG_KEY = 'honoua:i18n:lang';
+  function getLang(){
+    const s = localStorage.getItem(LANG_KEY);
+    if (s) return s;
+    const nav = (navigator.language || 'fr').slice(0,2).toLowerCase();
+    const lang = (nav === 'en') ? 'en' : 'fr';
+    localStorage.setItem(LANG_KEY, lang);
+    return lang;
+  }
+  function setLang(l){
+    const lang = (l==='en'?'en':'fr');
+    localStorage.setItem(LANG_KEY, lang);
+    applyStaticLabels();
+    // Re-appliquer tout ce qui dépend de la langue (compteur, toasts via wrapper, placeholders…)
+    applyDynamicBits();
+  }
+
+  // 3) t() simple
+  function t(key, vars){
+    const lang = getLang();
+    const pack = DICT[lang] || DICT.fr;
+    let s = pack[key] || key;
+    if (vars && typeof vars === 'object'){
+      Object.keys(vars).forEach(k => {
+        s = s.replace(new RegExp('\\{'+k+'\\}','g'), String(vars[k]));
+      });
+    }
+    return s;
+  }
+  window.i18n = { t, setLang, getLang };
+
+  // 4) Wire du sélecteur
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const sel = document.getElementById('i18n-select');
+    if (sel){
+      sel.value = getLang();
+      sel.addEventListener('change', ()=> setLang(sel.value));
+      sel.setAttribute('aria-label', t('lbl.language'));
+    }
+    applyStaticLabels();
+    applyDynamicBits();
+  });
+
+  // 5) Appliquer labels statiques (ex : placeholder du filtre)
+  function applyStaticLabels(){
+    const search = document.getElementById('searchInput');
+    if (search){
+      search.setAttribute('placeholder', t('lbl.filter_placeholder'));
+      search.setAttribute('aria-label', t('lbl.filter_placeholder'));
+    }
+  }
+
+  // 6) Compteur traduit
+  function updateCounterI18n(){
+    try{
+      const counter = document.getElementById('counter');
+      if (!counter) return;
+      const hasFilter = !!(window.prefs && window.prefs.filter && window.prefs.filter.trim());
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const visible = cards.filter(c => c.style.display !== 'none').length;
+      const n = hasFilter ? visible : (Array.isArray(window.eans)?window.eans.length:0);
+      counter.textContent = (n===1) ? t('ui.articles_one') : t('ui.articles_many',{n});
+    }catch{}
+  }
+
+  // 7) Wrapper de notify() pour traduire les messages connus
+  const _notify = (typeof window.notify === 'function') ? window.notify : null;
+  window.notify = function(msgKeyOrText){
+    const mapKnown = new Set(Object.keys(DICT.fr).concat(Object.keys(DICT.en)));
+    const msg = mapKnown.has(msgKeyOrText) ? t(msgKeyOrText) : msgKeyOrText;
+    const el = document.getElementById('toast');
+    if (el){
+      // ARIA: forcer annonce (aria-live polite)
+      el.textContent = msg;
+      el.style.opacity = 1;
+      setTimeout(()=> el.style.opacity = 0, 1400);
+    } else if (_notify){
+      _notify(msg);
+    }
+  };
+
+  // 8) Réappliquer les parties dynamiques au bon moment
+  function applyDynamicBits(){
+    updateCounterI18n();
+    const sel = document.getElementById('i18n-select');
+    if (sel) sel.setAttribute('aria-label', t('lbl.language'));
+  }
+
+  // 9) Observe changements impactant le compteur
+  const obs = new MutationObserver(()=>{
+    updateCounterI18n();
+  });
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const track = document.getElementById('track');
+    if (track) obs.observe(track, { childList:true, subtree:false });
+  });
+
+  // 10) Expose helper si d’autres modules veulent une string traduite
+  window.__t = t;
+})();
+</script>
+<!-- ===========================================================
+     A31 — Mode hors-ligne enrichi (Étape 1: infra cache + lecture)
+     - IndexedDB 'honoua-db' : products, rankings, sessions, prefs
+     - Wrappers cache-first avec TTL
+     =========================================================== -->
+<script>
+(function(){
+  // ===== A31 — DB Schema =====
+  const DB_NAME = 'honoua-db';
+  const DB_VER  = 1;
+  const STORES  = {
+    products:  { keyPath: 'key' },      // key = EAN
+    rankings:  { keyPath: 'key' },      // key = `${scope}|${period}`
+    sessions:  { keyPath: 'key' },      // key = timestamp or uid
+    prefs:     { keyPath: 'key' }       // key = pref name
+  };
+
+  // Small IndexedDB helper (no external deps)
+  function openDB(){
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, DB_VER);
+      req.onupgradeneeded = (ev)=>{
+        const db = req.result;
+        Object.keys(STORES).forEach(name=>{
+          if (!db.objectStoreNames.contains(name)){
+            db.createObjectStore(name, { keyPath: STORES[name].keyPath });
+          }
+        });
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror   = ()=> reject(req.error);
+    });
+  }
+
+  async function withStore(storeName, mode, fn){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx  = db.transaction(storeName, mode);
+      const st  = tx.objectStore(storeName);
+      const out = fn(st);
+      tx.oncomplete = ()=> resolve(out);
+      tx.onerror    = ()=> reject(tx.error);
+    });
+  }
+
+  // ===== A31 — Cache API =====
+  const now = ()=> Date.now();
+  const wrap = (key, value, ttlMs)=>({ key, value, ts: now(), ttl: ttlMs||0 });
+
+  async function cachePut(store, key, value, ttlMs){
+    return withStore(store, 'readwrite', st => st.put( wrap(key, value, ttlMs) ));
+  }
+
+  async function cacheGet(store, key, maxAgeMs){
+    const rec = await withStore(store, 'readonly', st => new Promise((res,rej)=>{
+      const rq = st.get(key);
+      rq.onsuccess = ()=> res(rq.result || null);
+      rq.onerror   = ()=> rej(rq.error);
+    }));
+    if (!rec) return null;
+    if (maxAgeMs && rec.ts && (now()-rec.ts)>maxAgeMs) return null; // stale
+    return rec.value;
+  }
+
+  // Helpers TTL (par défaut prudents)
+  const TTL = {
+    product: 30*24*3600*1000,  // 30 jours
+    ranking: 7*24*3600*1000,   // 7 jours (classements mensuels → suffisant)
+    prefs:   365*24*3600*1000, // 1 an
+    session: 30*24*3600*1000   // 30 jours
+  };
+
+  // ===== A31 — Wrappers métier (cache-first) =====
+  // (Ajuste les URLs selon ton backend actuel ; les endpoints finaux seront stabilisés en A35–A37) :contentReference[oaicite:3]{index=3}
+
+  async function fetchJSON(url){
+    const r = await fetch(url, { headers: { 'Accept':'application/json' }});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // Produits par EAN
+  window.honouaGetProduct = async function(ean){
+    const key = String(ean||'').trim();
+    if (!key) return null;
+    // 1) Cache
+    const cached = await cacheGet('products', key, TTL.product);
+    if (cached) return cached;
+    // 2) Réseau → cache
+    const data = await fetchJSON(`/api/products?ean=${encodeURIComponent(key)}`);
+    if (data) await cachePut('products', key, data, TTL.product);
+    return data;
+  };
+
+  // Classements (ex: scope='region|national', period='2025-10' ou 'latest')
+  window.honouaGetRanking = async function(scope, period){
+    const key = `${scope}|${period}`;
+    const cached = await cacheGet('rankings', key, TTL.ranking);
+    if (cached) return cached;
+    const data = await fetchJSON(`/api/rankings?scope=${encodeURIComponent(scope)}&period=${encodeURIComponent(period)}`);
+    if (data) await cachePut('rankings', key, data, TTL.ranking);
+    return data;
+  };
+
+  // Préférences : mirroir localStorage → IDB (lecture depuis IDB en priorité)
+  window.honouaPrefs = {
+    async get(name, fallback){
+      const v = await cacheGet('prefs', name, TTL.prefs);
+      if (v!==undefined && v!==null) return v;
+      try {
+        const ls = localStorage.getItem(name);
+        if (ls!=null){
+          const parsed = JSON.parse(ls);
+          await cachePut('prefs', name, parsed, TTL.prefs);
+          return parsed;
+        }
+      } catch {}
+      return fallback;
+    },
+    async set(name, value){
+      try { localStorage.setItem(name, JSON.stringify(value)); } catch{}
+      await cachePut('prefs', name, value, TTL.prefs);
+    }
+  };
+
+  // Sessions : snapshot minimal (liste EANs + options de tri/filtres)
+  window.honouaSessions = {
+    async save(snapshot){
+      const key = String(snapshot && snapshot.id || Date.now());
+      await cachePut('sessions', key, snapshot, TTL.session);
+      return key;
+    },
+    async get(key){ return cacheGet('sessions', key, TTL.session); }
+  };
+
+  
+
+  // ===== A31 — Bootstrap doux =====
+  document.addEventListener('DOMContentLoaded', ()=>{
+    // Rien d’intrusif ici : on expose juste les APIs ci-dessus.
+    // Les appels existants (comparateur, pages classements) peuvent progressivement
+    // migrer vers ces wrappers sans casser l’existant (principe acté A31). :contentReference[oaicite:4]{index=4}
+  });
+})();
+</script>
+<script>
+if (window.honouaGetProduct) {
+  // DEV ONLY — Test produit
+  async function __devTestProduct(ean){
+    try {
+      const p = await window.honouaGetProduct(ean);
+      console.debug('[DEV A31] cache product', ean, p);
+    } catch(e){
+      console.warn('[DEV A31] product fetch failed', e);
+    }
+  }
+  // Exemple : __devTestProduct('3274080005003');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+if (window.honouaGetRanking) {
+  // DEV ONLY — Test classement
+  async function __devTestRanking(scope='region', period='latest'){
+    try {
+      const r = await window.honouaGetRanking(scope, period);
+      console.debug('[DEV A31] cache ranking', scope, period, r);
+    } catch(e){
+      console.warn('[DEV A31] ranking fetch failed', e);
+    }
+  }
+  // Exemple : __devTestRanking('region','latest');
+}
+</script>
+
+<script>
+// A33 — ajournement non-critique
+(function(run){
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    setTimeout(run, 350);
+  }
+})(function initNonCritical(){
+  // … init des stats/graphes ici …
+});
+</script>
+
+
+
+</body>
+</html>

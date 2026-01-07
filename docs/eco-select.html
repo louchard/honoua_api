@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Honoua — Scanner</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+
+
+
+  <style>
+    :root{ --green:#062909; --orange:#F5C147; --blue:#001D85; --bg:#f7f7f7; --red:#C62828; }
+    html,body{ margin:0;padding:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial }
+    .wrap{ max-width:640px;margin:0 auto;padding:16px }
+    .card{ background:#fff;border-radius:16px;padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08);border:1px solid #eee }
+    .header{ display:flex;align-items:center;gap:12px;margin-bottom:12px }
+    .logo{ width:40px;height:40px;border-radius:8px;background:var(--green) }
+    h1{ font-size:20px;margin:0;color:var(--green) }
+    .sub{ font-size:13px;color:#333;background:linear-gradient(90deg,#00000008,#00000000);padding:6px 8px;border-radius:8px }
+
+    .video-wrap{ position:relative }
+    video{ width:100%;aspect-ratio:3/4;background:#000;border-radius:16px;object-fit:cover;border:2px solid var(--green) }
+
+    /* Cadre de visée responsive */
+    .reticle{ pointer-events:none; position:absolute; inset:0; display:flex; align-items:center; justify-content:center }
+    .reticle .box{
+      width:70%; max-width:400px; height:35%; max-height:220px;
+      border:3px solid var(--green); border-radius:12px;
+      box-shadow:0 0 0 200vmax rgba(0,0,0,.25) inset;
+      transition:transform .25s ease, border-color .25s ease;
+    }
+    .reticle.active .box{ border-color:var(--orange); transform:scale(1.02) }
+
+    .row{ display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap }
+    select,button{ padding:10px 12px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:14px }
+    button.primary{ background:var(--green);color:#fff;border:1px solid var(--green) }
+    button.ghost{ background:#fff;color:var(--green);border:1px solid var(--green) }
+    button.warn{ background:#fff;color:#111;border:1px solid #ccc;opacity:.6 }
+    button.torch-on{ background:var(--orange);color:#111;border:1px solid var(--orange) }
+    .status{ font-size:13px;color:#222;display:flex;align-items:center;gap:8px }
+    .badge{ font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px }
+    .badge.ok{ background:#E8F5E9;color:#1B5E20;border:1px solid #C8E6C9 }
+    .badge.off{ background:#FFF3F3;color:#7A1A1A;border:1px solid #FFD6D6 }
+        /* Message système du scanner (A55.8) */
+    .scanner-message {
+      margin: 4px 0 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      background: #f5f5f5;
+      font-size: 13px;
+      color: #222;
+    }
+
+    .scanner-message--hidden {
+      display: none;
+    }
+
+    /* Variante info (scan réussi, ajout panier, chargement, etc.) */
+    .scanner-message--info {
+      border-color: #C8E6C9;
+      background: #E8F5E9;
+      color: #1B5E20;
+    }
+
+    /* Variante erreur (produit introuvable, problème réseau, etc.) */
+    .scanner-message--error {
+      border-color: #FFD6D6;
+      background: #FFF3F3;
+      color: #7A1A1A;
+    }
+
+    .pill{ display:inline-block;padding:4px 8px;border-radius:999px;background:var(--orange);color:#111;font-weight:600 }
+    .hint{ font-size:12px;color:#555 }
+    .footer{ margin-top:10px;font-size:12px;color:#666;display:flex;justify-content:space-between }
+
+    /* Encart CO2 */
+    .co2-card{
+      margin-top:12px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid #e0e0e0;
+      background:#fafafa;
+      font-size:13px;
+    }
+    .co2-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:6px;
+      font-weight:600;
+      color:#062909;
+    }
+    .co2-badge{
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #C8E6C9;
+      background:#E8F5E9;
+      font-size:11px;
+      font-weight:600;
+    }
+    .co2-empty{
+      font-size:12px;
+      color:#555;
+    }
+    .co2-main{
+      font-size:16px;
+      font-weight:700;
+      margin:4px 0 2px;
+    }
+    .co2-main span.co2-total{
+      font-variant-numeric:tabular-nums;
+    }
+    .co2-sub{
+      font-size:11px;
+      color:#666;
+      margin-bottom:4px;
+    }
+    .co2-list{
+      list-style:none;
+      padding:0;
+      margin:6px 0 0;
+      font-size:12px;
+      color:#333;
+    }
+    .co2-list li{
+      display:flex;
+      justify-content:space-between;
+      gap:6px;
+    }
+    .co2-label{
+      opacity:.8;
+    }
+    .co2-value{
+      font-variant-numeric:tabular-nums;
+      font-weight:600;
+    }
+    .hidden{
+      display:none !important;
+    }
+
+    /* ==== code test ==== */
+   .co2-cart-item-header{
+    display: flex;
+   }
+   .co2-cart-item-header-right{
+    padding: 1px;
+   }
+      .co2-cart-qty-badge {
+            padding: 4px 8px;
+          }
+
+     .co2-cart-remove-x {
+            padding: 2px 8px;
+            font-size: 14px;     /* beau X */
+            line-height: 1;
+          }
+
+           .co2-cart-name{
+            width: 200px;
+           }
+      
+/* =========================
+   PANIER CO₂ – CONTAINER
+   ========================= */
+
+#co2-cart {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* =========================
+   CERcles – RÉSUMÉ CO₂
+   ========================= */
+
+.co2-circles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+/*
+.co2-circle {
+  background: #f7f9fb;
+  border-radius: 14px; 
+  padding: 14px 10px;
+  text-align: center;
+  border: 1px solid #eef1f4;
+}
+*/
+.co2-circle-title {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.co2-circle-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #062909; /* vert Honoua */
+}
+
+
+/* =========================
+   LISTE PRODUITS PANIER
+   ========================= */
+
+#co2-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.co2-cart-item {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid #eef1f4;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.co2-cart-item:hover {
+  background: #f9fafb;
+  transform: translateY(-1px);
+}
+
+
+/* =========================
+   Ligne titre + quantité + bouton X
+   ========================= */
+
+.co2-cart-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.co2-cart-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.co2-cart-item-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.co2-cart-qty-badge {
+  background: #eef1f4;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.co2-cart-remove-x {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.co2-cart-remove-x:hover {
+  color: #dc2626;
+}
+
+/* =========================
+   Ligne CO₂ + distance
+   ========================= */
+
+.co2-cart-item-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.co2-cart-info {
+  white-space: nowrap;
+}
+
+/* =========================
+   RÉSUMÉ TEXTE PANIER
+   ========================= */
+
+#co2-cart-total-items,
+#co2-cart-distinct-products,
+#co2-cart-total-co2 {
+  font-size: 13px;
+  color: #374151;
+  margin-top: 6px;
+}
+
+/* =========================
+   Animation légère du cercle CO₂ total
+   ========================= */
+
+.co2-circle--animate {
+  animation: pulseCo2 0.6s ease-out;
+}
+
+@keyframes pulseCo2 {
+  from {
+    transform: scale(1.96);
+    background-color: #e6f4ea;
+  }
+  to {
+    transform: scale(1);
+    background-color: #f7f9fb;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>Scanner un produit</h1>
+          <div class="sub">Autorisez la caméra. Sur mobile, l’app sélectionnera l’objectif arrière.</div>
+        </div>
+      </div>
+
+      <div id="scanner-message" class="scanner-message scanner-message--hidden">
+        <!-- Message système affiché ici par JavaScript -->
+      </div>
+
+      <div class="video-wrap">
+        <video id="preview" playsinline autoplay muted></video>
+        <div class="reticle" aria-hidden="true"><div class="box"></div></div>
+      </div>
+
+      <div class="row">
+        <label for="cameras" class="status">Caméra :</label>
+        <select id="cameras" aria-label="Sélectionner la caméra"></select>
+        <button id="btnStart" class="primary">Autoriser caméra</button>
+        <button id="btnReset" class="ghost">Reset</button>
+        <button id="btnTorch" class="warn" disabled>Lampe</button>
+      </div>
+
+      <div class="row">
+        <label for="eanInput" class="status">Test manuel :</label>
+        <input id="eanInput" type="text" inputmode="numeric" pattern="[0-9]*"
+               placeholder="Entrer un EAN (ex : 3017620422003)"
+               style="flex:1;min-width:160px;padding:10px 12px;border-radius:12px;border:1px solid #ddd;font-size:14px" />
+        <button id="btnTestEan" class="ghost">Tester l’EAN</button>
+      </div>
+
+      <div class="row status">
+        <span id="stateBadge" class="badge off">Arrêté</span>
+        <span id="state">En attente d’autorisation…</span>
+        <span id="secure" class="pill" title="getUserMedia fonctionne sur localhost ou HTTPS">HTTPS/localhost</span>
+      </div>
+
+      <!-- Encart CO2 -->
+      <div id="co2Card" class="co2-card" aria-live="polite">
+        <div class="co2-header">
+          <span>Empreinte CO₂ du produit</span>
+          <span id="co2Badge" class="co2-badge">En attente de scan</span>
+        </div>
+
+        <!-- État vide / avant scan -->
+        <div id="co2Empty" class="co2-empty">
+          Scannez un code-barres pour afficher l’empreinte CO₂ (production, emballage, transport).
+        </div>
+
+        <!-- Contenu quand le produit est trouvé -->
+        <div id="co2Content" class="hidden">
+          <!-- Ligne de résumé sur une seule ligne -->
+          <div class="co2-product-summary">
+            <div class="co2-summary-row">
+              <!-- Nom du produit -->
+              <div class="co2-summary-left">
+                <span id="co2ProductLabel" class="co2-summary-name">
+                  Nom du produit
+                </span>
+              </div>
+
+              <!-- Total CO2 -->
+              <div class="co2-summary-center">
+                <span id="co2Total" class="co2-summary-total">
+                  0.0 kg CO₂
+                </span>
+              </div>
+
+              <!-- Origine + Emballage + icône info -->
+              <div class="co2-summary-right">
+                <div class="co2-summary-meta">
+                  <span id="co2Origin" class="co2-summary-origin">
+                    Origine – distance
+                  </span>
+                  <span id="co2PackageLabel" class="co2-summary-package">
+                    Type d’emballage
+                  </span>
+                </div>
+                <button id="co2SummaryInfoBtn"
+                        class="co2-summary-info-btn"
+                        type="button"
+                        aria-label="Voir la fiche détaillée du produit">
+                  ⓘ
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Détails (cachés par défaut) -->
+          <div id="co2Details" class="co2-details hidden">
+            <!-- A. En-tête fiche produit -->
+            <div class="co2-details-header">
+              <div id="co2DetailsProductName" class="co2-details-name">
+                Nom du produit
+              </div>
+
+              <div class="co2-details-total-line">
+                <span class="co2-details-total-label">Émission totale</span>
+                <span id="co2DetailsTotal" class="co2-details-total-value">
+                  0.0 kg CO₂
+                </span>
+              </div>
+
+              <div class="co2-details-reliability">
+                <span id="co2ReliabilityIcon" class="co2-reliability-icon">⚪</span>
+                <span id="co2ReliabilityLabel" class="co2-reliability-label">
+                  Fiabilité inconnue
+                </span>
+              </div>
+            </div>
+
+            <!-- B. Détail CO2 : production / emballage / transport -->
+            <div class="co2-details-co2breakdown">
+              <ul class="co2-list">
+                <li>
+                  <span class="co2-label">Production</span>
+                  <span id="co2Prod" class="co2-value">0.0</span>
+                </li>
+                <li>
+                  <span class="co2-label">Emballage</span>
+                  <span id="co2Pack" class="co2-value">0.0</span>
+                </li>
+                <li>
+                  <span class="co2-label">Transport</span>
+                  <span id="co2Trans" class="co2-value">0.0</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- C. Infos logistiques : distance, origine, emballage -->
+            <div class="co2-details-meta">
+              <div id="co2DetailsDistance" class="co2-details-meta-item">
+                Distance : 0 km
+              </div>
+
+              <div id="co2DetailsOrigin" class="co2-details-meta-item">
+                Origine : -
+              </div>
+
+              <div id="co2DetailsPackage" class="co2-details-meta-item">
+                Type d’emballage : -
+              </div>
+            </div>
+
+            <!-- D. Indication "jours d'arbre" -->
+            <div id="co2TreeCapture" class="co2-sub">
+              Un arbre mettrait environ XX jours pour capter les émissions de ce produit.
+            </div>
+
+            <!-- E. Remarque du fabricant -->
+            <div id="co2ManufacturerNote" class="co2-manufacturer-note">
+              Remarque du fabricant : fonctionnalité en construction.
+            </div>
+          </div><!-- /#co2Details -->
+        </div><!-- /#co2Content -->
+      </div><!-- /#co2Card -->
+
+      <!-- SECTION COMPARATEUR CO₂ (EcoSELECT) -->
+      <section id="eco-select" class="eco-select">
+        <div class="eco-select-header">
+          <h2>Comparer les produits</h2>
+
+          <div class="eco-select-sort">
+            <button id="sort-by-co2" class="eco-sort-btn eco-sort-btn-active">
+              CO₂
+            </button>
+            <button id="sort-by-distance" class="eco-sort-btn">
+              Distance
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages dynamiques (erreurs, info, limite 10, etc.) -->
+        <div id="eco-select-message" class="eco-select-message"></div>
+
+        <!-- Liste des produits scannés -->
+        <div id="eco-select-list" class="eco-select-list">
+          <!-- Les lignes produits seront insérées ici par eco-select.js -->
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+ <!-- FOOTER / MENU PRINCIPAL -->
+<footer class="honoua-footer-nav">
+  <button class="honoua-footer-nav__item" data-page="home" type="button">
+    <span class="honoua-footer-nav__icon">🏠</span>
+    <span class="honoua-footer-nav__label">Accueil</span>
+  </button>
+
+  <button class="honoua-footer-nav__item is-active"data-page="eco" type="button">
+    <span class="honoua-footer-nav__icon">⛶</span>
+    <span class="honoua-footer-nav__label">EcoSelect</span>
+  </button>
+
+  <button class="honoua-footer-nav__item" data-page="scan" type="button">
+    <span class="honoua-footer-nav__icon">🛒</span>
+    <span class="honoua-footer-nav__label">ScanImpact</span>
+  </button>
+
+  <button class="honoua-footer-nav__item" data-page="suivi" type="button">
+    <span class="honoua-footer-nav__icon">📊</span>
+    <span class="honoua-footer-nav__label">Suivi CO₂</span>
+  </button>
+</footer>
+<script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+<script src="js/honoua-core.js"></script>
+<script src="js/eco-select.js"></script>
+<script src="js/nav.js"></script>
+</body>
+
+</html>
