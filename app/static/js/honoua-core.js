@@ -1,4 +1,4 @@
- 
+
 
 (async () => {
   const $video = document.getElementById('preview');
@@ -4392,4 +4392,4 @@ window.addEventListener("load", () => {
   };
 })();
 
-
+console.log("Bonjour exercution terminer");
