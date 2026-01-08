@@ -1,5 +1,3 @@
-
-
 (async () => {
   const $video = document.getElementById('preview');
   const $cams  = document.getElementById('cameras');
@@ -183,6 +181,35 @@
 
   let torchSupported = false;
   let torchOn = false;
+
+  async function detectTorchSupport(track){
+  torchSupported = false;
+  torchOn = false;
+
+  try {
+    if ($torch) {
+      $torch.disabled = true;
+      $torch.classList.remove('torch-on');
+      $torch.textContent = 'Lampe';
+    }
+  } catch (_) {}
+
+  try {
+    if (!track || !track.getCapabilities) return false;
+    const caps = track.getCapabilities();
+    torchSupported = !!caps.torch;
+
+    try { if ($torch) $torch.disabled = !torchSupported; } catch (_) {}
+    return torchSupported;
+  } catch (_) {
+    torchSupported = false;
+    try { if ($torch) $torch.disabled = true; } catch (_) {}
+    return false;
+  }
+}
+
+
+
   let lastChallengeAutoEval = 0;
 
   // --- ZXing (EAN/Code-barres) : iPhone stable ---
@@ -202,103 +229,57 @@
     __lastZxingText = '';
     __lastZxingAt = 0;
   }
+   
+   async function startZXingFromStream(stream) {
+  // iOS SAFE MODE
+  // Do NOT use decodeFromStream (can trigger cleanVideoSource / aborted play on iOS)
 
-  async function startZXingFromStream(stream) {
-  // Selon la build UMD, le global peut être ZXingBrowser ou ZXing
-  const ZX = window.ZXingBrowser || window.ZXing;
-
-  // Diagnostics UI (visible sur iPhone)
-  let loops = 0;
-  let detected = 0;
-  let startedAt = Date.now();
-  let watchdogTimer = null;
-
-  function ui(msg, ok) {
-    try {
-      if (typeof setStatus === 'function') setStatus(msg, !!ok);
-    } catch (_) {}
-    try {
-      if ($badge) $badge.textContent = ok ? "OK" : "KO";
-    } catch (_) {}
+  const video = document.getElementById('preview');
+  if (!video) {
+    throw new Error('Missing <video id="preview">');
   }
 
-  if (!ZX) {
-    console.warn('[ZXing] Global ZXing introuvable. Script UMD non chargé ou bloqué.');
-    ui("ZXing: NON CHARGÉ", false);
-    try { showScannerError("Lecteur EAN non chargé (ZXing). Vérifie le script ZXing dans la page."); } catch(_) {}
-    return;
-  }
+  // Bind stream to the video element (stable path)
+  video.srcObject = stream;
+  video.setAttribute('playsinline', '');
+  video.muted = true;
 
-  if (!$video || !stream) {
-    ui("ZXing: vidéo/stream manquant", false);
-    return;
-  }
-
-  stopZXing();
-
-  // Hints (EAN/UPC) + TRY_HARDER
-  const hints = new Map();
   try {
-    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
-      ZX.BarcodeFormat.EAN_13,
-      ZX.BarcodeFormat.EAN_8,
-      ZX.BarcodeFormat.UPC_A,
-      ZX.BarcodeFormat.UPC_E,
-      ZX.BarcodeFormat.CODE_128
-    ]);
-  } catch (_) {}
+    await video.play();
+  } catch (e) {
+    // iOS may still play while throwing; do not hard-fail
+    console.warn('[Scan] video.play() warning:', e);
+  }
 
-  // timeBetweenScansMs : laisse l’autofocus iPhone travailler
-  __zxingReader = new ZX.BrowserMultiFormatReader(hints, 250);
+  // Reuse a singleton reader to avoid multiple concurrent decoders
+  if (!window.__HONOUA_ZXING_READER__) {
+    window.__HONOUA_ZXING_READER__ = new ZXingBrowser.BrowserMultiFormatReader();
+  }
+  const reader = window.__HONOUA_ZXING_READER__;
 
-  // Affiche la résolution réelle (crucial sur iPhone)
-  ui(`ZXing: démarrage (${ $video.videoWidth }x${ $video.videoHeight })`, true);
+  // Decode from the VIDEO ELEMENT (not from stream)
+  reader.decodeFromVideoElement(video, (result, err) => {
+    if (result && result.text) {
+      const ean = String(result.text).trim();
+      if (!ean) return;
 
-  // Watchdog : si aucune détection après 8s, on le dit clairement
-  watchdogTimer = setTimeout(() => {
-    if (detected === 0) {
-      ui(`ZXing: 0 détection (8s) (${ $video.videoWidth }x${ $video.videoHeight })`, false);
-      try { showScannerError("Aucune détection EAN. Approche le code-barres, évite les reflets, et vérifie que l'image est nette."); } catch(_) {}
-    }
-  }, 8000);
+      console.log('[Scan OK]', ean);
 
-  __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
-    try {
-      loops++;
-
-      // Heartbeat UI (toutes les ~2s environ)
-      if (loops % 8 === 0) {
-        ui(`ZXing: actif (${detected}) (${ $video.videoWidth }x${ $video.videoHeight })`, true);
+      // Stop camera immediately for iOS stability
+      if (typeof stopStream === 'function') {
+        stopStream();
       }
 
-      if (result && result.getText) {
-        const text = String(result.getText()).trim();
-        const now = Date.now();
-
-        if (!text) return;
-        if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
-
-        __lastZxingText = text;
-        __lastZxingAt = now;
-        detected++;
-
-        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
-
-        ui(`ZXing: détecté ${text}`, true);
-        console.info('[ZXing] code détecté:', text);
-
-        if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
+      // Continue normal flow
+      if (typeof handleEAN === 'function') {
+        handleEAN(ean);
       }
-    } catch (e) {
-      console.warn('[ZXing] callback error:', e);
     }
   });
 }
 
-
- 
-    // === Localisation utilisateur (GPS) ===
+  
+  // === Localisation utilisateur (GPS) ===
   // === Localisation utilisateur (GPS) ===
   const userLocation = {
     lat: null,
@@ -535,6 +516,7 @@ function showScannerError(text, persistent = false) {
     });
   }
 
+
   // === Affichage / masquage de la fiche produit CO₂ ===
   if ($co2SummaryInfoBtn && $co2Details) {
     $co2SummaryInfoBtn.addEventListener('click', () => {
@@ -549,6 +531,10 @@ function showScannerError(text, persistent = false) {
       }
     });
   }
+
+
+
+
 
 
   function setCo2Waiting(){
@@ -1046,7 +1032,7 @@ async function startWith(deviceId){
 
         // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
        // iPhone : tenter Quagga2 en priorité, mais NE PAS bloquer si Quagga échoue
-    if (isIphoneIOS() && window.Quagga) {
+    if (false && isIphoneIOS() && window.Quagga) {
       setStatus('Caméra active', true);
 
       const ok = await startQuaggaInTarget();
@@ -1150,6 +1136,8 @@ async function startWith(deviceId){
 
     // IMPORTANT iPhone : attendre les dimensions réelles de la vidéo avant ZXing
     await waitForVideoReady($video, 3000);
+    await startZXingFromStream(stream);
+
 
     currentTrack = stream.getVideoTracks()[0] || null;
     setStatus('Caméra active', true);
@@ -1171,11 +1159,8 @@ async function startWith(deviceId){
     await startZXingFromStream(stream);
 
 
-  } catch(e) {
-    setStatus('Erreur ou refus caméra', false);
-      } catch(e) {
+      } catch (e) {
     console.warn('[Scan] startWith error:', e);
-
     setStatus('Erreur ou refus caméra', false);
 
     const name = (e && e.name) ? e.name : '';
@@ -1190,10 +1175,8 @@ async function startWith(deviceId){
     }
   }
 
-  }
-}
-
-    if ($start) {
+ 
+   } if ($start) {
     $start.onclick = async () => {
       try {
         const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -1228,9 +1211,8 @@ async function startWith(deviceId){
    if(!('mediaDevices' in navigator)){
   setStatus('API média non supportée', false);
   showScannerError("Caméra non supportée sur cet appareil.");
+  return;
    }
-
-  })();
 
    // Fallback global pour être sûr que handleEanDetected existe
   window.handleEanDetected = function(ean){
@@ -4392,4 +4374,25 @@ window.addEventListener("load", () => {
   };
 })();
 
-console.log("Bonjour exercution terminer");
+document.addEventListener('DOMContentLoaded', () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('[Scanner] getUserMedia indisponible');
+    // si tu as une fonction d’erreur existante :
+    // showScannerError("Votre navigateur ne supporte pas l'accès à la caméra.", true);
+    return;
+  }
+
+  const isSecure =
+    location.protocol === 'https:' ||
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1';
+
+  if (!isSecure) {
+    console.warn('[Scanner] Contexte non sécurisé (HTTPS requis hors localhost)');
+  }
+});
+
+})();
+
+
+
