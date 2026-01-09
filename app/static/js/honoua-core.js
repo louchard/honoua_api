@@ -222,6 +222,11 @@ console.log("[Honoua] build: 2026-01-09-H002");
   let __lastZxingText = '';
   let __lastZxingAt = 0;
 
+  let __stableEan = '';
+  let __stableHits = 0;
+  let __stableAt = 0;
+
+
   function stopZXing() {
     try { if (__zxingControls && typeof __zxingControls.stop === 'function') __zxingControls.stop(); } catch (_) {}
     __zxingControls = null;
@@ -231,6 +236,11 @@ console.log("[Honoua] build: 2026-01-09-H002");
 
     __lastZxingText = '';
     __lastZxingAt = 0;
+
+    __stableEan = '';
+    __stableHits = 0;
+    __stableAt = 0;
+
   }
    
    async function startZXingFromStream(stream) {
@@ -262,11 +272,43 @@ console.log("[Honoua] build: 2026-01-09-H002");
 
   // Decode from the VIDEO ELEMENT (not from stream)
   reader.decodeFromVideoElement(video, (result, err) => {
-    if (result && result.text) {
-      const ean = String(result.text).trim();
-      if (!ean) return;
+  // 1) Erreurs attendues en scan continu : ne pas fermer la caméra
+  if ((!result || !result.text) && err) {
+    const name = err?.name || err?.constructor?.name || '';
 
-      console.log('[Scan OK]', ean);
+    // NotFound/Format/Checksum = normal tant qu’on n’a pas de code net
+    if (name.includes('NotFound') || name.includes('Checksum') || name.includes('Format')) {
+      return;
+    }
+
+    // Autres erreurs : on log, mais on ne casse pas le scan
+    console.warn('[ZXing] non-fatal err:', name);
+    return;
+  }
+
+  if (result && result.text) {
+    const ean = String(result.text).trim();
+    if (!ean) return;
+
+    // Filtre anti faux-positifs : EAN-8 (8), UPC-A (12), EAN-13 (13), EAN-14 (14)
+    if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(ean)) return;
+
+    // 2) Stabilisation iOS : exiger 2 détections identiques rapprochées
+    const now = Date.now();
+    if (__stableEan === ean && (now - __stableAt) < 900) {
+      __stableHits += 1;
+    } else {
+      __stableEan = ean;
+      __stableHits = 1;
+    }
+    __stableAt = now;
+
+    if (__stableHits < 2) return;
+
+    console.log('[Scan OK]', ean);
+
+    // Verrou anti double-détection (iOS: évite les callbacks multiples)
+
 
       // Stop camera immediately for iOS stability
       if (typeof stopStream === 'function') {
@@ -281,8 +323,6 @@ console.log("[Honoua] build: 2026-01-09-H002");
   });
 }
 
-  
-  // === Localisation utilisateur (GPS) ===
   // === Localisation utilisateur (GPS) ===
   const userLocation = {
     lat: null,
