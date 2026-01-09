@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="honoua-api-base" content="/api">
   <title>Honoua — Scanner</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -361,7 +363,7 @@
         <video id="preview" playsinline autoplay muted></video>
         <div class="reticle" aria-hidden="true"><div class="box"></div></div>
       </div>
-      <!--
+      
       <div class="row">
         <label for="cameras" class="status">Caméra :</label>
         <select id="cameras" aria-label="Sélectionner la caméra"></select>
@@ -369,8 +371,8 @@
         <button id="btnReset" class="ghost">Reset</button>
         <button id="btnTorch" class="warn" disabled>Lampe</button>
       </div>
-      -->
-      <!--
+      
+      
       <div class="row">
         <label for="eanInput" class="status"> Ajout manuel :</label>
         <input id="eanInput" type="text" inputmode="numeric" pattern="[0-9]*"
@@ -385,7 +387,7 @@
         <span id="secure" class="pill" title="getUserMedia fonctionne sur localhost ou HTTPS">HTTPS/localhost</span>
       </div>
 
-      -->
+      
 
       <!-- Encart CO2 -->
       <div id="co2Card" class="co2-card" aria-live="polite">
