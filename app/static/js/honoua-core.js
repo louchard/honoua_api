@@ -228,6 +228,12 @@ console.log("[Honoua] build: 2026-01-09-H002");
 
 
   function stopZXing() {
+    // Reset du reader réellement utilisé (singleton global)
+try {
+    const r = window.__HONOUA_ZXING_READER__;
+        if (r && typeof r.reset === 'function') r.reset();
+      } catch (_) {}
+
     try { if (__zxingControls && typeof __zxingControls.stop === 'function') __zxingControls.stop(); } catch (_) {}
     __zxingControls = null;
 
@@ -269,6 +275,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
     window.__HONOUA_ZXING_READER__ = new ZXingBrowser.BrowserMultiFormatReader();
   }
   const reader = window.__HONOUA_ZXING_READER__;
+  __zxingReader = reader; // IMPORTANT: stopZXing() resettera le bon reader
 
   // Decode from the VIDEO ELEMENT (not from stream)
   reader.decodeFromVideoElement(video, (result, err) => {
@@ -292,6 +299,9 @@ console.log("[Honoua] build: 2026-01-09-H002");
 
     // Filtre anti faux-positifs : EAN-8 (8), UPC-A (12), EAN-13 (13), EAN-14 (14)
     if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(ean)) return;
+    
+    // Checksum GTIN : bloque les faux positifs (très fréquent sur iPhone)
+    if (!isValidGTIN(ean)) return;
 
     // 2) Stabilisation iOS : exiger 2 détections identiques rapprochées
     const now = Date.now();
@@ -321,6 +331,25 @@ console.log("[Honoua] build: 2026-01-09-H002");
       }
     }
   });
+}
+
+
+     function isValidGTIN(code) {
+  if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(code)) return false;
+
+  const len = code.length;
+  let sum = 0;
+
+  // On calcule sur tous les digits sauf le dernier (check digit), en partant de la droite
+  for (let i = 0; i < len - 1; i++) {
+    const digit = code.charCodeAt((len - 2) - i) - 48; // de droite vers gauche
+    const weight = (i % 2 === 0) ? 3 : 1;            // alternance 3,1,3,1...
+    sum += digit * weight;
+  }
+
+  const check = (10 - (sum % 10)) % 10;
+  const last = code.charCodeAt(len - 1) - 48;
+  return check === last;
 }
 
   // === Localisation utilisateur (GPS) ===
@@ -954,7 +983,20 @@ if (typeof data.co2_kg_total === "number") {
       currentStream.getTracks().forEach(t=>t.stop());
       currentStream=null; currentTrack=null;
     }
-    $video.srcObject=null;
+    // iOS: éviter écran noir brutal -> on garde la dernière frame
+  try { $video.pause(); } catch (_) {}
+  
+
+  // iOS: éviter écran noir brutal -> on pause et on libère le flux avec un léger délai
+  try { $video.pause(); } catch (_) {}
+
+  const _old = $video.srcObject;
+  // NE PAS faire srcObject=null tout de suite (sinon écran noir immédiat sur iOS)
+  setTimeout(() => {
+    try { $video.srcObject = null; } catch (_) {}
+  }, 250);
+
+
     $torch.disabled = true; $torch.classList.remove('torch-on'); $torch.textContent='Lampe';
     setStatus('Flux arrÃªtÃ©',false);
 
