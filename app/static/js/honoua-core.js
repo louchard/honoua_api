@@ -299,9 +299,9 @@ try {
     }
 
 
-    // Autres erreurs : on log, mais on ne casse pas le scan
-    console.warn('[ZXing] non-fatal err:', name);
+    // Trop bruyant en scan continu (iOS/Firefox). On ignore.
     return;
+
   }
 
   if (result && result.text) {
@@ -999,10 +999,12 @@ if (typeof data.co2_kg_total === "number") {
     stopZXing();
     stopQuagga();
 
-    if(currentStream){
-      currentStream.getTracks().forEach(t=>t.stop());
-      currentStream=null; currentTrack=null;
-    }
+    // IMPORTANT: sur success, on ne stoppe pas les tracks (évite écran noir iPhone)
+  if (reason !== 'success' && currentStream){
+        currentStream.getTracks().forEach(t=>t.stop());
+        currentStream=null; currentTrack=null;
+      }
+
     // iOS: éviter écran noir brutal -> on garde la dernière frame
   try { $video.pause(); } catch (_) {}
   
