@@ -242,7 +242,7 @@ try {
 
     __lastZxingText = '';
     __lastZxingAt = 0;
-
+   
     __stableEan = '';
     __stableHits = 0;
     __stableAt = 0;
@@ -277,16 +277,24 @@ try {
   const reader = window.__HONOUA_ZXING_READER__;
   __zxingReader = reader; // IMPORTANT: stopZXing() resettera le bon reader
 
+  if (window.__HONOUA_SCAN_LOCK__) return;
+
+
   // Decode from the VIDEO ELEMENT (not from stream)
   reader.decodeFromVideoElement(video, (result, err) => {
   // 1) Erreurs attendues en scan continu : ne pas fermer la caméra
   if ((!result || !result.text) && err) {
     const name = err?.name || err?.constructor?.name || '';
 
-    // NotFound/Format/Checksum = normal tant qu’on n’a pas de code net
-    if (name.includes('NotFound') || name.includes('Checksum') || name.includes('Format')) {
+    if (
+      name.includes('NotFound') ||
+      name.includes('Checksum') ||
+      name.includes('Format') ||
+      name.includes('IndexSizeError')
+    ) {
       return;
     }
+
 
     // Autres erreurs : on log, mais on ne casse pas le scan
     console.warn('[ZXing] non-fatal err:', name);
@@ -315,23 +323,27 @@ try {
 
     if (__stableHits < 2) return;
 
-    console.log('[Scan OK]', ean);
+    // Verrou anti double-détection ...
+      if (window.__HONOUA_SCAN_LOCK__) return;
 
-    // Verrou anti double-détection (iOS: évite les callbacks multiples)
+      window.__HONOUA_SCAN_LOCK__ = true;
 
+        console.log('[Scan OK]', ean);
 
-      // Stop camera immediately for iOS stability
-      if (typeof stopStream === 'function') {
-        stopStream();
-      }
+        // Arrêt propre (et UX moins "crash")
+        if (typeof stopStream === 'function') {
+          stopStream('success'); // <- on ajoute un reason (voir Patch 3)
+        }
 
-      // Continue normal flow
-      if (typeof handleEAN === 'function') {
-        handleEAN(ean);
-      }
+        if (typeof handleEAN === 'function') {
+          handleEAN(ean);
+        }
+        return;
+
     }
   });
 }
+    
 
 
      function isValidGTIN(code) {
@@ -974,7 +986,7 @@ if (typeof data.co2_kg_total === "number") {
     if(on) vibrate(50);
   }
 
-  async function stopStream(){
+   async function stopStream(reason = 'user'){
     // Stop le dÃ©codage EAN si actif
     stopZXing();
     stopQuagga();
@@ -1001,7 +1013,12 @@ if (typeof data.co2_kg_total === "number") {
     setStatus('Flux arrÃªtÃ©',false);
 
      // A55.13 â€” message d'information
-    showScannerInfo("CamÃ©ra arrÃªtÃ©e. Relancez le scanner pour continuer.");
+   if (reason === 'success') {
+      showScannerInfo("EAN détecté. Chargement…", 1200);
+    } else {
+      showScannerInfo("Caméra arrêtée. Relancez le scanner pour continuer.");
+    }
+
 
   }
 
@@ -1011,7 +1028,7 @@ if (typeof data.co2_kg_total === "number") {
     $cams.innerHTML='';
     videos.forEach(d=>{
       const opt=document.createElement('option');
-      opt.value=d.deviceId; opt.textContent=d.label||'CamÃ©ra';
+      opt.value=d.deviceId; opt.textContent=d.label||'Caméra ';
       $cams.appendChild(opt);
     });
     if (videos.length===0) {
@@ -1115,10 +1132,17 @@ async function startWith(deviceId){
   try{
     await stopStream();
 
+        // H-005: reset propre avant un NOUVEAU scan
+    window.__HONOUA_SCAN_LOCK__ = false;
+    __stableEan = '';
+    __stableHits = 0;
+    __stableAt = 0;
+
+
         // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
        // iPhone : tenter Quagga2 en prioritÃ©, mais NE PAS bloquer si Quagga Ã©choue
     if (false && isIphoneIOS() && window.Quagga) {
-      setStatus('CamÃ©ra active', true);
+      setStatus('Caméra active', true);
 
       const ok = await startQuaggaInTarget();
       if (ok) return;
