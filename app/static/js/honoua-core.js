@@ -263,12 +263,7 @@ try {
   video.setAttribute('playsinline', '');
   video.muted = true;
 
-  try {
-    await video.play();
-  } catch (e) {
-    // iOS may still play while throwing; do not hard-fail
-    console.warn('[Scan] video.play() warning:', e);
-  }
+try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exception */ }
 
   // Reuse a singleton reader to avoid multiple concurrent decoders
   if (!window.__HONOUA_ZXING_READER__) {
@@ -333,20 +328,23 @@ try {
 
         console.log('[Scan OK]', ean);
 
-        // Arrêt propre (et UX moins "crash")
-        if (typeof stopStream === 'function') {
-          stopStream('success'); // <- on ajoute un reason (voir Patch 3)
-        }
-
-        if (typeof handleEAN === 'function') {
+        // On traite l’EAN (même chemin que manuel)
+        if (typeof fetchCo2ForEan === 'function') {
+          fetchCo2ForEan(ean);
+        } else if (typeof handleEAN === 'function') {
           handleEAN(ean);
         }
-       // Flux “produit” : même chemin que la saisie manuelle
-      if (typeof fetchCo2ForEan === 'function') {
-        fetchCo2ForEan(ean);
-      }
-      return;
 
+        // IMPORTANT : on NE COUPE PAS la caméra sur iOS (évite écran noir / "crash").
+        // On met juste un cooldown puis on réarme le scan.
+        setTimeout(() => {
+          window.__HONOUA_SCAN_LOCK__ = false;
+          __stableEan = '';
+          __stableHits = 0;
+          __stableAt = 0;
+        }, 1200);
+
+        return;
 
     }
   });
@@ -2095,7 +2093,7 @@ function renderCo2Cart() {
   const $circleAvgDist     = document.getElementById('co2-circle-avg-distance-value');
 
   if (!$list || !$totalItems || !$distinctProducts || !$totalCo2) {
-    console.warn('[Panier CO2] Ã‰lÃ©ments DOM manquants pour le rendu.');
+    //console.warn('[Panier CO2] Ã‰lÃ©ments DOM manquants pour le rendu.');
     return;
   }
 
