@@ -282,6 +282,9 @@ try {
 
   // Decode from the VIDEO ELEMENT (not from stream)
   reader.decodeFromVideoElement(video, (result, err) => {
+  // Après un scan validé, ignorer TOUT (résultats + erreurs) pour éviter spam + instabilité iOS
+  if (window.__HONOUA_SCAN_LOCK__) return;
+
   // 1) Erreurs attendues en scan continu : ne pas fermer la caméra
   if ((!result || !result.text) && err) {
     const name = err?.name || err?.constructor?.name || '';
@@ -338,7 +341,12 @@ try {
         if (typeof handleEAN === 'function') {
           handleEAN(ean);
         }
-        return;
+       // Flux “produit” : même chemin que la saisie manuelle
+      if (typeof fetchCo2ForEan === 'function') {
+        fetchCo2ForEan(ean);
+      }
+      return;
+
 
     }
   });
@@ -1004,9 +1012,12 @@ if (typeof data.co2_kg_total === "number") {
 
   const _old = $video.srcObject;
   // NE PAS faire srcObject=null tout de suite (sinon écran noir immédiat sur iOS)
+  if (reason !== 'success') {
   setTimeout(() => {
     try { $video.srcObject = null; } catch (_) {}
   }, 250);
+}
+// Sur succès : on ne null pas srcObject => évite écran noir (frame figée)
 
 
     $torch.disabled = true; $torch.classList.remove('torch-on'); $torch.textContent='Lampe';
@@ -1016,7 +1027,12 @@ if (typeof data.co2_kg_total === "number") {
    if (reason === 'success') {
       showScannerInfo("EAN détecté. Chargement…", 1200);
     } else {
-      showScannerInfo("Caméra arrêtée. Relancez le scanner pour continuer.");
+      if (reason === 'success') {
+          showScannerInfo("EAN détecté. Chargement…", 1200);
+        } else {
+          showScannerInfo("Caméra arrêtée. Relancez le scanner pour continuer.");
+        }
+
     }
 
 
