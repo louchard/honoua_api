@@ -225,6 +225,10 @@ console.log("[Honoua] build: 2026-01-09-H002");
   let __stableEan = '';
   let __stableHits = 0;
   let __stableAt = 0;
+  // H-007: anti-répétition (évite ajout en boucle si l’EAN reste dans le champ)
+  let __lastAcceptedEan = '';
+  let __lastAcceptedAt = 0;
+
 
 
   function stopZXing() {
@@ -320,6 +324,13 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
     __stableAt = now;
 
     if (__stableHits < 2) return;
+
+    // H-007: anti-répétition "même EAN" sur une courte fenêtre
+      const t = Date.now();
+      if (ean === __lastAcceptedEan && (t - __lastAcceptedAt) < 3500) return;
+      __lastAcceptedEan = ean;
+      __lastAcceptedAt = t;
+
 
     // Verrou anti double-détection ...
       if (window.__HONOUA_SCAN_LOCK__) return;
