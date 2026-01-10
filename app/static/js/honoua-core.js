@@ -334,10 +334,8 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
 
     // Verrou anti double-détection ...
       if (window.__HONOUA_SCAN_LOCK__) return;
-
       window.__HONOUA_SCAN_LOCK__ = true;
-
-        console.log('[Scan OK]', ean);
+      console.log('[Scan OK]', ean);
 
         // On traite l’EAN (même chemin que manuel)
         if (typeof fetchCo2ForEan === 'function') {
