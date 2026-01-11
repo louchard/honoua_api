@@ -761,7 +761,7 @@ function showScannerError(text, persistent = false) {
         icon = '🟡';
         text = 'Fiabilité moyenne';
       } else if (level === 'faible') {
-        icon = 'ðŸŸ ';
+        icon = '🔴';
         text = 'Fiabilité faible';
       }
 
@@ -4224,7 +4224,7 @@ console.log("[Défis CO2][MVP] script inline chargé");
 const PERSONAL_CHALLENGES_MVP = [
   {
     id: "reduce_10_percent_30_days",
-    icon: "ðŸ†",
+    icon: "🆙",
     name: "Réduire ton CO₂ de 10 % sur 30 jours",
     status: "en_cours",
     progressPct: 63,
@@ -4232,11 +4232,11 @@ const PERSONAL_CHALLENGES_MVP = [
   },
   {
     id: "local_week",
-    icon: "ðŸŒ",
+    icon: "🅲",
     name: "Une semaine 100 % locale",
     status: "en_cours",
     progressPct: 40,
-    message: "40 % de tes produits sont dÃ©jÃ  locaux cette semaine."
+    message: "40 % de tes produits sont déjà locaux cette semaine."
   },
   {
     id: "short_distance_month",
@@ -4339,7 +4339,7 @@ function buildChallengesFromAgg(agg, trend) {
   return [
     {
       id: "reduce_10_percent_30_days",
-      icon: "ðŸ†",
+      icon: "Co²",
       name: "Réduire ton CO₂ de 10 % (dernier mois vs précédent)",
       status: reduceStatus,
       progressPct: reduceProgress,
@@ -4347,7 +4347,7 @@ function buildChallengesFromAgg(agg, trend) {
     },
     {
       id: "local_week",
-      icon: "ðŸŒ",
+      icon: "🏆",
       name: "Une semaine 100 % locale (Ã  venir)",
       status: localStatus,
       progressPct: localProgress,
@@ -4387,7 +4387,7 @@ function createCo2ChallengeCard(challenge) {
 
   card.innerHTML = `
     <div class="co2-challenge-header">
-      <span class="co2-challenge-icon">${challenge.icon || "ðŸ†"}</span>
+      <span class="co2-challenge-icon">${challenge.icon || "🆙"}</span>
       <span class="co2-challenge-name">
         ${challenge.name || "Défi CO₂"}
       </span>
@@ -4430,6 +4430,23 @@ function renderCo2ChallengesList(challenges) {
     `;
     return;
   }
+
+challenges.forEach((c) => {
+  try {
+    $list.appendChild(createCo2ChallengeCard(c));
+    renderedCount++;
+  } catch (err) {
+    console.error("[Défis CO2] Erreur rendu carte défi:", err, c);
+  }
+});
+
+if (renderedCount === 0) {
+  $list.innerHTML = `
+    <div class="co2-challenge-empty">
+      Impossible d’afficher les défis (erreur front). Recharge la page.
+    </div>
+  `;
+}
 
   challenges.forEach((c) => {
     const card = createCo2ChallengeCard(c);
