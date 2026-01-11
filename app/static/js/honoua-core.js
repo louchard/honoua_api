@@ -1,4 +1,4 @@
-
+﻿
 console.log("[Honoua] build: 2026-01-09-H002");
 
 (async () => {
@@ -2577,7 +2577,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     // 3) Conversion CO₂ total → nombre d’arbres (règle 30 jours = 1 arbre)
 
             // === A52/A53 — Utils arbre (minimal, global) ===
-        // Calibré sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
+        // Calibré sur ton historique: 13,6 kg -> ≈225,6 jours => ≈22 kg/an/arbre
         (function () {
           const TREE_CO2_KG_PER_YEAR = 22; // cohérent avec tes valeurs backend/historique
           const DAYS_PER_YEAR = 365;
@@ -2753,7 +2753,7 @@ if ($recoIntro && $recoList) {
       "Pas assez de données CO₂ unitaires pour proposer des recommandations sur ce panier.";
   } else {
     $recoIntro.textContent =
-      "Voici les produits les moins Ã©missifs et ceux Ã  surveiller dans ce panier.";
+      "Voici les produits les moins émissifs et ceux à surveiller dans ce panier.";
 
     if (topLow && topLow.length) {
       const liTitle = document.createElement('li');
@@ -2770,13 +2770,13 @@ if ($recoIntro && $recoList) {
 
     if (topHigh && topHigh.length) {
       const liTitle = document.createElement('li');
-      liTitle.innerHTML = '<strong>Top Ã  fort impact</strong>';
+      liTitle.innerHTML = '<strong>Top à fort impact</strong>';
       $recoList.appendChild(liTitle);
 
       topHigh.forEach((it) => {
         const li = document.createElement('li');
         li.textContent =
-          `${it.product_name || 'Produit'} â€“ â‰ˆ ${formatNumberFr(Math.round(it.co2_unit_g))} g COâ‚‚e / unitÃ© (Ã  remplacer si possible)`;
+          `${it.product_name || 'Produit'} – ≈ ${formatNumberFr(Math.round(it.co2_unit_g))} g CO₂e / unité (à remplacer si possible)`;
         $recoList.appendChild(li);
       });
     }
@@ -2786,7 +2786,7 @@ if ($recoIntro && $recoList) {
 console.log('[Reco] introEl/listEl:', $recoIntro, $recoList);
 console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
-         // 6) RÃ©partition par catÃ©gories â€“ calcul Ã  partir du panier
+         // 6) RÃ©partition par catÃ©gories – calcul Ã  partir du panier
     if ($catBox) {
        
              // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
@@ -4544,3 +4544,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 })();
+
