@@ -44,24 +44,24 @@ console.log("[Honoua] build: 2026-01-09-H002");
       if (ls) return normalizeBaseUrl(ls);
     } catch (e) {}
 
-    // 4) Par dÃ©faut : PROD
+    // 4) Par défaut : PROD
     return 'https://api.honoua.com';
   })();
 
   // Expose la base API pour debug et pour les autres scripts
   window.HONOUA_API_BASE = HONOUA_API_BASE;
 
-  // Endpoints REST utilisÃ©s par le scanner
+  // Endpoints REST utilisés par le scanner
   const CO2_API_BASE = `${HONOUA_API_BASE}/api/v1/co2/product`;
   const CART_HISTORY_ENDPOINT = `${HONOUA_API_BASE}/api/cart/history`;
 
-  // âœ… rend lâ€™endpoint accessible aux autres scripts
+  // ✅ rend l’endpoint accessible aux autres scripts
   window.CART_HISTORY_ENDPOINT = CART_HISTORY_ENDPOINT;
 
 
   
 
-  // === Ã‰lÃ©ments de lâ€™encart COâ‚‚ ===
+  // === Éléments de l’encart CO₂ ===
   const $co2Card         = document.getElementById('co2Card');
   const $co2Badge        = document.getElementById('co2Badge');
   const $co2Empty        = document.getElementById('co2Empty');
@@ -71,7 +71,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
   const $co2Prod         = document.getElementById('co2Prod');
   const $co2Pack         = document.getElementById('co2Pack');
   const $co2Trans        = document.getElementById('co2Trans');
-    // Ã‰lÃ©ments UI pour origine / distance / emballage
+    // Éléments UI pour origine / distance / emballage
   const $co2Origin          = document.getElementById('co2Origin');
   const $co2PackageLabel    = document.getElementById('co2PackageLabel');
   const $co2DetailsDistance = document.getElementById('co2DetailsDistance');
@@ -105,22 +105,22 @@ console.log("[Honoua] build: 2026-01-09-H002");
     } catch(_) {}
     __quaggaRunning = false;
 
-    // RÃ©affiche la vidÃ©o native si on lâ€™avait cachÃ©e
+    // Réaffiche la vidéo native si on l’avait cachée
     try { if ($video) $video.style.display = ''; } catch(_) {}
   }
 
   async function startQuaggaInTarget(){
     const Q = window.Quagga;
     if (!Q) {
-      console.warn('[Quagga] Quagga non chargÃ© (script manquant).');
-      try { showScannerError("Quagga non chargÃ© (script)."); } catch(_) {}
+      console.warn('[Quagga] Quagga non chargé (script manquant).');
+      try { showScannerError("Quagga non chargé (script)."); } catch(_) {}
       return;
     }
 
-    // IMPORTANT : Ã©viter conflits camÃ©ra â†’ stoppe ton stream avant Quagga
+    // IMPORTANT : éviter conflits caméra → stoppe ton stream avant Quagga
     await stopStream(); // stopStream appelle dÃ©jÃ  stopZXing; on va y ajouter stopQuagga plus bas
 
-    // Quagga va crÃ©er son propre flux ; on masque la vidÃ©o native
+    // Quagga va créer son propre flux ; on masque la vidéo native
     try { if ($video) $video.style.display = 'none'; } catch(_) {}
 
     const targetEl = document.querySelector('.video-wrap') || document.body;
@@ -146,14 +146,14 @@ console.log("[Honoua] build: 2026-01-09-H002");
       }, (err) => {
         if (err) {
           console.warn('[Quagga] init error:', err);
-          try { showScannerError("Impossible de dÃ©marrer le scan (Quagga)."); } catch(_) {}
+          try { showScannerError("Impossible de démarrer le scan (Quagga)."); } catch(_) {}
           __quaggaRunning = false;
           return resolve(false);
         }
 
         __quaggaRunning = true;
 
-        // Important : Ã©viter doublons
+        // Important : éviter doublons
         let last = '';
         let lastAt = 0;
 
@@ -171,7 +171,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
               window.handleEanDetected(code);
             }
 
-            // Stoppe aprÃ¨s dÃ©tection (optionnel, mais utile pour Ã©viter â€œrafalesâ€)
+            // Stoppe aprÃ¨s dÃ©tection (optionnel, mais utile pour Ã©viter â€œrafalesâ€)
             stopQuagga();
           } catch(_) {}
         });
@@ -407,19 +407,19 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
           userLocation.status = 'ok';
           userLocation.error = null;
 
-          console.log('[Honoua] Localisation rechargÃ©e depuis localStorage :', saved);
+          console.log('[Honoua] Localisation rechargée depuis localStorage :', saved);
           return; // on a une localisation valide, pas besoin de redemander
         }
       }
     } catch (e) {
-      console.warn('[Honoua] Impossible de relire la localisation sauvegardÃ©e :', e);
+      console.warn('[Honoua] Impossible de relire la localisation sauvegardée :', e);
     }
 
-    // 2) Sinon, tenter une nouvelle gÃ©olocalisation
+    // 2) Sinon, tenter une nouvelle géolocalisation
     if (!('geolocation' in navigator)) {
       userLocation.status = 'unsupported';
-      userLocation.error = 'GÃ©olocalisation non supportÃ©e par ce navigateur.';
-      console.warn('[Honoua] GÃ©olocalisation non supportÃ©e.');
+      userLocation.error = 'Géolocalisation non supportée par ce navigateur.';
+      console.warn('[Honoua] Géolocalisation non supportée.');
       return;
     }
 
@@ -431,12 +431,12 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
         userLocation.status = 'ok';
         userLocation.error = null;
 
-        console.log('[Honoua] Localisation utilisateur capturÃ©e :', {
+        console.log('[Honoua] Localisation utilisateur capturée :', {
           lat: userLocation.lat,
           lon: userLocation.lon
         });
 
-        // âœ… On persiste la localisation pour les autres pages / rechargements
+        // ✅ On persiste la localisation pour les autres pages / rechargements
         try {
           const toStore = {
             lat: userLocation.lat,
@@ -450,8 +450,8 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
       },
       (err) => {
         userLocation.status = 'error';
-        userLocation.error = err && err.message ? err.message : 'Erreur de gÃ©olocalisation.';
-        console.warn('[Honoua] Erreur gÃ©olocalisation :', userLocation.error);
+        userLocation.error = err && err.message ? err.message : 'Erreur de géolocalisation.';
+        console.warn('[Honoua] Erreur géolocalisation :', userLocation.error);
       },
       {
         enableHighAccuracy: true,
@@ -461,14 +461,14 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
     );
   }
 
-  // On lance la tentative de rÃ©cupÃ©ration des coordonnÃ©es dÃ¨s le chargement du scanner
+  // On lance la tentative de récupération des coordonnées dès le chargement du scanner
   initUserLocation();
   
     // === Identifiant utilisateur anonyme (GLOBAL, robuste) ===
   (function ensureHonouaUserIdGlobal() {
     const KEY = 'honoua_user_id';
 
-    // 1) CrÃ©e si absent
+    // 1) Crée si absent
     let id = null;
     try { id = localStorage.getItem(KEY); } catch(e) {}
 
@@ -477,7 +477,7 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
         ? crypto.randomUUID()
         : ('uid_' + Math.random().toString(16).slice(2) + Date.now().toString(16));
       try { localStorage.setItem(KEY, id); } catch(e) {}
-      console.log('[Honoua] user_id crÃ©Ã© :', id);
+      console.log('[Honoua] user_id créé :', id);
     } else {
       console.log('[Honoua] user_id existant :', id);
     }
@@ -494,7 +494,7 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
   })();
 
 
-          // âœ… Alias global sÃ»r (optionnel mais pratique)
+          // ✅ Alias global sûr (optionnel mais pratique)
           // Permet d'appeler getHonouaUserId() sans risquer un ReferenceError
           function getHonouaUserId() {
             return (window.getHonouaUserId ? window.getHonouaUserId() : '');
@@ -502,23 +502,23 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
 
 
 
-  // Messages UX harmonisÃ©s pour le Panier COâ‚‚ et l'historique
+  // Messages UX harmonisés pour le Panier CO₂ et l'historique
 const CART_MESSAGES = {
   emptyCart: "Votre panier est vide. Scannez des produits en mode Panier pour les ajouter.",
-  historyIntro: "Retrouvez ici vos derniers paniers validÃ©s et leur impact carbone.",
-  noValidatedCart: "Aucun panier validÃ© pour le moment. Validez un panier pour afficher votre historique.",
-  addError: "Un problÃ¨me est survenu lors de lâ€™ajout du produit au panier. Veuillez rÃ©essayer."
+  historyIntro: "Retrouvez ici vos derniers paniers validés et leur impact carbone.",
+  noValidatedCart: "Aucun panier validé pour le moment. Validez un panier pour afficher votre historique.",
+  addError: "Un problème est survenu lors de l’ajout du produit au panier. Veuillez réessayer."
 };
 
 // =============================
-// SÃ©curisation des messages Panier COâ‚‚ pour scanner.html
+// Sécurisation des messages Panier CO₂ pour scanner.html
 // =============================
 window.CART_MESSAGES = window.CART_MESSAGES || {
-  EMPTY: "Votre Panier COâ‚‚ est vide. Scannez des produits avant de gÃ©nÃ©rer un rapport.",
-  ERROR: "Erreur lors de lâ€™affichage du Panier COâ‚‚.",
+  EMPTY: "Votre Panier CO₂ est vide. Scannez des produits avant de générer un rapport.",
+  ERROR: "Erreur lors de l’affichage du Panier CO₂.",
 };
 
-  // === A55.9 â€” Gestion unifiÃ©e des messages du scanner ===
+  // === A55.9 — Gestion unifiée des messages du scanner ===
 const $scannerMessage = document.getElementById('scanner-message');
 let scannerMessageTimeout = null;
 
@@ -537,9 +537,9 @@ function hideScannerMessage() {
 }
 
 /**
- * Affiche un message "info" (scan OK, ajout panier, chargementâ€¦)
+ * Affiche un message "info" (scan OK, ajout panier, chargement…)
  * @param {string} text
- * @param {number|null} durationMs DurÃ©e auto-masquage (ou null = permanent)
+ * @param {number|null} durationMs Durée auto-masquage (ou null = permanent)
  */
 function showScannerInfo(text, durationMs = 2500) {
   hideScannerMessage();
@@ -555,9 +555,9 @@ function showScannerInfo(text, durationMs = 2500) {
 }
 
 /**
- * Affiche un message "erreur" (produit introuvable, rÃ©seauâ€¦)
+ * Affiche un message "erreur" (produit introuvable, réseau…)
  * @param {string} text
- * @param {boolean} persistent Si true = ne disparaÃ®t pas automatiquement
+ * @param {boolean} persistent Si true = ne disparaît pas automatiquement
  */
 function showScannerError(text, persistent = false) {
   hideScannerMessage();
@@ -573,13 +573,13 @@ function showScannerError(text, persistent = false) {
 }
 
 
-  // === Helpers COâ‚‚ ===
+  // === Helpers CO₂ ===
   function formatKg(value){
     if (value == null || isNaN(value)) return '0.0';
     return Number(value).toFixed(2);
   }
 
-      // === Test manuel EAN (simplifiÃ©) ===
+      // === Test manuel EAN (simplifié) ===
   function triggerManualEan(){
     if(!$eanInput) return;
 
@@ -592,13 +592,13 @@ function showScannerError(text, persistent = false) {
   }
 
 
-    console.log('[Honoua] triggerManualEan appelÃ© avec :', raw);
+    console.log('[Honoua] triggerManualEan appelé avec :', raw);
 
-    // Appel direct au service COâ‚‚
+    // Appel direct au service CO₂
     if (typeof fetchCo2ForEan === 'function') {
       fetchCo2ForEan(raw);
     } else {
-      console.warn('[Honoua] fetchCo2ForEan nâ€™est pas dÃ©fini');
+      console.warn('[Honoua] fetchCo2ForEan n’est pas défini');
     }
   }
 
@@ -616,7 +616,7 @@ function showScannerError(text, persistent = false) {
   }
 
 
-  // === Affichage / masquage de la fiche produit COâ‚‚ ===
+  // === Affichage / masquage de la fiche produit CO₂ ===
   if ($co2SummaryInfoBtn && $co2Details) {
     $co2SummaryInfoBtn.addEventListener('click', () => {
       const isHidden = $co2Details.classList.contains('hidden');
@@ -639,7 +639,7 @@ function showScannerError(text, persistent = false) {
   function setCo2Waiting(){
     if(!$co2Card) return;
     $co2Badge.textContent = 'En attente de scan';
-    $co2Empty.textContent = 'Scannez un code-barres pour afficher lâ€™empreinte COâ‚‚ (production, emballage, transport).';
+    $co2Empty.textContent = 'Scannez un code-barres pour afficher l’empreinte CO₂ (production, emballage, transport).';
     $co2Empty.classList.remove('hidden');
     $co2Content.classList.add('hidden');
   }
@@ -647,16 +647,16 @@ function showScannerError(text, persistent = false) {
 
   function setCo2Loading(ean){
     if(!$co2Card) return;
-    $co2Badge.textContent = 'Rechercheâ€¦';
-    $co2Empty.textContent = `Code scannÃ© : ${ean} â€” recherche de lâ€™empreinte COâ‚‚â€¦`;
+    $co2Badge.textContent = 'Recherche…';
+    $co2Empty.textContent = `Code scanné : ${ean} — recherche de l’empreinte CO₂…`;
     $co2Empty.classList.remove('hidden');
     $co2Content.classList.add('hidden');
   }
 
   function setCo2Error(message){
     if(!$co2Card) return;
-    $co2Badge.textContent = 'DonnÃ©es indisponibles';
-    $co2Empty.textContent = message || `Nous nâ€™avons pas encore de donnÃ©es COâ‚‚ pour ce produit.`;
+    $co2Badge.textContent = 'Données indisponibles';
+    $co2Empty.textContent = message || `Nous n’avons pas encore de données CO₂ pour ce produit.`;
     $co2Empty.classList.remove('hidden');
     $co2Content.classList.add('hidden');
   }
@@ -670,7 +670,7 @@ function showScannerError(text, persistent = false) {
       carbon_product_kg,
       carbon_pack_kg,
       carbon_transport_kg,
-      // Champs ajoutÃ©s par lâ€™API FastAPI
+      // Champs ajoutés par l’API FastAPI
       origin_country,
       origin_label,
       distance_km,
@@ -678,65 +678,65 @@ function showScannerError(text, persistent = false) {
       reliability_level
     } = payload || {};
 
-    // ====== 1. Affichage COâ‚‚ (comportement actuel) ======
-    $co2Badge.textContent = 'DonnÃ©es COâ‚‚ trouvÃ©es';
+    // ====== 1. Affichage CO₂ (comportement actuel) ======
+    $co2Badge.textContent = 'Données CO₂ trouvées';
     $co2Empty.classList.add('hidden');
     $co2Content.classList.remove('hidden');
 
-    // LibellÃ© produit
+    // Libellé produit
     $co2ProductLabel.textContent = product_name || 'Produit alimentaire';
 
-    // Valeurs COâ‚‚ (total + dÃ©tail prod/pack/transport)
+    // Valeurs CO₂ (total + détail prod/pack/transport)
     $co2Total.textContent = formatKg(carbon_total_kg);
     $co2Prod.textContent  = formatKg(carbon_product_kg);
     $co2Pack.textContent  = formatKg(carbon_pack_kg);
     $co2Trans.textContent = formatKg(carbon_transport_kg);
 
-    // ====== 2. Origine + distance (rÃ©sumÃ© + fiche dÃ©taillÃ©e) ======
-    // Distance arrondie si prÃ©sente
+    // ====== 2. Origine + distance (résumé + fiche détaillée) ======
+    // Distance arrondie si présente
     const distanceKm =
       typeof distance_km === 'number' && isFinite(distance_km)
         ? Math.round(distance_km)
         : null;
 
-    // Texte dâ€™origine : label prioritaire, sinon code pays, sinon gÃ©nÃ©rique
+    // Texte d’origine : label prioritaire, sinon code pays, sinon générique
     const originText =
       (origin_label && String(origin_label).trim()) ||
       (origin_country && String(origin_country).trim()) ||
       'Origine inconnue';
 
-    // Bandeau rÃ©sumÃ© : "France â€¢ 1100 km"
+    // Bandeau résumé : "France • 1100 km"
     if ($co2Origin) {
       const parts = [];
       if (originText) parts.push(originText);
       if (distanceKm !== null) parts.push(`${distanceKm} km`);
 
       $co2Origin.textContent =
-        parts.length > 0 ? parts.join(' â€¢ ') : 'Origine â€“ distance';
+        parts.length > 0 ? parts.join(' • ') : 'Origine – distance';
     }
 
-    // Bloc dÃ©taillÃ© â€“ distance
+    // Bloc détaillé – distance
     if ($co2DetailsDistance) {
       if (distanceKm !== null) {
         $co2DetailsDistance.textContent = `Distance : ${distanceKm} km`;
       } else {
         $co2DetailsDistance.textContent =
-          'Distance : donnÃ©e en cours de calcul';
+          'Distance : donnée en cours de calcul';
       }
     }
 
-    // Bloc dÃ©taillÃ© â€“ origine
+    // Bloc détaillé – origine
     if ($co2DetailsOrigin) {
       $co2DetailsOrigin.textContent = `Origine : ${originText}`;
     }
 
-    // Bloc dÃ©taillÃ© â€“ type dâ€™emballage (placeholder pour lâ€™instant)
+    // Bloc détaillé – type d’emballage (placeholder pour l’instant)
     if ($co2DetailsPackage) {
       $co2DetailsPackage.textContent =
-        'Type dâ€™emballage : fonctionnalitÃ© en construction';
+        'Type d’emballage : fonctionnalité en construction';
     }
 
-    // ====== 3. FiabilitÃ© de la donnÃ©e COâ‚‚ ======
+    // ====== 3. Fiabilité de la donnée CO₂ ======
     if ($co2ReliabilityIcon && $co2ReliabilityLabel) {
       const score = (typeof reliability_score === 'number' && isFinite(reliability_score))
         ? Math.round(reliability_score)
@@ -744,25 +744,25 @@ function showScannerError(text, persistent = false) {
 
       let level = (reliability_level || '').toLowerCase();
 
-      // Si le backend nâ€™envoie pas de level mais envoie un score, on dÃ©duit le niveau
+      // Si le backend n’envoie pas de level mais envoie un score, on déduit le niveau
       if (!level && score !== null) {
-        if (score >= 80)      level = 'Ã©levÃ©e';
+        if (score >= 80)      level = 'élevée';
         else if (score >= 50) level = 'moyenne';
         else                  level = 'faible';
       }
 
-      let icon = 'âšª';
-      let text = 'FiabilitÃ© inconnue';
+      let icon = '⚪';
+      let text = 'Fiabilité inconnue';
 
-      if (level === 'Ã©levÃ©e') {
-        icon = 'ðŸŸ¢';
-        text = 'FiabilitÃ© Ã©levÃ©e';
+      if (level === 'élevée') {
+        icon = '🟢';
+        text = 'Fiabilité élevée';
       } else if (level === 'moyenne') {
-        icon = 'ðŸŸ¡';
-        text = 'FiabilitÃ© moyenne';
+        icon = '🟡';
+        text = 'Fiabilité moyenne';
       } else if (level === 'faible') {
         icon = 'ðŸŸ ';
-        text = 'FiabilitÃ© faible';
+        text = 'Fiabilité faible';
       }
 
       if (score !== null) {
@@ -775,10 +775,10 @@ function showScannerError(text, persistent = false) {
 
     // Etiquette Ã  droite du total
     if ($co2PackageLabel) {
-      $co2PackageLabel.textContent = 'Type dâ€™emballage';
+      $co2PackageLabel.textContent = 'Type d’emballage';
     }
 
-    // ====== 3. Jours dâ€™arbre (inchangÃ©) ======
+    // ====== 3. Jours d’arbre (inchangé) ======
     if ($co2TreeCapture) {
       let text = '';
 
@@ -791,7 +791,7 @@ function showScannerError(text, persistent = false) {
         const days = window.computeDaysTreeCapture(carbon_total_kg);
         const label = window.formatDaysTreeCapture(days);
 
-        text = `Un arbre mettrait environ ${label} pour capter les Ã©missions de ce produit.`;
+        text = `Un arbre mettrait environ ${label} pour capter les émissions de ce produit.`;
       }
 
       $co2TreeCapture.textContent = text;
@@ -803,12 +803,12 @@ function showScannerError(text, persistent = false) {
   if (!ean) return;
 
   setCo2Loading(ean);
-    // A55.10 â€” Message de chargement
-  showScannerInfo("Analyse en coursâ€¦", null);
+    // A55.10 — Message de chargement
+  showScannerInfo("Analyse en cours…", null);
 
 
   try{
-        // Construction de lâ€™URL avec Ã©ventuelles coordonnÃ©es utilisateur
+        // Construction de l’URL avec éventuelles coordonnées utilisateur
     let url = `${CO2_API_BASE}/${encodeURIComponent(ean)}`;
 
     const loc = window.HonouaUserLocation;
@@ -831,10 +831,10 @@ function showScannerError(text, persistent = false) {
     });
 
 
-      // 404 : produit non trouvÃ© â†’ cas mÃ©tier attendu en MVP (ne doit pas casser lâ€™UX)
+      // 404 : produit non trouvé → cas métier attendu en MVP (ne doit pas casser l’UX)
     if (resp.status === 404) {
       console.warn("[CO2 404 HANDLED]", ean);
-      let detail = "Nous nâ€™avons pas encore de donnÃ©es COâ‚‚ pour ce produit.";
+      let detail = "Nous n’avons pas encore de données CO₂ pour ce produit.";
       try {
         const err = await resp.json();
         if (err && typeof err.detail === "string" && err.detail.trim()) {
@@ -859,36 +859,36 @@ function showScannerError(text, persistent = false) {
       }
 
 
-      // Important : on sort sans throw, et on laisse lâ€™app continuer
+      // Important : on sort sans throw, et on laisse l’app continuer
       return null;
     }
 
 
 
-    // Autre erreur HTTP â†’ encart COâ‚‚ uniquement
+    // Autre erreur HTTP → encart CO₂ uniquement
     if (!resp.ok){
-  setCo2Error("Erreur lors de la rÃ©cupÃ©ration des donnÃ©es COâ‚‚.");
-  // A55.10 â€” Message erreur neutre
-  showScannerError("Erreur lors de la rÃ©cupÃ©ration des donnÃ©es COâ‚‚.");
+  setCo2Error("Erreur lors de la récupération des données CO₂.");
+  // A55.10 — Message erreur neutre
+  showScannerError("Erreur lors de la récupération des données CO₂.");
   return;
 }
 
 
     const data = await resp.json();
 
-    // 1ï¸âƒ£ Mise Ã  jour de la carte COâ‚‚ (comportement existant)
+    // 1ï¸âƒ£ Mise Ã  jour de la carte COâ‚‚ (comportement existant)
     renderCo2Result(data);
 
-    // A55.10 â€” Message succÃ¨s
+    // A55.10 — Message succès
 if (typeof data.co2_kg_total === "number") {
-  showScannerInfo(`Scan rÃ©ussi. ${Number(data.co2_kg_total).toFixed(2)} kg COâ‚‚e.`);
+  showScannerInfo(`Scan réussi. ${Number(data.co2_kg_total).toFixed(2)} kg CO₂e.`);
 } else {
-  showScannerInfo("Scan rÃ©ussi.");
+  showScannerInfo("Scan réussi.");
 }
 
-    // 2ï¸âƒ£ Construction de lâ€™objet ecoProduct pour EcoSELECT
+    // 2ï¸âƒ£ Construction de lâ€™objet ecoProduct pour EcoSELECT
     try {
-      // On rÃ©cupÃ¨re le total COâ‚‚ en kg depuis les bons champs de lâ€™API
+      // On récupère le total CO₂ en kg depuis les bons champs de l’API
       let co2TotalKg = null;
       if (typeof data.carbon_total_kg === 'number' && !isNaN(data.carbon_total_kg)) {
         co2TotalKg = data.carbon_total_kg;
@@ -914,7 +914,7 @@ if (typeof data.co2_kg_total === "number") {
         (data.origin_country && String(data.origin_country).trim()) ||
         null;
 
-      // Niveau de fiabilitÃ© (si tu veux lâ€™exploiter dans EcoSELECT plus tard)
+      // Niveau de fiabilité (si tu veux l’exploiter dans EcoSELECT plus tard)
       const reliabilityScore = typeof data.reliability_score === 'number'
         ? data.reliability_score
         : null;
@@ -923,7 +923,7 @@ if (typeof data.co2_kg_total === "number") {
       const ecoProduct = {
         ean: String(ean).trim(),
         label: data.product_name || data.product_label || 'Produit alimentaire',
-        co2Total: co2TotalKg,     // en kg COâ‚‚e
+        co2Total: co2TotalKg,     // en kg CO₂e
         distanceKm: distanceKm,   // en km
         origin: origin,
         hasCo2Data: hasCo2Data,
@@ -931,11 +931,11 @@ if (typeof data.co2_kg_total === "number") {
         reliabilityLevel
       };
 
-      // 3ï¸âƒ£ Envoi Ã  EcoSELECT (si dispo)
+      // 3ï¸âƒ£ Envoi Ã  EcoSELECT (si dispo)
       if (typeof window.ecoSelectAddProduct === 'function') {
         window.ecoSelectAddProduct(ecoProduct);
       } else {
-        console.warn('[Honoua] ecoSelectAddProduct nâ€™est pas disponible.');
+        console.warn('[Honoua] ecoSelectAddProduct n’est pas disponible.');
       }
 
     } catch (err) {
@@ -944,8 +944,8 @@ if (typeof data.co2_kg_total === "number") {
      
 
 
-    // === Panier COâ‚‚ â€“ A51.4 + A51.7 : ajout + rendu ===
-        // === Panier COâ‚‚ â€“ A51.4 + A51.7 : ajout + rendu ===
+    // === Panier CO₂ – A51.4 + A51.7 : ajout + rendu ===
+        // === Panier CO₂ – A51.4 + A51.7 : ajout + rendu ===
     try {
       addToCartFromApiResponse(data, ean);
 
@@ -954,7 +954,7 @@ if (typeof data.co2_kg_total === "number") {
         renderCo2Cart();
       }
 
-      // Logs de contrÃ´le (facultatif, mais utile pour debug)
+      // Logs de contrôle (facultatif, mais utile pour debug)
       const totals = getCartTotals();
       console.log('[Panier CO2] contenu actuel :', co2Cart);
       console.log('[Panier CO2] totaux :', totals);
@@ -962,47 +962,47 @@ if (typeof data.co2_kg_total === "number") {
       console.error(CART_MESSAGES.addError);
     }
 
-        // ðŸ”¥ A54.27 â€“ Auto-Ã©valuation intelligente (au max toutes les 20 secondes)
+        // 🔥 A54.27 – Auto-évaluation intelligente (au max toutes les 20 secondes)
     if (typeof evaluateAllCo2Challenges === 'function') {
       try {
         const now = Date.now();
 
-        // On Ã©vite de spammer l'API : max 1 Ã©valuation toutes les 20s
+        // On évite de spammer l'API : max 1 évaluation toutes les 20s
         if (now - lastChallengeAutoEval > 20000) { // 20 000 ms = 20 secondes
           evaluateAllCo2Challenges(CO2_CHALLENGES_USER_ID);
           lastChallengeAutoEval = now;
         }
       } catch (errEval) {
-        console.error('[DÃ©fis CO2] Erreur lors de lâ€™Ã©valuation auto :', errEval);
+        console.error('[Défis CO2] Erreur lors de l’évaluation auto :', errEval);
       }
     } else {
-      console.warn('[DÃ©fis CO2] evaluateAllCo2Challenges nâ€™est pas disponible.');
+      console.warn('[Défis CO2] evaluateAllCo2Challenges n’est pas disponible.');
     }
 
   }catch(e){
-  setCo2Error("Impossible de joindre le service COâ‚‚.");
-  // A55.10 â€” message erreur rÃ©seau
-  showScannerError("Impossible de joindre le service COâ‚‚.");
+  setCo2Error("Impossible de joindre le service CO₂.");
+  // A55.10 — message erreur réseau
+  showScannerError("Impossible de joindre le service CO₂.");
 }
 
 }
 
 
-  // Ã‰tat initial COâ‚‚
+  // État initial CO₂
   setCo2Waiting();
 
   function vibrate(ms=60){ if(navigator.vibrate) navigator.vibrate(ms); }
 
   function setStatus(text,on=false){
     $state.textContent = text;
-    $badge.textContent = on ? 'Actif' : 'ArrÃªtÃ©';
+    $badge.textContent = on ? 'Actif' : 'Arrêté';
     $badge.className = 'badge ' + (on ? 'ok' : 'off');
     $reticle.classList.toggle('active', on);
     if(on) vibrate(50);
   }
 
    async function stopStream(reason = 'user'){
-    // Stop le dÃ©codage EAN si actif
+    // Stop le décodage EAN si actif
     stopZXing();
     stopQuagga();
 
@@ -1030,9 +1030,9 @@ if (typeof data.co2_kg_total === "number") {
 
 
     $torch.disabled = true; $torch.classList.remove('torch-on'); $torch.textContent='Lampe';
-    setStatus('Flux arrÃªtÃ©',false);
+    setStatus('Flux arrêté',false);
 
-     // A55.13 â€” message d'information
+     // A55.13 — message d'information
    if (reason === 'success') {
       showScannerInfo("EAN détecté. Chargement…", 1200);
     } else {
@@ -1057,8 +1057,8 @@ if (typeof data.co2_kg_total === "number") {
       $cams.appendChild(opt);
     });
     if (videos.length===0) {
-  setStatus('Aucune camÃ©ra dÃ©tectÃ©e', false);
-  showScannerError("Aucune camÃ©ra dÃ©tectÃ©e. VÃ©rifiez votre appareil.");
+  setStatus('Aucune caméra détectée', false);
+  showScannerError("Aucune caméra détectée. Vérifiez votre appareil.");
     return videos;
   }
 }
@@ -1069,14 +1069,14 @@ if (typeof data.co2_kg_total === "number") {
   // 1) Heuristique iOS/Android : "back", "rear", "environment"
   const byLabel = list.find(d =>
     d && typeof d.label === 'string' &&
-    /back|rear|environment|arriÃ¨re|arri[eÃ¨]re/i.test(d.label)
+    /back|rear|environment|arrière|arri[eè]re/i.test(d.label)
   );
   if (byLabel) return byLabel;
 
-  // 2) Sinon : si on a plusieurs camÃ©ras, la derniÃ¨re est souvent la back cam (mobile)
+  // 2) Sinon : si on a plusieurs caméras, la dernière est souvent la back cam (mobile)
   if (list.length > 1) return list[list.length - 1];
 
-  // 3) Sinon : unique camÃ©ra ou rien
+  // 3) Sinon : unique caméra ou rien
   return list[0] || null;
 }
 
@@ -1099,18 +1099,18 @@ if (typeof data.co2_kg_total === "number") {
   }
 
   function startScanWatchdog(){
-    // Si aucun EAN nâ€™est dÃ©tectÃ© aprÃ¨s X secondes, on remonte un diagnostic utile.
+    // Si aucun EAN n’est détecté après X secondes, on remonte un diagnostic utile.
     if (__scanWatchdogTimer) clearTimeout(__scanWatchdogTimer);
 
     __scanWatchdogTimer = setTimeout(() => {
       try {
-        // si le flux nâ€™est pas actif, inutile
+        // si le flux n’est pas actif, inutile
         if (!currentStream || !$video) return;
 
-        // si un EAN vient dâ€™Ãªtre dÃ©tectÃ©, inutile
+        // si un EAN vient d’être détecté, inutile
         if (__lastEanDetectedAt && (Date.now() - __lastEanDetectedAt) < 1500) return;
 
-        // diagnostic vidÃ©o
+        // diagnostic vidéo
         const diag = {
           readyState: $video.readyState,
           videoW: $video.videoWidth,
@@ -1118,10 +1118,10 @@ if (typeof data.co2_kg_total === "number") {
           trackSettings: currentTrack?.getSettings ? currentTrack.getSettings() : null
         };
 
-        console.warn('[Scan][Watchdog] Aucun EAN dÃ©tectÃ© aprÃ¨s 6s. Probable lecteur EAN inactif (iOS).', diag);
+        console.warn('[Scan][Watchdog] Aucun EAN détecté après 6s. Probable lecteur EAN inactif (iOS).', diag);
 
         // message UX (sans bloquer)
-        showScannerError("Scan iPhone : aucune dÃ©tection EAN. Si le cadre est sombre ou si rien nâ€™est dÃ©tectÃ©, utilise le test EAN manuel. Diagnostic enregistrÃ© dans la console.");
+        showScannerError("Scan iPhone : aucune détection EAN. Si le cadre est sombre ou si rien n’est détecté, utilise le test EAN manuel. Diagnostic enregistré dans la console.");
       } catch (_) {}
     }, 6000);
   }
@@ -1148,7 +1148,7 @@ if (typeof data.co2_kg_total === "number") {
       try { video.addEventListener('loadedmetadata', onMeta, { once: true }); } catch(_) {}
       try { video.addEventListener('playing', onPlay, { once: true }); } catch(_) {}
 
-      // Filet de sÃ©curitÃ©
+      // Filet de sécurité
       setTimeout(() => finish(video.videoWidth > 0 && video.videoHeight > 0), timeoutMs);
     });
   }
@@ -1165,20 +1165,20 @@ async function startWith(deviceId){
 
 
         // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
-       // iPhone : tenter Quagga2 en prioritÃ©, mais NE PAS bloquer si Quagga Ã©choue
+       // iPhone : tenter Quagga2 en priorité, mais NE PAS bloquer si Quagga échoue
     if (false && isIphoneIOS() && window.Quagga) {
       setStatus('Caméra active', true);
 
       const ok = await startQuaggaInTarget();
       if (ok) return;
 
-      console.warn('[Quagga] Ã‰chec init â†’ fallback camÃ©ra native + ZXing.');
+      console.warn('[Quagga] Échec init → fallback caméra native + ZXing.');
       // IMPORTANT : on continue (pas de return)
     }
 
 
 
-    // iOS: stabilise la lecture vidÃ©o (indispensable pour analyse frame/ZXing)
+    // iOS: stabilise la lecture vidéo (indispensable pour analyse frame/ZXing)
     if ($video) {
       $video.setAttribute('playsinline', '');
       $video.setAttribute('webkit-playsinline', '');
@@ -1186,7 +1186,7 @@ async function startWith(deviceId){
       $video.autoplay = true;
     }
 
-    // RÃ©solution/contraintes robustes iOS pour EAN (tentatives successives)
+    // Résolution/contraintes robustes iOS pour EAN (tentatives successives)
     const baseVideo = {
       width: { ideal: 1280, min: 640 },
       height: { ideal: 720, min: 480 },
@@ -1194,7 +1194,7 @@ async function startWith(deviceId){
       frameRate: { ideal: 30, max: 60 }
     };
 
-    // Certaines contraintes avancÃ©es ne sont pas supportÃ©es partout : iOS les ignore si non supportÃ©es.
+    // Certaines contraintes avancées ne sont pas supportées partout : iOS les ignore si non supportées.
     const advanced = [
       { focusMode: "continuous" },
       { exposureMode: "continuous" },
@@ -1203,7 +1203,7 @@ async function startWith(deviceId){
 
     const candidates = [];
 
-    // 1) Si lâ€™utilisateur impose un deviceId (dropdown), on essaie en prioritÃ©
+    // 1) Si l’utilisateur impose un deviceId (dropdown), on essaie en priorité
     if (deviceId) {
       candidates.push({
         video: {
@@ -1214,7 +1214,7 @@ async function startWith(deviceId){
       });
     }
 
-    // 2) iOS/Android : tenter environment EXACT dâ€™abord (si dispo)
+    // 2) iOS/Android : tenter environment EXACT d’abord (si dispo)
     candidates.push({
       video: {
         ...baseVideo,
@@ -1268,17 +1268,17 @@ async function startWith(deviceId){
 
     try { await $video.play(); } catch(_) {}
 
-    // IMPORTANT iPhone : attendre les dimensions rÃ©elles de la vidÃ©o avant ZXing
+    // IMPORTANT iPhone : attendre les dimensions réelles de la vidéo avant ZXing
     await waitForVideoReady($video, 3000);
     await startZXingFromStream(stream);
 
 
     currentTrack = stream.getVideoTracks()[0] || null;
-    setStatus('CamÃ©ra active', true);
+    setStatus('Caméra active', true);
 
     if(currentTrack) await detectTorchSupport(currentTrack);
 
-    // BONUS iPhone : zoom lÃ©ger si supportÃ© (amÃ©liore Ã©normÃ©ment la lecture EAN)
+    // BONUS iPhone : zoom léger si supporté (améliore énormément la lecture EAN)
     try {
       if (currentTrack && currentTrack.getCapabilities) {
         const caps = currentTrack.getCapabilities();
@@ -1289,23 +1289,23 @@ async function startWith(deviceId){
       }
     } catch (_) {}
 
-    // DÃ©marre le dÃ©codage EAN (si ZXing est chargÃ© sur la page)
+    // Démarre le décodage EAN (si ZXing est chargé sur la page)
     await startZXingFromStream(stream);
 
 
       } catch (e) {
     console.warn('[Scan] startWith error:', e);
-    setStatus('Erreur ou refus camÃ©ra', false);
+    setStatus('Erreur ou refus caméra', false);
 
     const name = (e && e.name) ? e.name : '';
     if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-      showScannerError("AccÃ¨s camÃ©ra refusÃ©. Autorisez la camÃ©ra dans Safari (RÃ©glages).", true);
+      showScannerError("Accès caméra refusé. Autorisez la caméra dans Safari (Réglages).", true);
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      showScannerError("CamÃ©ra introuvable ou contraintes incompatibles. Essayez sans sÃ©lection camÃ©ra.", true);
+      showScannerError("Caméra introuvable ou contraintes incompatibles. Essayez sans sélection caméra.", true);
     } else if (name === 'NotReadableError') {
-      showScannerError("CamÃ©ra occupÃ©e par une autre app. Fermez les apps utilisant la camÃ©ra puis rÃ©essayez.", true);
+      showScannerError("Caméra occupée par une autre app. Fermez les apps utilisant la caméra puis réessayez.", true);
     } else {
-      showScannerError("Impossible dâ€™ouvrir la camÃ©ra. DÃ©tail console: " + (name || 'Erreur inconnue'), true);
+      showScannerError("Impossible d’ouvrir la caméra. Détail console: " + (name || 'Erreur inconnue'), true);
     }
   }
 
@@ -1328,9 +1328,9 @@ async function startWith(deviceId){
 
   if ($reset) {
     $reset.onclick = () => {
-      stopStream();                 // ArrÃªte la camÃ©ra
-      setCo2Waiting();              // Remet l'encart COâ‚‚ en Ã©tat initial
-      showScannerInfo("Scanner rÃ©initialisÃ©."); // Message UX clair
+      stopStream();                 // Arrête la caméra
+      setCo2Waiting();              // Remet l'encart CO₂ en état initial
+      showScannerInfo("Scanner réinitialisé."); // Message UX clair
     };
   }
 
@@ -1340,22 +1340,22 @@ async function startWith(deviceId){
 
 
 
-  // === Point dâ€™entrÃ©e appelÃ© par le lecteur de code-barres ===
+  // === Point d’entrée appelé par le lecteur de code-barres ===
   
    if(!('mediaDevices' in navigator)){
-  setStatus('API mÃ©dia non supportÃ©e', false);
-  showScannerError("CamÃ©ra non supportÃ©e sur cet appareil.");
+  setStatus('API média non supportée', false);
+  showScannerError("Caméra non supportée sur cet appareil.");
   return;
    }
 
-   // Fallback global pour Ãªtre sÃ»r que handleEanDetected existe
+   // Fallback global pour être sûr que handleEanDetected existe
   window.handleEanDetected = function(ean){
     if (!ean) return;
 
     // Marque une dÃ©tection (empÃªche le watchdog de conclure Ã  une absence de scan)
     markEanDetected();
 
-    console.log('handleEanDetected (fallback) appelÃ© avec :', ean);
+    console.log('handleEanDetected (fallback) appelé avec :', ean);
 
     if (typeof fetchCo2ForEan === 'function') {
       fetchCo2ForEan(String(ean).trim());
@@ -1364,12 +1364,12 @@ async function startWith(deviceId){
 
 
 /* ============================================================================
-   EcoSELECT (AUTONOME) â€” rendu du comparateur dans scanner.html
-   DÃ©pendances: #eco-select-list, #sort-by-co2, #sort-by-distance
+   EcoSELECT (AUTONOME) — rendu du comparateur dans scanner.html
+   Dépendances: #eco-select-list, #sort-by-co2, #sort-by-distance
    Expose: window.ecoSelectAddProduct, window.ecoSelectSetSortMode
    Fix:
    - tri CO2 / distance fonctionnel (boutons)
-   - badge "COâ‚‚" / "DIST" affichÃ© une seule fois (sur la 1Ã¨re ligne)
+   - badge "CO₂" / "DIST" affiché une seule fois (sur la 1ère ligne)
    ============================================================================ */
 
 (function(){
@@ -1379,7 +1379,7 @@ async function startWith(deviceId){
   const btnDist = document.getElementById('sort-by-distance');
 
   if (!listEl) {
-    console.warn('[EcoSELECT][inline] #eco-select-list introuvable. Comparateur non initialisÃ©.');
+    console.warn('[EcoSELECT][inline] #eco-select-list introuvable. Comparateur non initialisé.');
     return;
   }
 
@@ -1389,18 +1389,18 @@ async function startWith(deviceId){
 
 
 
-  function safeText(v, fallback='â€”'){
+  function safeText(v, fallback='—'){
     const s = (v == null) ? '' : String(v).trim();
     return s ? s : fallback;
   }
 
   function formatCo2Kg(v){
-    if (!Number.isFinite(v)) return 'â€”';
+    if (!Number.isFinite(v)) return '—';
     return v < 1 ? `${Math.round(v * 1000)} g` : `${v.toFixed(2)} kg`;
   }
 
   function formatKm(v){
-    if (!Number.isFinite(v)) return 'â€”';
+    if (!Number.isFinite(v)) return '—';
     return `${Math.round(v)} km`;
   }
 
@@ -1466,7 +1466,7 @@ async function startWith(deviceId){
     listEl.innerHTML = '';
 
     if (!arr.length) {
-      setMessage('Scannez un produit pour lâ€™ajouter au comparateur.');
+      setMessage('Scannez un produit pour l’ajouter au comparateur.');
       setActiveButtons();
       return;
     }
@@ -1478,10 +1478,10 @@ async function startWith(deviceId){
       const row = document.createElement('div');
       row.className = 'eco-item';
 
-      // Badge dynamique : affichÃ© UNIQUEMENT sur la 1Ã¨re ligne
+      // Badge dynamique : affiché UNIQUEMENT sur la 1ère ligne
       const badge = document.createElement('div');
       badge.className = 'eco-item-badge';
-      badge.textContent = (sortMode === 'distance') ? 'DIST' : 'COâ‚‚';
+      badge.textContent = (sortMode === 'distance') ? 'DIST' : 'CO₂';
       // Important : visible 1 seule fois
       badge.style.visibility = (idx === 0) ? 'visible' : 'hidden';
 
@@ -1502,17 +1502,17 @@ async function startWith(deviceId){
         ? formatKm(p.distanceKm)
         : formatCo2Kg(p.co2Total);
 
-      // Valeur secondaire (lâ€™autre mÃ©trique)
+      // Valeur secondaire (l’autre métrique)
       const secondary = document.createElement('span');
       secondary.className = 'eco-item-secondary';
       secondary.textContent = (sortMode === 'distance')
-        ? `COâ‚‚: ${formatCo2Kg(p.co2Total)}`
+        ? `CO₂: ${formatCo2Kg(p.co2Total)}`
         : `Dist: ${formatKm(p.distanceKm)}`;
 
       // Origine
       const origin = document.createElement('span');
       origin.className = 'eco-item-origin';
-      origin.textContent = p.origin ? `Origine: ${safeText(p.origin)}` : 'Origine: â€”';
+      origin.textContent = p.origin ? `Origine: ${safeText(p.origin)}` : 'Origine: —';
 
       meta.appendChild(primary);
       meta.appendChild(secondary);
@@ -1521,7 +1521,7 @@ async function startWith(deviceId){
       main.appendChild(title);
       main.appendChild(meta);
 
-      // Clic = rÃ©-ouvrir la fiche produit (via ton flux existant)
+      // Clic = ré-ouvrir la fiche produit (via ton flux existant)
       row.addEventListener('click', () => {
         if (typeof window.handleEanDetected === 'function') {
           window.handleEanDetected(p.ean);
@@ -1534,7 +1534,7 @@ async function startWith(deviceId){
     });
   }
 
-  // Boutons tri (si prÃ©sents)
+  // Boutons tri (si présents)
 
   if (btnCo2) {
     btnCo2.addEventListener('click', (e) => {
@@ -1552,12 +1552,12 @@ async function startWith(deviceId){
   }
  
 
-  // API globale appelÃ©e par fetchCo2ForEan()
+  // API globale appelée par fetchCo2ForEan()
   window.ecoSelectAddProduct = function(product){
     try {
       upsertProduct(product);
       render();
-      console.log('[EcoSELECT][inline] Produit ajoutÃ©:', product?.ean);
+      console.log('[EcoSELECT][inline] Produit ajouté:', product?.ean);
     } catch (e) {
       console.warn('[EcoSELECT][inline] addProduct error:', e);
     }
@@ -1572,20 +1572,20 @@ async function startWith(deviceId){
   render();
 })();
 
-  // === Panier CO2 â€“ A51 : logique de donnÃ©es uniquement ===
+  // === Panier CO2 – A51 : logique de données uniquement ===
 
 // Tableau principal du panier
 let co2Cart = [];
 
 window.co2Cart = co2Cart;
-// window.co2Cart pointe maintenant sur le panier utilisÃ© par le scan
+// window.co2Cart pointe maintenant sur le panier utilisé par le scan
 
 
 
 /**
  * Trouve l'index d'un produit dans le panier Ã  partir de son EAN.
  * @param {string|number} ean
- * @returns {number} index ou -1 si non trouvÃ©
+ * @returns {number} index ou -1 si non trouvé
  */
 function findCartItemIndex(ean) {
   const eanStr = String(ean);
@@ -1594,27 +1594,27 @@ function findCartItemIndex(ean) {
 
 /**
  * Ajoute / met Ã  jour un produit dans le panier Ã  partir de la rÃ©ponse API.
- * NE GÃˆRE PAS LE DOM.
- * @param {object} apiData - donnÃ©es renvoyÃ©es par /api/v1/co2/product/{ean}
- * @param {string|number} ean - code-barres scannÃ©
+ * NE GÈRE PAS LE DOM.
+ * @param {object} apiData - données renvoyées par /api/v1/co2/product/{ean}
+ * @param {string|number} ean - code-barres scanné
  */
 
    function addToCartFromApiResponse(apiData, ean) {
   const eanStr = String(ean);
 
   // ==== 1. Normalisation des champs depuis l'API ====
-  // âš ï¸ Adapte ici les noms exacts de champs de ton API si besoin.
+  // âš ï¸ Adapte ici les noms exacts de champs de ton API si besoin.
  
   const productName =
     apiData.product_name ||      // cas 1 : nom "standard"
-    apiData.product_label ||     // cas 2 : nom de ta base COâ‚‚
+    apiData.product_label ||     // cas 2 : nom de ta base CO₂
     apiData.label ||             // cas 3 : simple "label"
-    apiData.name ||              // cas 4 : autre champ gÃ©nÃ©rique
-    apiData.nom ||               // cas 5 : version FR Ã©ventuelle
+    apiData.name ||              // cas 4 : autre champ générique
+    apiData.nom ||               // cas 5 : version FR éventuelle
     "Produit sans nom";          // fallback ultime
 
 
-  // CO2 par unitÃ© (en g CO2e)
+  // CO2 par unité (en g CO2e)
   let co2UnitG = null;
 
   // 1) Ancien format : dÃ©jÃ  en grammes
@@ -1625,7 +1625,7 @@ function findCartItemIndex(ean) {
     // Peut dÃ©jÃ  Ãªtre en g dans certains anciens endpoints
     co2UnitG = apiData.co2_total;
 
-  // 2) Nouveau format : en kilogrammes â†’ on convertit en g
+  // 2) Nouveau format : en kilogrammes → on convertit en g
   } else if (typeof apiData.carbon_total_kg === "number") {
     co2UnitG = apiData.carbon_total_kg * 1000;
 
@@ -1664,7 +1664,7 @@ function findCartItemIndex(ean) {
     apiData.origine ||
     null;
 
-  // Poids utilisÃ© pour le calcul (en g)
+  // Poids utilisé pour le calcul (en g)
   let weightG = null;
   if (typeof apiData.weight_g === "number") {
     weightG = apiData.weight_g;
@@ -1673,7 +1673,7 @@ function findCartItemIndex(ean) {
   } else if (typeof apiData.poids_g === "number") {
     weightG = apiData.poids_g;
   } else {
-    // dÃ©faut dÃ©fini dans l'app : 500 g
+    // défaut défini dans l'app : 500 g
     weightG = 500;
   }
 
@@ -1684,11 +1684,11 @@ function findCartItemIndex(ean) {
   const now = Date.now();
 
   if (idx === -1) {
-    // ðŸ†• Nouveau produit : on ajoute directement
+    // 🆕 Nouveau produit : on ajoute directement
     const quantity = 1;
     const co2TotalG = hasCo2Data ? co2UnitG * quantity : 0;
 
-    // CatÃ©gorie (normalisation "safe" : toujours une chaÃ®ne)
+    // Catégorie (normalisation "safe" : toujours une chaîne)
 const categoryRawCandidate =
   apiData.category ??
   apiData.product_category ??
@@ -1709,7 +1709,7 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
       ean: eanStr,
       product_name: productName,
 
-      category: categoryRaw, // âœ… ajoutÃ©
+      category: categoryRaw, // ✅ ajouté
 
       quantity: quantity,
 
@@ -1731,7 +1731,7 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
     co2Cart.push(newItem);
   } else {
-    // â™»ï¸ Produit dÃ©jÃ  prÃ©sent â†’ demander confirmation avant d'augmenter la quantitÃ©
+    // â™»ï¸ Produit dÃ©jÃ  prÃ©sent â†’ demander confirmation avant d'augmenter la quantitÃ©
     const item = co2Cart[idx];
 
     // On met Ã  jour les infos les plus rÃ©centes (mÃªme si l'utilisateur refuse)
@@ -1749,15 +1749,15 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
 
     if (!ok) {
-      // âŒ L'utilisateur refuse : on ne change pas la quantitÃ© ni le total COâ‚‚
+      // âŒ L'utilisateur refuse : on ne change pas la quantitÃ© ni le total COâ‚‚
       item.last_scan_at = now;
       return;
     }
 
-    // âœ… L'utilisateur accepte : on ajoute 1
+    // ✅ L'utilisateur accepte : on ajoute 1
     item.quantity += 1;
 
-    // On ne change co2_unit_g que si on a de nouvelles donnÃ©es valides
+    // On ne change co2_unit_g que si on a de nouvelles données valides
     if (hasCo2Data && Number.isFinite(co2UnitG)) {
       item.co2_unit_g = co2UnitG;
     }
@@ -1779,17 +1779,17 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
    
 
 /**
- * Supprime complÃ¨tement un produit du panier (tous les exemplaires d'un EAN).
+ * Supprime complètement un produit du panier (tous les exemplaires d'un EAN).
  * @param {string|number} ean
  */
 function removeProductFromCart(ean) {
   const eanStr = String(ean);
   const idx = co2Cart.findIndex(it => it.ean === eanStr);
-  if (idx >= 0) co2Cart.splice(idx, 1); // mutation -> rÃ©fÃ©rences conservÃ©es
+  if (idx >= 0) co2Cart.splice(idx, 1); // mutation -> références conservées
 }
 
 function clearCart() {
-  co2Cart.length = 0; // mutation -> rÃ©fÃ©rences conservÃ©es
+  co2Cart.length = 0; // mutation -> références conservées
 }
 
 /**
@@ -1816,7 +1816,7 @@ function getCartTotals() {
 }
 
 /**
- * Retourne le dernier produit scannÃ© (basÃ© sur last_scan_at),
+ * Retourne le dernier produit scanné (basé sur last_scan_at),
  * ou null si le panier est vide.
  * @returns {object|null}
  */
@@ -1836,7 +1836,7 @@ function getLastScannedItem() {
 
 /**
  * Analyse le panier et retourne les recommandations
- * basÃ©es sur le CO2 unitaire (co2_unit_g).
+ * basées sur le CO2 unitaire (co2_unit_g).
  *
  * @param {Array} cart - tableau co2Cart
  * @returns {{ topLow: Array, topHigh: Array }}
@@ -1846,7 +1846,7 @@ function getRecoFromCart(cart) {
     return { topLow: [], topHigh: [] };
   }
 
-  // 1. On ne garde que les produits avec une donnÃ©e CO2 unitaire exploitable
+  // 1. On ne garde que les produits avec une donnée CO2 unitaire exploitable
   const itemsWithCo2 = cart.filter(item =>
     item &&
     item.has_co2_data &&
@@ -1861,57 +1861,57 @@ function getRecoFromCart(cart) {
   // 2. On travaille sur une copie pour ne pas modifier le panier
   const sorted = itemsWithCo2.slice().sort((a, b) => a.co2_unit_g - b.co2_unit_g);
 
-  // 3. Top 3 les moins Ã©missifs (dÃ©but du tableau)
+  // 3. Top 3 les moins émissifs (début du tableau)
   const topLow = sorted.slice(0, 3);
 
-  // 4. Top 3 les plus Ã©missifs (fin du tableau)
-  const topHigh = sorted.slice(-3).reverse(); // du plus Ã©levÃ© au moins Ã©levÃ©
+  // 4. Top 3 les plus émissifs (fin du tableau)
+  const topHigh = sorted.slice(-3).reverse(); // du plus élevé au moins élevé
 
   return { topLow, topHigh };
 }
 
 
 /**
- * Retourne l'une des 5 catÃ©gories officielles :
- * "Viande", "VÃ©gÃ©taux", "Ã‰picerie", "Boisson", "Autres"
- * en analysant la prÃ©sence de mots-clÃ©s dans la colonne `category`.
+ * Retourne l'une des 5 catégories officielles :
+ * "Viande", "Végétaux", "Épicerie", "Boisson", "Autres"
+ * en analysant la présence de mots-clés dans la colonne `category`.
  */
 function mapCategoryForGraph(rawCategoryText) {
   const text = (rawCategoryText || "").toLowerCase();
 
   // ---- Viande ----
   const viandeKeywords = [
-    "viande", "bÅ“uf", "boeuf", "porc", "poulet",
+    "viande", "bœuf", "boeuf", "porc", "poulet",
     "volaille", "dinde", "agneau", "charcuterie", "steak"
   ];
   if (viandeKeywords.some(k => text.includes(k))) {
     return "Viande";
   }
 
-  // ---- VÃ©gÃ©taux ----
+  // ---- Végétaux ----
   const vegetalKeywords = [
-    "lÃ©gume", "legume", "lÃ©gumes", "legumes",
+    "légume", "legume", "légumes", "legumes",
     "fruit", "fruits",
-    "vÃ©gÃ©tal", "vegetal", "vÃ©gÃ©taux", "vegetaux",
-    "cÃ©rÃ©ale", "cereale", "cÃ©rÃ©ales", "cereales",
-    "lÃ©gumineuse", "legumineuse", "lÃ©gumineuses", "legumineuses"
+    "végétal", "vegetal", "végétaux", "vegetaux",
+    "céréale", "cereale", "céréales", "cereales",
+    "légumineuse", "legumineuse", "légumineuses", "legumineuses"
   ];
   if (vegetalKeywords.some(k => text.includes(k))) {
-    return "VÃ©gÃ©taux";
+    return "Végétaux";
   }
 
-  // ---- Ã‰picerie ----
+  // ---- Épicerie ----
   const epicerieKeywords = [
-    "Ã©picerie", "epicerie",
-    "sucrÃ©", "sucre", "sucrerie",
+    "épicerie", "epicerie",
+    "sucré", "sucre", "sucrerie",
     "chocolat",
     "biscuit", "biscuits",
-    "gÃ¢teau", "gateau", "gÃ¢teaux", "gateaux",
-    "pÃ¢tisserie", "patisserie",
+    "gâteau", "gateau", "gâteaux", "gateaux",
+    "pâtisserie", "patisserie",
     "snack", "barre", "barres"
   ];
   if (epicerieKeywords.some(k => text.includes(k))) {
-    return "Ã‰picerie";
+    return "Épicerie";
   }
 
   // ---- Boisson ----
@@ -1935,9 +1935,9 @@ function getCategoryColor(cat) {
   switch (cat) {
     case 'Viande':
       return '#D9534F'; // rouge doux
-    case 'VÃ©gÃ©taux':
+    case 'Végétaux':
       return '#5CB85C'; // vert
-    case 'Ã‰picerie':
+    case 'Épicerie':
       return '#F0AD4E'; // orange
     case 'Boisson':
       return '#5BC0DE'; // bleu
@@ -1951,8 +1951,8 @@ function getCategoryColor(cat) {
 /**
  * Dessine un camembert simple Ã  partir des totaux COâ‚‚ par catÃ©gorie.
  *
- * @param {Object} totals - ex : { 'Viande': 1234, 'VÃ©gÃ©taux': 567, ... } en g
- * @param {number} totalAll - somme de toutes les catÃ©gories en g
+ * @param {Object} totals - ex : { 'Viande': 1234, 'Végétaux': 567, ... } en g
+ * @param {number} totalAll - somme de toutes les catégories en g
  */
    
 
@@ -1977,13 +1977,13 @@ if (cart.length === 0) {
   if ($reportSection) {
     $reportSection.classList.remove('hidden');
     $reportSection.style.display = '';
-    console.log('[Panier CO2] #co2-cart-report affichÃ© (onclick)');
+    console.log('[Panier CO2] #co2-cart-report affiché (onclick)');
     $reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     console.warn('[Panier CO2] #co2-cart-report introuvable (onclick)');
   }
 
-  // 3) GÃ©nÃ©rer le rapport (recommandations)
+  // 3) Générer le rapport (recommandations)
   try {
     if (typeof generateCo2CartReport === 'function') {
       generateCo2CartReport();
@@ -2027,7 +2027,7 @@ if (cart.length === 0) {
           li.setAttribute('data-lastcarts', '1');
 
           if (history.length === 0) {
-            li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardÃ© pour lâ€™instant.`;
+            li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardé pour l’instant.`;
             ul.insertAdjacentElement('afterbegin', li);
             return;
           }
@@ -2038,8 +2038,8 @@ if (cart.length === 0) {
 
           const lines = history.map((h, idx) => {
             const nb = Array.isArray(h.items) ? h.items.length : 0;
-            const co2 = h.totals?.total_co2_text ? ` â€” ${h.totals.total_co2_text}` : '';
-            return `â€¢ Panier ${idx + 1} (${fmtDate(h.ts)}) â€” ${nb} produits${co2}`;
+            const co2 = h.totals?.total_co2_text ? ` — ${h.totals.total_co2_text}` : '';
+            return `• Panier ${idx + 1} (${fmtDate(h.ts)}) — ${nb} produits${co2}`;
           }).join('<br>');
 
           li.innerHTML = `<strong>Derniers paniers</strong><br>${lines}`;
@@ -2060,7 +2060,7 @@ if (cart.length === 0) {
         }
 
     } else {
-      console.warn('[Panier CO2] generateCo2CartReport non dÃ©fini (onclick)');
+      console.warn('[Panier CO2] generateCo2CartReport non défini (onclick)');
     }
   } catch (e) {
     console.error('[Panier CO2] generateCo2CartReport ERROR (onclick)', e);
@@ -2071,7 +2071,7 @@ if (cart.length === 0) {
 
 
       
-    // === A51.7 â€“ Rendu du Panier COâ‚‚ dans lâ€™UI ===
+    // === A51.7 – Rendu du Panier CO₂ dans l’UI ===
 
 /**
  * Formate un nombre avec la locale fr-FR.
@@ -2088,7 +2088,7 @@ function formatNumberFr(value, decimals = 0) {
 
 /**
  * Met Ã  jour l'affichage du panier COâ‚‚ dans la section HTML dÃ©diÃ©e
- * + les 4 cercles + les 3 lignes de rÃ©sumÃ© sous les cercles.
+ * + les 4 cercles + les 3 lignes de résumé sous les cercles.
  */
 function renderCo2Cart() {
   const $list              = document.getElementById('co2-cart-list');
@@ -2102,7 +2102,7 @@ function renderCo2Cart() {
   const $circleAvgDist     = document.getElementById('co2-circle-avg-distance-value');
 
   if (!$list || !$totalItems || !$distinctProducts || !$totalCo2) {
-    //console.warn('[Panier CO2] Ã‰lÃ©ments DOM manquants pour le rendu.');
+    //console.warn('[Panier CO2] Éléments DOM manquants pour le rendu.');
     return;
   }
 
@@ -2116,13 +2116,13 @@ function renderCo2Cart() {
     $empty.textContent = CART_MESSAGES.emptyCart;
     $list.appendChild($empty);
 
-    $totalItems.textContent       = '0 article scannÃ©';
+    $totalItems.textContent       = '0 article scanné';
     $distinctProducts.textContent = '0 produit distinct';
-    $totalCo2.textContent         = 'Total : 0 g COâ‚‚e';
+    $totalCo2.textContent         = 'Total : 0 g CO₂e';
 
-    if ($circleTotalCo2)  $circleTotalCo2.textContent  = '0 g COâ‚‚e';
+    if ($circleTotalCo2)  $circleTotalCo2.textContent  = '0 g CO₂e';
     if ($circleTotalDist) $circleTotalDist.textContent = '0 km';
-    if ($circleAvgCo2)    $circleAvgCo2.textContent    = '0 g COâ‚‚e';
+    if ($circleAvgCo2)    $circleAvgCo2.textContent    = '0 g CO₂e';
     if ($circleAvgDist)   $circleAvgDist.textContent   = '0 km';
 
     return;
@@ -2153,9 +2153,9 @@ function renderCo2Cart() {
     const $remove = document.createElement('button');
     $remove.type = 'button';
     $remove.className = 'co2-cart-remove-x';
-    $remove.textContent = 'Ã—';
+    $remove.textContent = '×';
 
-    // clic sur X â†’ supprime sans ouvrir la fiche
+    // clic sur X → supprime sans ouvrir la fiche
     $remove.addEventListener('click', function (event) {
       event.stopPropagation();
       removeProductFromCart(item.ean);
@@ -2167,17 +2167,17 @@ function renderCo2Cart() {
     $header.appendChild($name);
     $header.appendChild($right);
 
-    // ----- Ligne 2 : COâ‚‚ + distance -----
+    // ----- Ligne 2 : CO₂ + distance -----
     const $meta = document.createElement('div');
     $meta.className = 'co2-cart-item-meta';
 
-    let co2Text = 'COâ‚‚ indisponible';
+    let co2Text = 'CO₂ indisponible';
     if (item.has_co2_data && Number.isFinite(item.co2_unit_g)) {
       const unit = item.co2_unit_g;
       if (unit < 1000) {
-        co2Text = formatNumberFr(Math.round(unit)) + ' g COâ‚‚e / Dist';
+        co2Text = formatNumberFr(Math.round(unit)) + ' g CO₂e / Dist';
       } else {
-        co2Text = formatNumberFr(unit / 1000, 1) + ' kg COâ‚‚e / Dist';
+        co2Text = formatNumberFr(unit / 1000, 1) + ' kg CO₂e / Dist';
       }
     }
 
@@ -2191,7 +2191,7 @@ function renderCo2Cart() {
 
       const $sep = document.createElement('span');
       $sep.className = 'co2-cart-info';
-      $sep.textContent = ' Â· ';
+      $sep.textContent = ' · ';
       $meta.appendChild($sep);
 
       const $dist = document.createElement('span');
@@ -2200,7 +2200,7 @@ function renderCo2Cart() {
       $meta.appendChild($dist);
     }
 
-    // Clic sur la carte â†’ rÃ©affiche la fiche COâ‚‚ du produit
+    // Clic sur la carte → réaffiche la fiche CO₂ du produit
     $row.addEventListener('click', function () {
       if (typeof window.handleEanDetected === 'function') {
         window.handleEanDetected(String(item.ean).trim());
@@ -2237,13 +2237,13 @@ function renderCo2Cart() {
       }
     }
 
-    // 1) COâ‚‚ total
+    // 1) CO₂ total
     if (totalCo2G < 1000) {
       $circleTotalCo2.textContent =
-        formatNumberFr(Math.round(totalCo2G)) + ' g COâ‚‚e';
+        formatNumberFr(Math.round(totalCo2G)) + ' g CO₂e';
     } else {
       $circleTotalCo2.textContent =
-        formatNumberFr(totalCo2G / 1000, 1) + ' kg COâ‚‚e';
+        formatNumberFr(totalCo2G / 1000, 1) + ' kg CO₂e';
     }
 
     // 2) Distance totale
@@ -2251,14 +2251,14 @@ function renderCo2Cart() {
     $circleTotalDist.textContent =
       formatNumberFr(totalKmRounded) + ' km';
 
-    // 3) COâ‚‚ moyen / produit
+    // 3) CO₂ moyen / produit
     const avgCo2PerItem = totalItems > 0 ? totalCo2G / totalItems : 0;
     if (avgCo2PerItem < 1000) {
       $circleAvgCo2.textContent =
-        formatNumberFr(Math.round(avgCo2PerItem)) + ' g COâ‚‚e';
+        formatNumberFr(Math.round(avgCo2PerItem)) + ' g CO₂e';
     } else {
       $circleAvgCo2.textContent =
-        formatNumberFr(avgCo2PerItem / 1000, 1) + ' kg COâ‚‚e';
+        formatNumberFr(avgCo2PerItem / 1000, 1) + ' kg CO₂e';
     }
 
     // 4) Distance moyenne / produit
@@ -2279,22 +2279,22 @@ function renderCo2Cart() {
   const totalG       = totals.total_co2_g || 0;
 
   const labelArticles = totalItems <= 1 ? 'article' : 'articles';
-  $totalItems.textContent = `ðŸ›’ ${totalItems} ${labelArticles}`;
+  $totalItems.textContent = `🛒 ${totalItems} ${labelArticles}`;
 
   const labelProduits  = dp <= 1 ? 'produit' : 'produits';
   const suffixDistinct = dp <= 1 ? 'distinct' : 'distincts';
   $distinctProducts.textContent =
-    `ðŸ“¦ ${dp} ${labelProduits} ${suffixDistinct}`;
+    `📦 ${dp} ${labelProduits} ${suffixDistinct}`;
 
   if (totalG < 1000) {
     $totalCo2.textContent =
-      'ðŸŒ¿ ' + formatNumberFr(Math.round(totalG)) + ' g COâ‚‚e';
+      '🌿 ' + formatNumberFr(Math.round(totalG)) + ' g CO₂e';
   } else {
     $totalCo2.textContent =
-      'ðŸŒ¿ ' + formatNumberFr(totalG / 1000, 1) + ' kg COâ‚‚e';
+      '🌿 ' + formatNumberFr(totalG / 1000, 1) + ' kg CO₂e';
   }
 
-  // Petite animation sur le cercle COâ‚‚ total
+  // Petite animation sur le cercle CO₂ total
   const totalCircle = document.querySelector('.co2-circle-total-co2');
   if (totalCircle) {
     totalCircle.classList.remove('co2-circle--animate');
@@ -2332,7 +2332,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-      // GÃ©nÃ©ration du rapport local
+      // Génération du rapport local
       generateCo2CartReport();
 
       // Sauvegarde + affichage des 2 derniers paniers (dans Recos)
@@ -2348,7 +2348,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
 
-      // Enregistrement backend + rechargement de lâ€™historique
+      // Enregistrement backend + rechargement de l’historique
      if (typeof saveCartHistoryFromCart === 'function') saveCartHistoryFromCart();
      if (typeof loadCo2CartHistory === 'function') loadCo2CartHistory();
 
@@ -2360,7 +2360,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
    // ==============================
-// A53 â€“ Save historique panier (minimal)
+// A53 – Save historique panier (minimal)
 // ==============================
 function saveCartHistoryFromCart() {
   try {
@@ -2374,16 +2374,16 @@ function saveCartHistoryFromCart() {
     const nbArticles  = Number(totals.total_items) || 0;
     const nbDistinct  = Number(totals.distinct_products) || 0;
 
-    // Distance totale (pondÃ©rÃ©e par quantitÃ©) â€“ minimal
+    // Distance totale (pondérée par quantité) – minimal
     let totalDistanceKm = 0;
     for (const it of (co2Cart || [])) {
       const qty = Number(it.quantity) || 0;
       if (Number.isFinite(it.distance_km)) totalDistanceKm += it.distance_km * qty;
     }
 
-    // On nâ€™enregistre pas un panier vide
+    // On n’enregistre pas un panier vide
     if (nbArticles <= 0 || totalCo2G <= 0) {
-      console.warn('[Historique CO2] Panier vide ou CO2=0 â†’ skip save.');
+      console.warn('[Historique CO2] Panier vide ou CO2=0 → skip save.');
       return;
     }
 
@@ -2418,14 +2418,14 @@ function saveCartHistoryFromCart() {
     .then(async (res) => {
       if (res.ok) return;
 
-      // âœ… IMPORTANT : lire le dÃ©tail FastAPI (souvent { detail: [...] })
+      // ✅ IMPORTANT : lire le détail FastAPI (souvent { detail: [...] })
       let detail = null;
       try { detail = await res.json(); } catch (_) {}
 
       console.error('[Historique CO2] POST /api/cart/history erreur :', res.status, detail);
     })
     .catch((err) => {
-      console.error('[Historique CO2] POST /api/cart/history erreur rÃ©seau :', err);
+      console.error('[Historique CO2] POST /api/cart/history erreur réseau :', err);
     });
 
 
@@ -2436,7 +2436,7 @@ function saveCartHistoryFromCart() {
 
   
   // =========================
-// Honoua â€” Historique paniers (storage)
+// Honoua — Historique paniers (storage)
 // =========================
 if (!window.honouaAppendCartToHistory) {
   window.honouaAppendCartToHistory = function ({ co2Kg, distanceKm, itemsCount }) {
@@ -2455,7 +2455,7 @@ if (!window.honouaAppendCartToHistory) {
 }
 
   // =========================
-// Honoua â€” Historique paniers (localStorage)
+// Honoua — Historique paniers (localStorage)
 // =========================
         if (!window.honouaAppendCartToHistory) {
           window.honouaAppendCartToHistory = function ({ co2Kg, distanceKm, itemsCount }) {
@@ -2476,19 +2476,19 @@ if (!window.honouaAppendCartToHistory) {
 
 
     /**
-   * GÃ©nÃ¨re et affiche le rapport COâ‚‚ du panier
-   * (A52 â€“ Conversion COâ‚‚ â†’ jours de captation dâ€™un arbre).
+   * Génère et affiche le rapport CO₂ du panier
+   * (A52 – Conversion CO₂ → jours de captation d’un arbre).
    */
   function generateCo2CartReport() {
    const $reportSection        = document.getElementById('co2-cart-report');
 
-// PÃ©riode / titre du rapport (dans ton HTML : id="co2-report-period")
+// Période / titre du rapport (dans ton HTML : id="co2-report-period")
 const $reportPeriod         = document.getElementById('co2-report-period');
 
 // Arbres / captation
 const $reportTree           = document.getElementById('co2-cart-report-tree');
 
-// Ã‰missions
+// Émissions
 const $reportEmissionsTotal = document.getElementById('co2-report-emissions-total');
 const $reportEmissionsAvg   = document.getElementById('co2-report-emissions-avg');
 
@@ -2501,23 +2501,23 @@ const $reportDistComment    = document.getElementById('co2-report-distance-comme
 const $recoIntro            = document.getElementById('co2-report-reco-intro');
 const $recoList             = document.getElementById('co2-report-reco-list');
 
-// CatÃ©gories
+// Catégories
 const $catBox               = document.getElementById('co2-cart-report-categories');
 
 
 
     if (!$reportSection) {
-      console.warn('[Panier CO2] Section de rapport non trouvÃ©e.');
+      console.warn('[Panier CO2] Section de rapport non trouvée.');
       return;
     }
 
     if (!co2Cart || co2Cart.length === 0) {
-      alert('Votre Panier COâ‚‚ est vide. Scannez des produits avant de gÃ©nÃ©rer un rapport.');
+      alert('Votre Panier CO₂ est vide. Scannez des produits avant de générer un rapport.');
       $reportSection.classList.add('hidden');
       return;
     }
 
-    // âœ… Afficher la section rapport (recommandations)
+    // ✅ Afficher la section rapport (recommandations)
       $reportSection.classList.remove('hidden');
       $reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -2538,11 +2538,11 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
 
     const totalCo2Kg = totalCo2G / 1000;
     // =========================
-// Suivi CO2 â€” sauvegarde du panier (MVP)
+// Suivi CO2 — sauvegarde du panier (MVP)
 // =========================
     window.honouaAppendCartToHistory({
       co2Kg: totalCo2Kg,
-      distanceKm: 0, // distance non gÃ©rÃ©e dans getCartTotals() pour lâ€™instant
+      distanceKm: 0, // distance non gérée dans getCartTotals() pour l’instant
       itemsCount: totals.distinct_products || co2Cart.length || 0
     });
 
@@ -2550,10 +2550,10 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     if ($reportEmissionsTotal) {
       if (totalCo2G < 1000) {
          $reportEmissionsTotal.textContent =
-          `Ã‰missions totales : ${formatNumberFr(Math.round(totalCo2G))} g COâ‚‚e.`;
+          `Émissions totales : ${formatNumberFr(Math.round(totalCo2G))} g CO₂e.`;
       } else {
         $reportEmissionsTotal.textContent =
-          `Ã‰missions totales : ${formatNumberFr(totalCo2Kg, 1)} kg COâ‚‚e.`;
+          `Émissions totales : ${formatNumberFr(totalCo2Kg, 1)} kg CO₂e.`;
       }
     }
 
@@ -2562,24 +2562,24 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
         const avgCo2G = totalCo2G / totalItems;
         if (avgCo2G < 1000) {
           $reportEmissionsAvg.textContent =
-            `Ã‰missions moyennes par produit : ${formatNumberFr(Math.round(avgCo2G))} g COâ‚‚e.`;
+            `Émissions moyennes par produit : ${formatNumberFr(Math.round(avgCo2G))} g CO₂e.`;
         } else {
           $reportEmissionsAvg.textContent =
-            `Ã‰missions moyennes par produit : ${formatNumberFr(avgCo2G / 1000, 2)} kg COâ‚‚e.`;
+            `Émissions moyennes par produit : ${formatNumberFr(avgCo2G / 1000, 2)} kg CO₂e.`;
         }
       } else {
-        $reportEmissionsAvg.textContent = `Ã‰missions moyennes par produit : donnÃ©es indisponibles.`;
+        $reportEmissionsAvg.textContent = `Émissions moyennes par produit : données indisponibles.`;
       }
     }
 
-    // 3) Conversion CO2 total â†’ jours dâ€™un arbre
-    // 3) Conversion CO2 total â†’ nombre dâ€™arbres
-    // 3) Conversion COâ‚‚ total â†’ nombre dâ€™arbres (rÃ¨gle 30 jours = 1 arbre)
+    // 3) Conversion CO2 total → jours d’un arbre
+    // 3) Conversion CO2 total → nombre d’arbres
+    // 3) Conversion CO₂ total → nombre d’arbres (règle 30 jours = 1 arbre)
 
-            // === A52/A53 â€” Utils arbre (minimal, global) ===
-        // CalibrÃ© sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
+            // === A52/A53 — Utils arbre (minimal, global) ===
+        // Calibré sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
         (function () {
-          const TREE_CO2_KG_PER_YEAR = 22; // cohÃ©rent avec tes valeurs backend/historique
+          const TREE_CO2_KG_PER_YEAR = 22; // cohérent avec tes valeurs backend/historique
           const DAYS_PER_YEAR = 365;
 
           if (typeof window.computeDaysTreeCapture !== 'function') {
@@ -2593,7 +2593,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
           if (typeof window.formatDaysTreeCapture !== 'function') {
             window.formatDaysTreeCapture = function (days) {
               const d = Number(days);
-              if (!Number.isFinite(d) || d <= 0) return 'â€”';
+              if (!Number.isFinite(d) || d <= 0) return '—';
               if (d < 1) return '< 1 jour';
               if (d < 2) return '1 jour';
               return `${Math.round(d)} jours`;
@@ -2603,7 +2603,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
 
 
     if ($reportTree) {
-      let text = `Ce panier ne contient pas encore assez dâ€™informations pour estimer une Ã©quivalence en arbres.`;
+      let text = `Ce panier ne contient pas encore assez d’informations pour estimer une équivalence en arbres.`;
       const $treeNumber = document.getElementById('co2-tree-number');
 
       if (typeof window.computeDaysTreeCapture === 'function' &&
@@ -2613,7 +2613,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
         // Nombre de jours de captation total pour ce panier
         const daysCaptured = window.computeDaysTreeCapture(totalCo2Kg);
 
-        // RÃ¨gle : 1 arbre = 30 jours de captation
+        // Règle : 1 arbre = 30 jours de captation
         const treeEquivalent = daysCaptured / 30;
 
         // Mise Ã  jour du petit bloc numÃ©rique
@@ -2627,15 +2627,15 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
           }
         }
 
-        // Phrase dÃ©taillÃ©e
+        // Phrase détaillée
         const daysRounded = Math.round(daysCaptured);
 
         if (treeEquivalent < 1) {
-          text = `Ce panier reprÃ©sente moins dâ€™un arbre captant pendant ${daysRounded} jours.`;
+          text = `Ce panier représente moins d’un arbre captant pendant ${daysRounded} jours.`;
         } else if (treeEquivalent < 10) {
-          text = `Ce panier reprÃ©sente environ ${formatNumberFr(treeEquivalent, 1)} arbres captant pendant ${daysRounded} jours.`;
+          text = `Ce panier représente environ ${formatNumberFr(treeEquivalent, 1)} arbres captant pendant ${daysRounded} jours.`;
         } else {
-          text = `Ce panier reprÃ©sente environ ${formatNumberFr(Math.round(treeEquivalent))} arbres captant pendant ${daysRounded} jours.`;
+          text = `Ce panier représente environ ${formatNumberFr(Math.round(treeEquivalent))} arbres captant pendant ${daysRounded} jours.`;
         }
 
         // Gestion du badge visuel d'arbres
@@ -2643,8 +2643,8 @@ const $treeIcons  = document.getElementById('co2-tree-icons');
 const $treeBadge  = document.getElementById('co2-tree-number-badge');
 
 if ($treeIcons && $treeBadge) {
-    const value = treeEquivalent; // nombre rÃ©el
-    const iconsCount = Math.floor(value); // nombre dâ€™arbres pleins
+    const value = treeEquivalent; // nombre réel
+    const iconsCount = Math.floor(value); // nombre d’arbres pleins
 
     let icons = "";
 
@@ -2653,15 +2653,15 @@ if ($treeIcons && $treeBadge) {
 
     if (iconsCount >= 1) {
         const countToShow = Math.min(iconsCount, maxIcons);
-        icons = "ðŸŒ³".repeat(countToShow);
+        icons = "🌳".repeat(countToShow);
 
-        // Ajout du "+" si on dÃ©passe le max
+        // Ajout du "+" si on dépasse le max
         if (iconsCount > maxIcons) {
             icons += "+";
         }
     } else {
-        // Cas < 1 arbre â†’ un mini arbre grisÃ©
-        icons = "ðŸŒ±";
+        // Cas < 1 arbre → un mini arbre grisé
+        icons = "🌱";
     }
 
     $treeIcons.textContent = icons;
@@ -2676,13 +2676,13 @@ if ($treeIcons && $treeBadge) {
 
 
       } else if ($treeNumber) {
-        // Pas de donnÃ©es exploitables â†’ on garde le tiret
-        $treeNumber.textContent = 'â€”';
+        // Pas de données exploitables → on garde le tiret
+        $treeNumber.textContent = '—';
           const $treeIcons  = document.getElementById('co2-tree-icons');
         const $treeBadge  = document.getElementById('co2-tree-number-badge');
         if ($treeIcons && $treeBadge) {
-          $treeIcons.textContent = 'â€”';
-          $treeBadge.textContent = '(â€”)';
+          $treeIcons.textContent = '—';
+          $treeBadge.textContent = '(—)';
         }
       }
 
@@ -2692,7 +2692,7 @@ if ($treeIcons && $treeBadge) {
 
    
 
-    // 4) Distances (totale & moyenne, pondÃ©rÃ©es par la quantitÃ©)
+    // 4) Distances (totale & moyenne, pondérées par la quantité)
     let sumDistanceKm = 0;
     let countDistanceItems = 0;
 
@@ -2711,9 +2711,9 @@ if ($treeIcons && $treeBadge) {
     if ($reportDistTotal) {
       if (totalDistanceKm > 0) {
         $reportDistTotal.textContent =
-          `Distance totale parcourue (pondÃ©rÃ©e par la quantitÃ©) : ${formatNumberFr(Math.round(totalDistanceKm))} km.`;
+          `Distance totale parcourue (pondérée par la quantité) : ${formatNumberFr(Math.round(totalDistanceKm))} km.`;
       } else {
-        $reportDistTotal.textContent = 'Distance totale parcourue : donnÃ©es indisponibles.';
+        $reportDistTotal.textContent = 'Distance totale parcourue : données indisponibles.';
       }
     }
 
@@ -2722,7 +2722,7 @@ if ($treeIcons && $treeBadge) {
           $reportDistAvg.textContent =
             `Distance moyenne par produit : ${formatNumberFr(Math.round(avgDistanceKm))} km.`;
         } else {
-          $reportDistAvg.textContent = 'Distance moyenne par produit : donnÃ©es indisponibles.';
+          $reportDistAvg.textContent = 'Distance moyenne par produit : données indisponibles.';
         }
       }
 
@@ -2731,14 +2731,14 @@ if ($treeIcons && $treeBadge) {
       if (avgDistanceKm > 0) {
         if (avgDistanceKm <= localThreshold) {
           $reportDistComment.textContent =
-            `Votre panier est plutÃ´t local (distance moyenne infÃ©rieure au seuil de ${localThreshold} km).`;
+            `Votre panier est plutôt local (distance moyenne inférieure au seuil de ${localThreshold} km).`;
         } else {
           $reportDistComment.textContent =
-            `Votre panier est plutÃ´t Ã©loignÃ© (distance moyenne supÃ©rieure au seuil de ${localThreshold} km).`;
+            `Votre panier est plutôt éloigné (distance moyenne supérieure au seuil de ${localThreshold} km).`;
         }
       } else {
         $reportDistComment.textContent =
-          'Impossible de qualifier le caractÃ¨re local du panier (distances manquantes).';
+          'Impossible de qualifier le caractère local du panier (distances manquantes).';
       }
     }
 
@@ -2750,7 +2750,7 @@ if ($recoIntro && $recoList) {
 
   if ((!topLow || topLow.length === 0) && (!topHigh || topHigh.length === 0)) {
     $recoIntro.textContent =
-      "Pas assez de donnÃ©es COâ‚‚ unitaires pour proposer des recommandations sur ce panier.";
+      "Pas assez de données CO₂ unitaires pour proposer des recommandations sur ce panier.";
   } else {
     $recoIntro.textContent =
       "Voici les produits les moins Ã©missifs et ceux Ã  surveiller dans ce panier.";
@@ -2763,7 +2763,7 @@ if ($recoIntro && $recoList) {
       topLow.forEach((it) => {
         const li = document.createElement('li');
         li.textContent =
-          `${it.product_name || 'Produit'} â€“ â‰ˆ ${formatNumberFr(Math.round(it.co2_unit_g))} g COâ‚‚e / unitÃ©`;
+          `${it.product_name || 'Produit'} – ≈ ${formatNumberFr(Math.round(it.co2_unit_g))} g CO₂e / unité`;
         $recoList.appendChild(li);
       });
     }
@@ -2789,7 +2789,7 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
          // 6) RÃ©partition par catÃ©gories â€“ calcul Ã  partir du panier
     if ($catBox) {
        
-             // Fonction locale (dÃ©fensive) : mappe une catÃ©gorie brute â†’ catÃ©gorie graphique
+             // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
       function mapCategoryForGraph(rawCategory) {
         const c = String(rawCategory || '').toLowerCase();
 
@@ -2797,7 +2797,7 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
         if (
           c.includes('viande') ||
           c.includes('boeuf') ||
-          c.includes('bÅ“uf') ||
+          c.includes('bœuf') ||
           c.includes('porc') ||
           c.includes('poulet') ||
           c.includes('dinde') ||
@@ -2807,26 +2807,26 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
           return 'Viande';
         }
 
-        // VÃ©gÃ©taux
+        // Végétaux
         if (
           c.includes('legume') ||
-          c.includes('lÃ©gume') ||
+          c.includes('légume') ||
           c.includes('fruit') ||
           c.includes('cereal') ||
-          c.includes('cÃ©rÃ©ale') ||
+          c.includes('céréale') ||
           c.includes('riz') ||
           c.includes('pate') ||
-          c.includes('pÃ¢te') ||
+          c.includes('pâte') ||
           c.includes('lentille') ||
           c.includes('haricot')
         ) {
-          return 'VÃ©gÃ©taux';
+          return 'Végétaux';
         }
 
-        // Ã‰picerie
+        // Épicerie
         if (
           c.includes('epicerie') ||
-          c.includes('Ã©picerie') ||
+          c.includes('épicerie') ||
           c.includes('sauce') ||
           c.includes('condiment') ||
           c.includes('biscuit') ||
@@ -2834,7 +2834,7 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
           c.includes('sucre') ||
           c.includes('confiture')
         ) {
-          return 'Ã‰picerie';
+          return 'Épicerie';
         }
 
         // Boisson
@@ -2843,7 +2843,7 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
           c.includes('jus') ||
           c.includes('soda') ||
           c.includes('biere') ||
-          c.includes('biÃ¨re') ||
+          c.includes('bière') ||
           c.includes('vin') ||
           c.includes('eau') ||
           c.includes('sirop')
@@ -2856,16 +2856,16 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
       }
 
-      // 6.2 â€“ Initialisation des totaux COâ‚‚ par catÃ©gorie (en g)
+      // 6.2 – Initialisation des totaux CO₂ par catégorie (en g)
       const categoryTotals = {
         'Viande': 0,
-        'VÃ©gÃ©taux': 0,
-        'Ã‰picerie': 0,
+        'Végétaux': 0,
+        'Épicerie': 0,
         'Boisson': 0,
         'Autres': 0
       };
 
-      // 6.3 â€“ AgrÃ©gation du COâ‚‚ total pour chaque catÃ©gorie
+      // 6.3 – Agrégation du CO₂ total pour chaque catégorie
       co2Cart.forEach(item => {
         const rawCategory =
           item.category ||
@@ -2886,13 +2886,13 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
       const totalAll = Object.values(categoryTotals).reduce((sum, v) => sum + v, 0);
 
-      // 6.4 â€“ Rendu texte dans le bloc #co2-cart-report-categories
+      // 6.4 – Rendu texte dans le bloc #co2-cart-report-categories
       $catBox.innerHTML = '';
 
       if (totalAll <= 0) {
         const p = document.createElement('p');
         p.textContent =
-          "Impossible de calculer la rÃ©partition par catÃ©gories (donnÃ©es COâ‚‚ insuffisantes dans le panier).";
+          "Impossible de calculer la répartition par catégories (données CO₂ insuffisantes dans le panier).";
         $catBox.appendChild(p);
       } else {
         const ul = document.createElement('ul');
@@ -2907,13 +2907,13 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
           const li = document.createElement('li');
           li.textContent =
-            `${label} : ${formatNumberFr(valueKg, 1)} kg COâ‚‚e (${share} %)`;
+            `${label} : ${formatNumberFr(valueKg, 1)} kg CO₂e (${share} %)`;
           ul.appendChild(li);
         }
 
         addLine('Viande');
-        addLine('VÃ©gÃ©taux');
-        addLine('Ã‰picerie');
+        addLine('Végétaux');
+        addLine('Épicerie');
         addLine('Boisson');
         addLine('Autres');
 
@@ -2921,12 +2921,12 @@ console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
 
         /* =========================================================
-   ScanImpact â€” Camembert catÃ©gories (version robuste)
+   ScanImpact — Camembert catégories (version robuste)
    Cible les IDs de scan-impact.html :
    #co2-category-pie, #co2-category-dominant, #co2-category-legend
    ========================================================= */
 window.HonouaReportPie = window.HonouaReportPie || (function () {
-  const ORDERED = ['Viande', 'VÃ©gÃ©taux', 'Ã‰picerie', 'Boisson', 'Autres'];
+  const ORDERED = ['Viande', 'Végétaux', 'Épicerie', 'Boisson', 'Autres'];
 
   function safeNumber(x) {
     const n = Number(x);
@@ -2934,7 +2934,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
   }
 
   function getColor(cat) {
-    // RÃ©utilise ta fonction si elle existe, sinon fallback
+    // Réutilise ta fonction si elle existe, sinon fallback
     if (typeof window.getCategoryColor === 'function') {
       const c = window.getCategoryColor(cat);
       if (typeof c === 'string' && c.trim()) return c;
@@ -2988,14 +2988,14 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
       const fmt = (typeof window.formatNumberFr === 'function')
         ? window.formatNumberFr(valueKg, 1)
         : valueKg.toFixed(1).replace('.', ',');
-      textSpan.textContent = `${cat} â€“ ${share} % (${fmt} kg COâ‚‚e)`;
+      textSpan.textContent = `${cat} – ${share} % (${fmt} kg CO₂e)`;
 
       li.appendChild(colorBox);
       li.appendChild(textSpan);
 
       // Hover / click (mobile friendly)
       li.addEventListener('mouseenter', () => {
-        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg COâ‚‚e)`;
+        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg CO₂e)`;
         li.classList.add('active');
       });
       li.addEventListener('mouseleave', () => {
@@ -3003,7 +3003,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
         li.classList.remove('active');
       });
       li.addEventListener('click', () => {
-        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg COâ‚‚e)`;
+        if ($dominant) $dominant.textContent = `${cat} : ${share} % (${fmt} kg CO₂e)`;
         Array.from($legend.querySelectorAll('li')).forEach(x => x.classList.remove('active'));
         li.classList.add('active');
       });
@@ -3021,7 +3021,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 
     const ctx = canvas.getContext('2d');
 
-    // Taille interne stable (indÃ©pendante du CSS)
+    // Taille interne stable (indépendante du CSS)
     canvas.width = 180;
     canvas.height = 180;
 
@@ -3074,25 +3074,25 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 
     const total = safeNumber(totalAllG);
 
-    // Bandeau catÃ©gorie dominante (ou message)
+    // Bandeau catégorie dominante (ou message)
     if ($dominant) {
       const dom = pickDominant(categoryTotalsG, total);
       if (dom.cat) {
-        $dominant.textContent = `CatÃ©gorie dominante : ${dom.cat} (${dom.share} %)`;
+        $dominant.textContent = `Catégorie dominante : ${dom.cat} (${dom.share} %)`;
       } else {
-        $dominant.textContent = 'Aucune catÃ©gorie dominante (donnÃ©es insuffisantes).';
+        $dominant.textContent = 'Aucune catégorie dominante (données insuffisantes).';
       }
     }
 
-    // LÃ©gende + interactions
+    // Légende + interactions
     renderLegend($legend, $dominant, categoryTotalsG, total);
 
     // Camembert
     const res = drawPie(canvas, categoryTotalsG, total);
     if (res.drawn) {
-      console.log('[CatGraph] Camembert dessinÃ©.');
+      console.log('[CatGraph] Camembert dessiné.');
     } else {
-      console.warn('[CatGraph] Aucun secteur dessinÃ© (donnÃ©es catÃ©gories vides).', { categoryTotalsG, total });
+      console.warn('[CatGraph] Aucun secteur dessiné (données catégories vides).', { categoryTotalsG, total });
     }
     return res;
   }
@@ -3102,7 +3102,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 
   window.HonouaReportPie.render(categoryTotals, totalAll);
         if ($graph) {
-          // CatÃ©gorie dominante
+          // Catégorie dominante
           if ($dominant) {
             let dominantCat = null;
             let dominantVal = 0;
@@ -3119,21 +3119,21 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
             if (dominantCat && dominantVal > 0) {
               const shareDom = Math.round((dominantVal / totalAll) * 100);
               $dominant.textContent =
-                `CatÃ©gorie dominante : ${dominantCat} (${shareDom} %)`;
+                `Catégorie dominante : ${dominantCat} (${shareDom} %)`;
             } else {
               $dominant.textContent =
-                "Aucune catÃ©gorie dominante (donnÃ©es insuffisantes).";
+                "Aucune catégorie dominante (données insuffisantes).";
             }
           }
 
-          // LÃ©gende
-                // LÃ©gende + mini-hover (Option C)
+          // Légende
+                // Légende + mini-hover (Option C)
           if ($legend) {
             $legend.innerHTML = '';
 
-            const ordered = ['Viande', 'VÃ©gÃ©taux', 'Ã‰picerie', 'Boisson', 'Autres'];
+            const ordered = ['Viande', 'Végétaux', 'Épicerie', 'Boisson', 'Autres'];
 
-            // Texte par dÃ©faut du bandeau (catÃ©gorie dominante)
+            // Texte par défaut du bandeau (catégorie dominante)
             const defaultDominantText = $dominant ? $dominant.textContent : '';
 
             ordered.forEach(cat => {
@@ -3155,7 +3155,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 
               const textSpan = document.createElement('span');
               textSpan.textContent =
-                `${cat} â€“ ${share} % (${formatNumberFr(valueKg, 1)} kg COâ‚‚e)`;
+                `${cat} – ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
 
               li.appendChild(colorBox);
               li.appendChild(textSpan);
@@ -3164,12 +3164,12 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
               li.addEventListener('mouseenter', () => {
                 if ($dominant) {
                   $dominant.textContent =
-                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg COâ‚‚e)`;
+                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
                 }
                 li.classList.add('active');
               });
 
-              // On restaure le texte par dÃ©faut quand on sort
+              // On restaure le texte par défaut quand on sort
               li.addEventListener('mouseleave', () => {
                 if ($dominant && defaultDominantText) {
                   $dominant.textContent = defaultDominantText;
@@ -3181,9 +3181,9 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
               li.addEventListener('click', () => {
                 if ($dominant) {
                   $dominant.textContent =
-                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg COâ‚‚e)`;
+                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
                 }
-                // on enlÃ¨ve l'Ã©tat actif des autres <li>
+                // on enlève l'état actif des autres <li>
                 Array.from($legend.querySelectorAll('li')).forEach(liOther => {
                   liOther.classList.remove('active');
                 });
@@ -3207,7 +3207,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
   }
 
 // ==============================
-// A53 â€“ Chargement de l'historique COâ‚‚
+// A53 – Chargement de l'historique CO₂
 // ==============================
 // ================================
 // Historique : stocker + afficher 2 derniers paniers
@@ -3254,7 +3254,7 @@ function honouaRenderLastTwoCartsInReco() {
   li.setAttribute('data-lastcarts', '1');
 
   if (history.length === 0) {
-    li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardÃ© pour lâ€™instant.`;
+    li.innerHTML = `<strong>Derniers paniers</strong><br>Aucun panier sauvegardé pour l’instant.`;
     ul.insertAdjacentElement('afterbegin', li);
     return;
   }
@@ -3273,10 +3273,10 @@ function honouaRenderLastTwoCartsInReco() {
       (Array.isArray(h.items) ? h.items.length : 0);
 
     const co2Txt = (co2kg != null && Number.isFinite(co2kg))
-      ? ` â€” â‰ˆ ${co2kg.toFixed(2).replace('.', ',')} kg COâ‚‚e`
+      ? ` — ≈ ${co2kg.toFixed(2).replace('.', ',')} kg CO₂e`
       : '';
 
-    return `â€¢ Panier ${idx + 1} (${fmtDate(h.ts)}) â€” ${label} produits${co2Txt}`;
+    return `• Panier ${idx + 1} (${fmtDate(h.ts)}) — ${label} produits${co2Txt}`;
   }).join('<br>');
 
   li.innerHTML = `<strong>Derniers paniers</strong><br>${lines}`;
@@ -3284,23 +3284,23 @@ function honouaRenderLastTwoCartsInReco() {
 }
 
 // ==============================
-// A53 â€“ Chargement de l'historique COâ‚‚ (fiabilisÃ©)
+// A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
-// Endpoint /api/cart/history absent en prod (404) : on dÃ©sactive cÃ´tÃ© front pour Ã©viter le spam rÃ©seau/console.
+// Endpoint /api/cart/history absent en prod (404) : on désactive côté front pour éviter le spam réseau/console.
 // Le jour oÃ¹ lâ€™endpoint est disponible, repasser Ã  false.
 let __CO2_CART_HISTORY_DISABLED = true;
 
 
 async function loadCo2CartHistory(limit = 5) {
   const $list = document.getElementById("co2-cart-history-list");
-  const $reportList = document.getElementById("co2-report-history-list"); // âœ… historique dans le rapport
+  const $reportList = document.getElementById("co2-report-history-list"); // ✅ historique dans le rapport
 
   if (!$list) {
-    console.warn("[Historique CO2] Ã‰lÃ©ment #co2-cart-history-list introuvable.");
+    console.warn("[Historique CO2] Élément #co2-cart-history-list introuvable.");
     return;
   }
 
-  // Si lâ€™endpoint nâ€™existe pas en API (404), on stoppe les refetch suivants.
+  // Si l’endpoint n’existe pas en API (404), on stoppe les refetch suivants.
   if (__CO2_CART_HISTORY_DISABLED) {
     $list.innerHTML = `
       <p class="co2-cart-history-empty">
@@ -3322,10 +3322,10 @@ async function loadCo2CartHistory(limit = 5) {
 
 
       if (!res.ok) {
-      // 404 = endpoint non disponible : on dÃ©sactive dÃ©finitivement cÃ´tÃ© front
+      // 404 = endpoint non disponible : on désactive définitivement côté front
       if (res.status === 404) {
         __CO2_CART_HISTORY_DISABLED = true;
-        console.info("[Historique CO2] /api/cart/history indisponible (404) -> historique dÃ©sactivÃ© cÃ´tÃ© front.");
+        console.info("[Historique CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.");
         $list.innerHTML = `
           <p class="co2-cart-history-empty">
             Historique indisponible pour le moment.
@@ -3346,7 +3346,7 @@ async function loadCo2CartHistory(limit = 5) {
 
 
     const raw = await res.json();
-    // On rÃ©utilise normalizeHistoryResponse dÃ©fini plus haut
+    // On réutilise normalizeHistoryResponse défini plus haut
     const history = normalizeHistoryResponse(raw);
 
     // Vider la liste
@@ -3357,7 +3357,7 @@ async function loadCo2CartHistory(limit = 5) {
     if (!history || history.length === 0) {
       $list.innerHTML = `
         <p class="co2-cart-history-empty">
-          Aucun panier validÃ© pour le moment. Validez un panier pour voir son historique ici.
+          Aucun panier validé pour le moment. Validez un panier pour voir son historique ici.
         </p>`;
       return;
     }
@@ -3368,7 +3368,7 @@ async function loadCo2CartHistory(limit = 5) {
       const co2Kg        = (Number(item.total_co2_g) || 0) / 1000;
       const createdAt    = item.created_at
         ? new Date(item.created_at).toLocaleDateString("fr-FR")
-        : (item.period_label || "PÃ©riode inconnue");
+        : (item.period_label || "Période inconnue");
 
       const nbArticles   = Number(item.nb_articles) || 0;
       const nbDistinct   = Number(item.nb_distinct_products) || 0;
@@ -3391,10 +3391,10 @@ async function loadCo2CartHistory(limit = 5) {
         </div>
 
         <div class="co2-history-card-content">
-          <p><strong>COâ‚‚ total :</strong> ${format(co2Kg, 2)} kg COâ‚‚</p>
+          <p><strong>CO₂ total :</strong> ${format(co2Kg, 2)} kg CO₂</p>
           <p><strong>Articles :</strong> ${nbArticles} articles (${nbDistinct} distincts)</p>
           <p><strong>Distance :</strong> ${format(distanceKm, 1)} km parcourus</p>
-          <p><strong>Ã‰quivalent arbres :</strong> ${format(treeEq, 2)} arbre(s) (thÃ©orique)</p>
+          <p><strong>Équivalent arbres :</strong> ${format(treeEq, 2)} arbre(s) (théorique)</p>
           <p><strong>Jours de captation :</strong> ${format(daysCaptured, 1)} jours</p>
         </div>
       `;
@@ -3405,16 +3405,16 @@ async function loadCo2CartHistory(limit = 5) {
     });
 
   } catch (err) {
-    console.error("[Historique CO2] Erreur rÃ©seau :", err);
+    console.error("[Historique CO2] Erreur réseau :", err);
     $list.innerHTML = `
       <p class="co2-cart-history-empty">
-        Historique indisponible (problÃ¨me de connexion).
+        Historique indisponible (problème de connexion).
       </p>`;
   }
 }
 
 
-// Charger automatiquement l'historique au dÃ©marrage
+// Charger automatiquement l'historique au démarrage
 document.addEventListener("DOMContentLoaded", () => {
   loadCo2CartHistory();
 });
@@ -3422,10 +3422,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // ============================
-  // Suivi COâ‚‚ â€“ Bloc 1 : Budget annuel
+  // Suivi CO₂ – Bloc 1 : Budget annuel
   // ============================
 
-  // Budget GIEC par personne (en kg COâ‚‚ / an)
+  // Budget GIEC par personne (en kg CO₂ / an)
   const BUDGET_PER_PERSON_KG = 2000;
 
   // --- Foyer : persistance localStorage (MVP) ---
@@ -3449,7 +3449,7 @@ function setHouseholdSize(value) {
   try {
     localStorage.setItem(HONOUA_HOUSEHOLD_SIZE_KEY, String(n));
   } catch (e) {}
-  // RafraÃ®chit l'affichage du budget si la fonction existe (Ã©vite toute rÃ©gression)
+  // Rafraîchit l'affichage du budget si la fonction existe (évite toute régression)
 if (typeof refreshBudgetFromApi === 'function') {
   refreshBudgetFromApi();
 }
@@ -3461,8 +3461,8 @@ if (typeof refreshBudgetFromApi === 'function') {
 
 
   /**
-   * Normalise la rÃ©ponse de /api/cart/history
-   * (gÃ¨re les deux formats : tableau direct ou { value: [...] })
+   * Normalise la réponse de /api/cart/history
+   * (gère les deux formats : tableau direct ou { value: [...] })
    */
   function normalizeHistoryResponse(raw) {
     if (Array.isArray(raw)) {
@@ -3488,7 +3488,7 @@ if (typeof refreshBudgetFromApi === 'function') {
 
       let itemYear = null;
 
-      // 1) On privilÃ©gie created_at si prÃ©sent
+      // 1) On privilégie created_at si présent
       if (item.created_at) {
         const d = new Date(item.created_at);
         if (!isNaN(d)) {
@@ -3534,7 +3534,7 @@ if (typeof refreshBudgetFromApi === 'function') {
       budgetRemainingKg = 0;
     }
 
-    // Statut simple selon % utilisÃ©
+    // Statut simple selon % utilisé
     let statusKey = "ok";
     if (percentUsed > 100) {
       statusKey = "over";
@@ -3546,13 +3546,13 @@ if (typeof refreshBudgetFromApi === 'function') {
     let statusLevel = "";
 
     if (statusKey === "ok") {
-      statusLabel = "Budget maÃ®trisÃ©";
+      statusLabel = "Budget maîtrisé";
       statusLevel = "green";
     } else if (statusKey === "warning") {
       statusLabel = "Budget Ã  surveiller";
       statusLevel = "orange";
     } else {
-      statusLabel = "Budget dÃ©passÃ©";
+      statusLabel = "Budget dépassé";
       statusLevel = "red";
     }
 
@@ -3585,11 +3585,11 @@ if (typeof refreshBudgetFromApi === 'function') {
     const $budgetStatus  = document.getElementById('budget-status');
 
     if (!$budgetTotal || !$co2Consomme || !$budgetUsed || !$budgetLeft || !$progressBar || !$budgetStatus) {
-      console.warn('[Suivi CO2] Ã‰lÃ©ments DOM du bloc Budget manquants.');
+      console.warn('[Suivi CO2] Éléments DOM du bloc Budget manquants.');
       return;
     }
 
-    // Helpers de format (on rÃ©utilise formatNumberFr si dispo)
+    // Helpers de format (on réutilise formatNumberFr si dispo)
     const formatKg = (kg, decimals = 0) => {
       if (typeof formatNumberFr === 'function') {
         return formatNumberFr(kg, decimals);
@@ -3632,9 +3632,9 @@ if (typeof refreshBudgetFromApi === 'function') {
 
     // Statut : texte + classes
     $budgetStatus.textContent =
-      state.statusLabel + ' â€” ' +
+      state.statusLabel + ' — ' +
       formatPercent(state.percentUsed, 1) +
-      ' % du budget utilisÃ© en ' +
+      ' % du budget utilisé en ' +
       state.currentYear;
 
     $budgetStatus.classList.remove('status-green', 'status-orange', 'status-red');
@@ -3642,9 +3642,9 @@ if (typeof refreshBudgetFromApi === 'function') {
   }
 
   /**
- * AgrÃ¨ge l'historique par annÃ©e / mois / semaine.
- * UnitÃ© pivot : total_co2_g (grammes).
- * Compat : gÃ¨re created_at, validated_at, period_month, period_week, period_label.
+ * Agrège l'historique par année / mois / semaine.
+ * Unité pivot : total_co2_g (grammes).
+ * Compat : gère created_at, validated_at, period_month, period_week, period_label.
  */
 function aggregateHistoryByPeriod(items) {
   const byYear = Object.create(null);
@@ -3667,7 +3667,7 @@ function aggregateHistoryByPeriod(items) {
   const toYearKey = (dateObj) => String(dateObj.getFullYear());
   const pad2 = (n) => String(n).padStart(2, "0");
 
-  // ISO week (YYYY-Www) â€“ calcul minimal robuste
+  // ISO week (YYYY-Www) – calcul minimal robuste
   const toIsoWeekKey = (dateObj) => {
     const d = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
     // Jeudi de la semaine ISO
@@ -3687,11 +3687,11 @@ function aggregateHistoryByPeriod(items) {
     if (!Number.isFinite(co2g) || co2g < 0) co2g = 0;
 
 
-// âœ… AJOUT ICI (juste aprÃ¨s co2g)
+// ✅ AJOUT ICI (juste après co2g)
     let distKm = Number(item.total_distance_km);
     if (!Number.isFinite(distKm) || distKm < 0) distKm = 0;
 
-    // 2) ClÃ©s pÃ©riode : on privilÃ©gie les champs backend si prÃ©sents
+    // 2) Clés période : on privilégie les champs backend si présents
     const yearFromLabel = () => {
       const src = item.period_label || item.period_month || item.period_week;
       if (!src) return null;
@@ -3733,7 +3733,7 @@ function aggregateHistoryByPeriod(items) {
 
   });
 
-  // 7) Sorties triÃ©es (utile pour le graphique ensuite)
+  // 7) Sorties triées (utile pour le graphique ensuite)
   const toSortedSeries = (bucket) =>
     Object.keys(bucket)
       .sort()
@@ -3794,7 +3794,7 @@ function aggregateHistoryByPeriod(items) {
       if (!resp.ok) {
         if (resp.status === 404) {
           __CO2_CART_HISTORY_DISABLED = true;
-          console.info('[Suivi CO2] /api/cart/history indisponible (404) -> historique dÃ©sactivÃ© cÃ´tÃ© front.');
+          console.info('[Suivi CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.');
           if ($budgetStatus) {
             $budgetStatus.textContent = "Budget indisponible pour le moment.";
             $budgetStatus.classList.remove('status-green', 'status-orange');
@@ -3818,10 +3818,10 @@ function aggregateHistoryByPeriod(items) {
 
       const agg = aggregateHistoryByPeriod(items);
 
-        // Debug MVP (temporaire) : exposer les sÃ©ries pour inspection console
+        // Debug MVP (temporaire) : exposer les séries pour inspection console
         window.__honouaSuiviAgg = agg;
 
-    // âœ… PrÃ©paration sÃ©rie mois + indicateurs (sans UI)
+    // ✅ Préparation série mois + indicateurs (sans UI)
       const monthSeries = agg.seriesMonth || [];
       const last = monthSeries.length > 0 ? monthSeries[monthSeries.length - 1] : null;
       const prev = monthSeries.length > 1 ? monthSeries[monthSeries.length - 2] : null;
@@ -3842,7 +3842,7 @@ function aggregateHistoryByPeriod(items) {
         deltaMonth_pct
       };
 
-      // âœ… UI minimale (si les Ã©lÃ©ments existent)
+      // ✅ UI minimale (si les éléments existent)
       const $mLabel = document.getElementById("suiviLastMonthLabel");
       const $mCo2 = document.getElementById("suiviLastMonthCo2");
       const $dG = document.getElementById("suiviDeltaMonth");
@@ -3850,14 +3850,14 @@ function aggregateHistoryByPeriod(items) {
 
       const trend = window.__honouaSuiviTrend;
 
-      // format en kg (lisible MVP) ; si tu prÃ©fÃ¨res tCO2, on bascule ensuite
-      const fmtKg = (g) => `${Math.round((Number(g) || 0) / 1000)} kgCOâ‚‚`;
-      const fmtPct = (p) => (p === null || !Number.isFinite(p)) ? "â€”" : `${Math.round(p * 100)}%`;
+      // format en kg (lisible MVP) ; si tu préfères tCO2, on bascule ensuite
+      const fmtKg = (g) => `${Math.round((Number(g) || 0) / 1000)} kgCO₂`;
+      const fmtPct = (p) => (p === null || !Number.isFinite(p)) ? "—" : `${Math.round(p * 100)}%`;
 
-      if ($mLabel) $mLabel.textContent = trend.lastMonth || "â€”";
+      if ($mLabel) $mLabel.textContent = trend.lastMonth || "—";
       if ($mCo2) $mCo2.textContent = fmtKg(trend.lastMonthCo2_g);
-      if ($dG) $dG.textContent = (trend.prevMonth ? `${trend.deltaMonth_g >= 0 ? "+" : ""}${fmtKg(trend.deltaMonth_g)}` : "â€”");
-      if ($dPct) $dPct.textContent = (trend.prevMonth ? fmtPct(trend.deltaMonth_pct) : "â€”");
+      if ($dG) $dG.textContent = (trend.prevMonth ? `${trend.deltaMonth_g >= 0 ? "+" : ""}${fmtKg(trend.deltaMonth_g)}` : "—");
+      if ($dPct) $dPct.textContent = (trend.prevMonth ? fmtPct(trend.deltaMonth_pct) : "—");
 
 
       console.log("[Suivi CO2] Trend:", window.__honouaSuiviTrend);
@@ -3871,29 +3871,29 @@ function aggregateHistoryByPeriod(items) {
       renderBudgetFromState(budgetState);
 
     } catch (err) {
-      console.error('[Suivi CO2] Erreur rÃ©seau /api/cart/history :', err);
+      console.error('[Suivi CO2] Erreur réseau /api/cart/history :', err);
       if ($budgetStatus) {
-        $budgetStatus.textContent = "Budget indisponible (problÃ¨me de connexion).";
+        $budgetStatus.textContent = "Budget indisponible (problème de connexion).";
         $budgetStatus.classList.remove('status-green', 'status-orange');
         $budgetStatus.classList.add('status-red');
       }
     }
   }
 
-  // On lance le calcul du budget quand la page est prÃªte
+  // On lance le calcul du budget quand la page est prête
   document.addEventListener('DOMContentLoaded', function () {
     refreshBudgetFromApi();
   });
 
 /* ============================================================================
-   SUIVI COâ‚‚ â€” BLOC 2 : Ã‰VOLUTION DES Ã‰MISSIONS (DonnÃ©es + graphique)
+   SUIVI CO₂ — BLOC 2 : ÉVOLUTION DES ÉMISSIONS (Données + graphique)
    ============================================================================ */
 /** Label lisible pour l'axe X */
 function formatLabelFromPeriod(periodType, periodLabel) {
   if (!periodLabel) return "";
   if (periodType === "month") {
     const [year, month] = periodLabel.split("-");
-    const moisNoms = ["Jan.", "FÃ©v.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "AoÃ»t", "Sept.", "Oct.", "Nov.", "DÃ©c."];
+    const moisNoms = ["Jan.", "Fév.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
     const mIndex = parseInt(month, 10) - 1;
     const moisTxt = moisNoms[mIndex] || month;
     return `${moisTxt} ${year}`;
@@ -3915,7 +3915,7 @@ function safePctChange(current, previous) {
   return ((current - previous) / previous) * 100;
 }
 
-/* -------- 1) Construction de la sÃ©rie -------- */
+/* -------- 1) Construction de la série -------- */
 
 function buildEvolutionSeries(items, periodType) {
   const filtered = (items || []).filter(
@@ -3938,7 +3938,7 @@ function buildEvolutionSeries(items, periodType) {
   return points;
 }
 
-/* -------- 2) RÃ©sumÃ© pÃ©riode actuelle vs prÃ©cÃ©dente -------- */
+/* -------- 2) Résumé période actuelle vs précédente -------- */
 
 function buildEvolutionSummary(points, periodType) {
   if (!points.length) return null;
@@ -3970,7 +3970,7 @@ function buildEvolutionSummary(points, periodType) {
   };
 }
 
-/* -------- 3) Injection du rÃ©sumÃ© dans le DOM -------- */
+/* -------- 3) Injection du résumé dans le DOM -------- */
 
 function renderEvolutionSummary(summary) {
   if (!summary) return;
@@ -3981,33 +3981,33 @@ function renderEvolutionSummary(summary) {
   const $co2Chg  = document.getElementById("evo-co2-change");
   const $distChg = document.getElementById("evo-distance-change");
 
-   // âœ… Fix: si la page ne contient pas le module Evolution, on ne fait rien
+   // ✅ Fix: si la page ne contient pas le module Evolution, on ne fait rien
   if (!$period || !$co2 || !$dist || !$co2Chg || !$distChg) return;
 
-  const fmt = (n) => (n === null || isNaN(n) ? "â€”" : n.toFixed(1));
+  const fmt = (n) => (n === null || isNaN(n) ? "—" : n.toFixed(1));
 
   if (summary.current) {
     $period.textContent = summary.current.label;
     $co2.textContent    = fmt(summary.current.co2Kg) + " kg";
     $dist.textContent   = fmt(summary.current.distanceKm) + " km";
   } else {
-    $period.textContent = "â€”";
-    $co2.textContent    = "â€” kg";
-    $dist.textContent   = "â€” km";
+    $period.textContent = "—";
+    $co2.textContent    = "— kg";
+    $dist.textContent   = "— km";
   }
 
   if (summary.previous && summary.co2ChangePct !== null) {
     const pct = summary.co2ChangePct;
     $co2Chg.textContent = (pct > 0 ? "+" : "") + pct.toFixed(1) + " %";
   } else {
-    $co2Chg.textContent = "â€” %";
+    $co2Chg.textContent = "— %";
   }
 
   if (summary.previous && summary.distanceChangePct !== null) {
     const pct = summary.distanceChangePct;
     $distChg.textContent = (pct > 0 ? "+" : "") + pct.toFixed(1) + " %";
   } else {
-    $distChg.textContent = "â€” %";
+    $distChg.textContent = "— %";
   }
 }
 
@@ -4029,11 +4029,11 @@ function drawEvolutionChart(series) {
     ctx.font = "12px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Pas encore assez de donnÃ©es pour afficher un graphique.", width / 2, height / 2);
+    ctx.fillText("Pas encore assez de données pour afficher un graphique.", width / 2, height / 2);
     return;
   }
 
-  // Max CO2 pour l'Ã©chelle
+  // Max CO2 pour l'échelle
   let maxCo2 = 0;
   series.forEach((p) => {
     if (p.co2Kg > maxCo2) maxCo2 = p.co2Kg;
@@ -4075,7 +4075,7 @@ function drawEvolutionChart(series) {
   const n = series.length;
   const stepX = n > 1 ? innerW / (n - 1) : 0;
 
-  // Courbe COâ‚‚
+  // Courbe CO₂
   ctx.strokeStyle = "#062909";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -4117,7 +4117,7 @@ function drawEvolutionChart(series) {
   });
 }
 
-/* -------- 5) Fonction principale appelÃ©e par la page -------- */
+/* -------- 5) Fonction principale appelée par la page -------- */
 
 let currentEvolutionPeriodType = "month";
 
@@ -4126,7 +4126,7 @@ function buildEvolutionSeriesFromAgg(agg, periodType) {
 
   return src.map((p) => ({
     key: p.period,
-    label: p.period, // MVP : label brut (on raffinera aprÃ¨s)
+    label: p.period, // MVP : label brut (on raffinera après)
     co2Kg: (Number(p.total_co2_g) || 0) / 1000,
     distanceKm: Number(p.total_distance_km) || 0
   }));
@@ -4137,7 +4137,7 @@ async function refreshEvolution(periodType = "month") {
   currentEvolutionPeriodType = periodType;
 
   if (__CO2_CART_HISTORY_DISABLED) {
-    // Lâ€™endpoint historique est indisponible : on Ã©vite les refetch et le spam console.
+    // L’endpoint historique est indisponible : on évite les refetch et le spam console.
     return;
   }
 
@@ -4157,7 +4157,7 @@ async function refreshEvolution(periodType = "month") {
     if (!resp.ok) {
       if (resp.status === 404) {
         __CO2_CART_HISTORY_DISABLED = true;
-        console.info("[Evolution] /api/cart/history indisponible (404) -> Ã©volution dÃ©sactivÃ©e cÃ´tÃ© front.");
+        console.info("[Evolution] /api/cart/history indisponible (404) -> évolution désactivée côté front.");
         return;
       }
       console.warn("[Evolution] Erreur HTTP :", resp.status);
@@ -4180,7 +4180,7 @@ async function refreshEvolution(periodType = "month") {
     console.log("=== SUMMARY ===", summary);
 
   } catch (err) {
-    console.error("[Evolution] Erreur rÃ©seau :", err);
+    console.error("[Evolution] Erreur réseau :", err);
   }
 }
 
@@ -4215,24 +4215,24 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ============================================================================
-   SUIVI COâ‚‚ â€” BLOC 4 : DÃ©fis personnels (MVP â€“ version finale)
+   SUIVI CO₂ — BLOC 4 : Défis personnels (MVP – version finale)
    ============================================================================ */
 
-console.log("[DÃ©fis CO2][MVP] script inline chargÃ©");
+console.log("[Défis CO2][MVP] script inline chargé");
 
-// 1) DÃ©fis personnels statiques pour le MVP
+// 1) Défis personnels statiques pour le MVP
 const PERSONAL_CHALLENGES_MVP = [
   {
     id: "reduce_10_percent_30_days",
-    icon: "ðŸ†",
-    name: "RÃ©duire ton COâ‚‚ de 10 % sur 30 jours",
+    icon: "ðŸ†",
+    name: "Réduire ton CO₂ de 10 % sur 30 jours",
     status: "en_cours",
     progressPct: 63,
-    message: "Tu as rÃ©duit ton COâ‚‚ de 7 %, objectif : 10 %. Continue !"
+    message: "Tu as réduit ton CO₂ de 7 %, objectif : 10 %. Continue !"
   },
   {
     id: "local_week",
-    icon: "ðŸŒ",
+    icon: "ðŸŒ",
     name: "Une semaine 100 % locale",
     status: "en_cours",
     progressPct: 40,
@@ -4240,15 +4240,15 @@ const PERSONAL_CHALLENGES_MVP = [
   },
   {
     id: "short_distance_month",
-    icon: "ðŸš²",
+    icon: "🚲",
     name: "Limiter la distance moyenne des produits",
     status: "reussi",
     progressPct: 100,
-    message: "Bravo ! Ta distance moyenne est restÃ©e sous ton objectif ce mois-ci."
+    message: "Bravo ! Ta distance moyenne est restée sous ton objectif ce mois-ci."
   }
 ];
 
-// 1bis) DÃ©fis dynamiques (basÃ©s sur donnÃ©es rÃ©elles) â€” fallback sur MVP si donnÃ©es absentes
+// 1bis) Défis dynamiques (basés sur données réelles) — fallback sur MVP si données absentes
 function buildChallengesFromAgg(agg, trend) {
   const monthSeries = agg?.seriesMonth || [];
   const hasAtLeast2Months = monthSeries.length >= 2;
@@ -4261,10 +4261,10 @@ function buildChallengesFromAgg(agg, trend) {
   const fmtKg = (g) => Math.round((Number(g) || 0) / 1000);
   const fmtPct = (x) => Math.round((Number(x) || 0) * 100);
 
-  // --- DÃ©fi 1 : RÃ©duire COâ‚‚ de 10% (comparaison dernier mois vs prÃ©cÃ©dent) ---
+  // --- Défi 1 : Réduire CO₂ de 10% (comparaison dernier mois vs précédent) ---
   let reduceStatus = "en_cours";
   let reduceProgress = 0;
-  let reduceMsg = "Historique insuffisant : il faut au moins 2 mois de donnÃ©es.";
+  let reduceMsg = "Historique insuffisant : il faut au moins 2 mois de données.";
 
   if (hasAtLeast2Months && prev && Number(prev.total_co2_g) > 0) {
     const lastG = Number(last?.total_co2_g) || 0;
@@ -4281,24 +4281,24 @@ function buildChallengesFromAgg(agg, trend) {
     } else if (lastG > prevG) {
       reduceStatus = "en_cours";
       reduceProgress = 0;
-      reduceMsg = `COâ‚‚ en hausse : ${fmtKg(lastG)} kg vs ${fmtKg(prevG)} kg (${prev.period}). Objectif : -10%.`;
+      reduceMsg = `CO₂ en hausse : ${fmtKg(lastG)} kg vs ${fmtKg(prevG)} kg (${prev.period}). Objectif : -10%.`;
     } else {
       reduceStatus = "en_cours";
-      reduceMsg = `RÃ©duction actuelle : -${fmtPct(achievedReduction)}% (objectif : -10%). Continue.`;
+      reduceMsg = `Réduction actuelle : -${fmtPct(achievedReduction)}% (objectif : -10%). Continue.`;
     }
   }
 
-  // --- DÃ©fi 2 : Une semaine 100% locale (donnÃ©e indisponible pour lâ€™instant) ---
+  // --- Défi 2 : Une semaine 100% locale (donnée indisponible pour l’instant) ---
   // Respect contrainte : pas de spÃ©culation, donc on affiche "Ã  venir".
   const localStatus = "non_atteint";
   const localProgress = 0;
-  const localMsg = "Ã€ venir : lâ€™origine/label â€œlocalâ€ nâ€™est pas encore enregistrÃ© dans les donnÃ©es.";
+  const localMsg = "Ã€ venir : lâ€™origine/label â€œlocalâ€ nâ€™est pas encore enregistrÃ© dans les donnÃ©es.";
 
-  // --- DÃ©fi 3 : RÃ©duire la distance totale (dernier mois vs prÃ©cÃ©dent) ---
+  // --- Défi 3 : Réduire la distance totale (dernier mois vs précédent) ---
   // BasÃ© sur total_distance_km agrÃ©gÃ© (dÃ©jÃ  calculÃ© dans agg).
   let distStatus = "en_cours";
   let distProgress = 0;
-  let distMsg = "Historique insuffisant : il faut au moins 2 mois de donnÃ©es.";
+  let distMsg = "Historique insuffisant : il faut au moins 2 mois de données.";
 
   if (hasAtLeast2Months) {
     const lastPoint = agg.seriesMonth[agg.seriesMonth.length - 1];
@@ -4309,7 +4309,7 @@ function buildChallengesFromAgg(agg, trend) {
 
     if (prevKm > 0) {
       const achieved = Math.max(0, (prevKm - lastKm) / prevKm); // 0..1
-      // objectif MVP : -10% comme rÃ¨gle gÃ©nÃ©rique (pas dâ€™objectif absolu en km)
+      // objectif MVP : -10% comme règle générique (pas d’objectif absolu en km)
       const target = 0.10;
 
       distProgress = Math.min(100, Math.round((achieved / target) * 100));
@@ -4326,28 +4326,28 @@ function buildChallengesFromAgg(agg, trend) {
         distMsg = `Baisse actuelle : ${fmtPct(achieved)}% (objectif : 10%).`;
       }
     } else {
-      // cas oÃ¹ prevKm=0 : on ne peut pas calculer un % fiable
+      // cas où prevKm=0 : on ne peut pas calculer un % fiable
       distStatus = "en_cours";
       distProgress = 0;
-      distMsg = `Distance dernier mois : ${Math.round(lastKm)} km (base prÃ©cÃ©dente nulle).`;
+      distMsg = `Distance dernier mois : ${Math.round(lastKm)} km (base précédente nulle).`;
     }
   }
 
-  // Si aucune donnÃ©e dâ€™agrÃ©gation exploitable, fallback sur challenges statiques
+  // Si aucune donnée d’agrégation exploitable, fallback sur challenges statiques
   if (!monthSeries.length) return PERSONAL_CHALLENGES_MVP;
 
   return [
     {
       id: "reduce_10_percent_30_days",
-      icon: "ðŸ†",
-      name: "RÃ©duire ton COâ‚‚ de 10 % (dernier mois vs prÃ©cÃ©dent)",
+      icon: "ðŸ†",
+      name: "Réduire ton CO₂ de 10 % (dernier mois vs précédent)",
       status: reduceStatus,
       progressPct: reduceProgress,
       message: reduceMsg
     },
     {
       id: "local_week",
-      icon: "ðŸŒ",
+      icon: "ðŸŒ",
       name: "Une semaine 100 % locale (Ã  venir)",
       status: localStatus,
       progressPct: localProgress,
@@ -4355,8 +4355,8 @@ function buildChallengesFromAgg(agg, trend) {
     },
     {
       id: "short_distance_month",
-      icon: "ðŸš²",
-      name: "RÃ©duire la distance totale (dernier mois vs prÃ©cÃ©dent)",
+      icon: "🚲",
+      name: "Réduire la distance totale (dernier mois vs précédent)",
       status: distStatus,
       progressPct: distProgress,
       message: distMsg
@@ -4369,7 +4369,7 @@ function buildChallengesFromAgg(agg, trend) {
 function getChallengeStatusMeta(status) {
   switch (status) {
     case "reussi":
-      return { label: "RÃ©ussi", className: "status-reussi" };
+      return { label: "Réussi", className: "status-reussi" };
     case "non_atteint":
       return { label: "Non atteint", className: "status-non-atteint" };
     case "en_cours":
@@ -4387,9 +4387,9 @@ function createCo2ChallengeCard(challenge) {
 
   card.innerHTML = `
     <div class="co2-challenge-header">
-      <span class="co2-challenge-icon">${challenge.icon || "ðŸ†"}</span>
+      <span class="co2-challenge-icon">${challenge.icon || "ðŸ†"}</span>
       <span class="co2-challenge-name">
-        ${challenge.name || "DÃ©fi COâ‚‚"}
+        ${challenge.name || "Défi CO₂"}
       </span>
     </div>
 
@@ -4416,7 +4416,7 @@ function createCo2ChallengeCard(challenge) {
 function renderCo2ChallengesList(challenges) {
   const $list = document.getElementById("co2-challenges-list");
   if (!$list) {
-    console.warn("[DÃ©fis CO2] Ã‰lÃ©ment #co2-challenges-list introuvable.");
+    console.warn("[Défis CO2] Élément #co2-challenges-list introuvable.");
     return;
   }
 
@@ -4425,7 +4425,7 @@ function renderCo2ChallengesList(challenges) {
   if (!challenges || !challenges.length) {
     $list.innerHTML = `
       <div class="co2-challenge-empty">
-        Aucun dÃ©fi actif pour le moment. Active ton premier dÃ©fi pour suivre ta progression.
+        Aucun défi actif pour le moment. Active ton premier défi pour suivre ta progression.
       </div>
     `;
     return;
@@ -4439,20 +4439,20 @@ function renderCo2ChallengesList(challenges) {
 
 // 4) Initialisation + protection du bouton contre les autres scripts
 function setupCo2ChallengesMvp() {
-  console.log("[DÃ©fis CO2][MVP] initialisation");
+  console.log("[Défis CO2][MVP] initialisation");
 
   const $btnRefresh = document.getElementById("co2-challenges-refresh");
   if ($btnRefresh) {
-    // On capte le clic AVANT les autres gestionnaires Ã©ventuels
+    // On capte le clic AVANT les autres gestionnaires éventuels
     $btnRefresh.addEventListener("click", (evt) => {
       evt.preventDefault();
-      // On bloque la propagation pour Ã©viter que d'autres scripts effacent la liste
+      // On bloque la propagation pour éviter que d'autres scripts effacent la liste
       evt.stopPropagation();
       if (typeof evt.stopImmediatePropagation === "function") {
         evt.stopImmediatePropagation();
       }
 
-      console.log("[DÃ©fis CO2][MVP] clic sur refresh");
+      console.log("[Défis CO2][MVP] clic sur refresh");
       renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
     }, true); // <-- capture = true : notre handler passe en premier
   }
@@ -4461,18 +4461,18 @@ function setupCo2ChallengesMvp() {
   renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
 }
 
-// 5) On attend que tout soit chargÃ©, puis on force quelques re-rendus
+// 5) On attend que tout soit chargé, puis on force quelques re-rendus
 window.addEventListener("load", () => {
   setupCo2ChallengesMvp();
 
   // Si un autre script touche Ã  la liste aprÃ¨s coup, on repasse derriÃ¨re
   setTimeout(() => {
-    console.log("[DÃ©fis CO2][MVP] re-render +1000ms");
+    console.log("[Défis CO2][MVP] re-render +1000ms");
     renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
   }, 1000);
 
   setTimeout(() => {
-    console.log("[DÃ©fis CO2][MVP] re-render +3000ms");
+    console.log("[Défis CO2][MVP] re-render +3000ms");
     renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
   }, 3000);
 });
@@ -4511,7 +4511,7 @@ window.addEventListener("load", () => {
 document.addEventListener('DOMContentLoaded', () => {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.error('[Scanner] getUserMedia indisponible');
-    // si tu as une fonction dâ€™erreur existante :
+    // si tu as une fonction d’erreur existante :
     // showScannerError("Votre navigateur ne supporte pas l'accÃ¨s Ã  la camÃ©ra.", true);
     return;
   }
@@ -4522,7 +4522,7 @@ document.addEventListener('DOMContentLoaded', () => {
     location.hostname === '127.0.0.1';
 
   if (!isSecure) {
-    console.warn('[Scanner] Contexte non sÃ©curisÃ© (HTTPS requis hors localhost)');
+    console.warn('[Scanner] Contexte non sécurisé (HTTPS requis hors localhost)');
   }
 });
 
