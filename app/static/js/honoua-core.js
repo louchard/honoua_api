@@ -1,4 +1,4 @@
-﻿
+
 console.log("[Honoua] build: 2026-01-09-H002");
 
 (async () => {
@@ -1933,20 +1933,18 @@ function mapCategoryForGraph(rawCategoryText) {
  */
 function getCategoryColor(cat) {
   switch (cat) {
-    case 'Viande':
-      return '#D9534F'; // rouge doux
-    case 'Végétaux':
-      return '#5CB85C'; // vert
-    case 'Épicerie':
-      return '#F0AD4E'; // orange
-    case 'Boisson':
-      return '#5BC0DE'; // bleu
-    case 'Autres':
-      return '#999999'; // gris
-    default:
-      return '#CCCCCC';
+    case 'Viande':   return '#D9534F';
+    case 'Végétaux': return '#5CB85C';
+    case 'Épicerie': return '#F0AD4E';
+    case 'Boisson':  return '#5BC0DE';
+    case 'Autres':   return '#999999';
+    default:         return '#CCCCCC';
   }
 }
+
+// Expose la palette des catégories pour le graphique
+window.getCategoryColor = getCategoryColor;
+
 
 /**
  * Dessine un camembert simple Ã  partir des totaux COâ‚‚ par catÃ©gorie.
@@ -2577,7 +2575,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     // 3) Conversion CO₂ total → nombre d’arbres (règle 30 jours = 1 arbre)
 
             // === A52/A53 — Utils arbre (minimal, global) ===
-        // Calibré sur ton historique: 13,6 kg -> ≈225,6 jours => ≈22 kg/an/arbre
+        // Calibré sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
         (function () {
           const TREE_CO2_KG_PER_YEAR = 22; // cohérent avec tes valeurs backend/historique
           const DAYS_PER_YEAR = 365;
@@ -2776,7 +2774,7 @@ if ($recoIntro && $recoList) {
       topHigh.forEach((it) => {
         const li = document.createElement('li');
         li.textContent =
-          `${it.product_name || 'Produit'} – ≈ ${formatNumberFr(Math.round(it.co2_unit_g))} g CO₂e / unité (à remplacer si possible)`;
+          `${it.product_name || 'Produit'} â€“ â‰ˆ ${formatNumberFr(Math.round(it.co2_unit_g))} g COâ‚‚e / unitÃ© (Ã  remplacer si possible)`;
         $recoList.appendChild(li);
       });
     }
@@ -2786,7 +2784,7 @@ if ($recoIntro && $recoList) {
 console.log('[Reco] introEl/listEl:', $recoIntro, $recoList);
 console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
-         // 6) RÃ©partition par catÃ©gories – calcul Ã  partir du panier
+         // 6) RÃ©partition par catÃ©gories â€“ calcul Ã  partir du panier
     if ($catBox) {
        
              // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
@@ -4544,4 +4542,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 })();
-
