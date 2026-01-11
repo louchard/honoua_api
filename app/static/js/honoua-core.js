@@ -3099,7 +3099,104 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 })();
 
   window.HonouaReportPie.render(categoryTotals, totalAll);
-       
+        if ($graph) {
+          // Catégorie dominante
+          if ($dominant) {
+            let dominantCat = null;
+            let dominantVal = 0;
+
+            Object.keys(categoryTotals).forEach(cat => {
+              const v = categoryTotals[cat];   // <-- ligne indispensable
+              if (v > dominantVal) {
+                dominantVal = v;
+                dominantCat = cat;
+              }
+            });
+
+
+            if (dominantCat && dominantVal > 0) {
+              const shareDom = Math.round((dominantVal / totalAll) * 100);
+              $dominant.textContent =
+                `Catégorie dominante : ${dominantCat} (${shareDom} %)`;
+            } else {
+              $dominant.textContent =
+                "Aucune catégorie dominante (données insuffisantes).";
+            }
+          }
+
+          // Légende
+                // Légende + mini-hover (Option C)
+          if ($legend) {
+            $legend.innerHTML = '';
+
+            const ordered = ['Viande', 'Végétaux', 'Épicerie', 'Boisson', 'Autres'];
+
+            // Texte par défaut du bandeau (catégorie dominante)
+            const defaultDominantText = $dominant ? $dominant.textContent : '';
+
+            ordered.forEach(cat => {
+              const valueG = Number(totals[cat]);
+
+              if (!Number.isFinite(valueG) || valueG <= 0) {
+                return;
+              
+                }
+
+              const valueKg = valueG / 1000;
+              const share   = Math.round((valueG / totalAll) * 100);
+
+              const li = document.createElement('li');
+
+              const colorBox = document.createElement('span');
+              colorBox.className = 'legend-color';
+              colorBox.style.backgroundColor = getCategoryColor(cat);
+
+              const textSpan = document.createElement('span');
+              textSpan.textContent =
+                `${cat} – ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
+
+              li.appendChild(colorBox);
+              li.appendChild(textSpan);
+
+              // Mini-hover : survol
+              li.addEventListener('mouseenter', () => {
+                if ($dominant) {
+                  $dominant.textContent =
+                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
+                }
+                li.classList.add('active');
+              });
+
+              // On restaure le texte par défaut quand on sort
+              li.addEventListener('mouseleave', () => {
+                if ($dominant && defaultDominantText) {
+                  $dominant.textContent = defaultDominantText;
+                }
+                li.classList.remove('active');
+              });
+
+              // Clic (mobile friendly)
+              li.addEventListener('click', () => {
+                if ($dominant) {
+                  $dominant.textContent =
+                    `${cat} : ${share} % (${formatNumberFr(valueKg, 1)} kg CO₂e)`;
+                }
+                // on enlève l'état actif des autres <li>
+                Array.from($legend.querySelectorAll('li')).forEach(liOther => {
+                  liOther.classList.remove('active');
+                });
+                li.classList.add('active');
+              });
+
+              $legend.appendChild(li);
+            });
+          }
+
+          // Dessin du camembert (canvas)
+         //drawCategoryPie(categoryTotals, totalAll);
+
+        }
+      }
     
 
     // 7) Affichage du rapport
