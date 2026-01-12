@@ -833,7 +833,7 @@ function setupHistorySort() {
     householdSize: "honoua_household_size",
     // On tente plusieurs clés possibles pour l'historique (robuste)
     cartHistoryCandidates: [
-      "honoua_co2_cart_history",
+      "honoua_cart_history_v1",
       "co2_cart_history",
       "honoua_cart_history",
       "cart_history",
@@ -886,19 +886,48 @@ function setupHistorySort() {
   }
 
   function parseCartCo2Kg(cart) {
-    // On accepte plusieurs noms de champs
-    const raw =
-      cart?.co2_kg ??
-      cart?.co2Kg ??
-      cart?.totalCo2Kg ??
-      cart?.co2TotalKg ??
-      cart?.co2_total_kg ??
-      cart?.total_co2_kg ??
-      cart?.totalCo2 ??
-      cart?.co2;
+  // Format Honoua actuel : { ts, items, totals: { total_co2_g, total_co2_text, ... } }
+  const g =
+    cart?.totals?.total_co2_g ??
+    cart?.totals?.totalCo2G ??
+    cart?.total_co2_g ??
+    cart?.totalCo2G ??
+    null;
 
-    return safeNumber(raw, 0);
+  if (g != null) return safeNumber(g, 0) / 1000;
+
+  const kg =
+    cart?.totals?.total_co2_kg ??
+    cart?.totals?.totalCo2Kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2_kg ??
+    cart?.co2Kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2TotalKg ??
+    cart?.co2_total_kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2 ??
+    cart?.co2 ??
+    null;
+
+  if (kg != null) return safeNumber(kg, 0);
+
+  // Fallback : tenter de parser "≈ 4,20 kg CO₂e" depuis total_co2_text
+  const t =
+    cart?.totals?.total_co2_text ??
+    cart?.totals?.totalCo2Text ??
+    cart?.total_co2_text ??
+    "";
+
+  if (typeof t === "string") {
+    const m = t.match(/([0-9]+(?:[.,][0-9]+)?)\s*kg/i);
+    if (m) return safeNumber(m[1], 0);
   }
+
+  return 0;
+}
+
 
   function readCartHistory() {
     for (const k of STORAGE_KEYS.cartHistoryCandidates) {
@@ -1011,7 +1040,7 @@ function setupHistorySort() {
 (function () {
   const STORAGE_KEYS = {
     cartHistoryCandidates: [
-      "honoua_co2_cart_history",
+      "honoua_cart_history_v1",
       "co2_cart_history",
       "honoua_cart_history",
       "cart_history",
@@ -1065,43 +1094,82 @@ function setupHistorySort() {
   }
 
   function parseCartCo2Kg(cart) {
-    const raw =
-      cart?.co2_kg ??
-      cart?.co2Kg ??
-      cart?.totalCo2Kg ??
-      cart?.co2TotalKg ??
-      cart?.co2_total_kg ??
-      cart?.total_co2_kg ??
-      cart?.totalCo2 ??
-      cart?.co2;
+  // Format Honoua actuel : { ts, items, totals: { total_co2_g, total_co2_text, ... } }
+  const g =
+    cart?.totals?.total_co2_g ??
+    cart?.totals?.totalCo2G ??
+    cart?.total_co2_g ??
+    cart?.totalCo2G ??
+    null;
 
-    return safeNumber(raw, 0);
+  if (g != null) return safeNumber(g, 0) / 1000;
+
+  const kg =
+    cart?.totals?.total_co2_kg ??
+    cart?.totals?.totalCo2Kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2_kg ??
+    cart?.co2Kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2TotalKg ??
+    cart?.co2_total_kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2 ??
+    cart?.co2 ??
+    null;
+
+  if (kg != null) return safeNumber(kg, 0);
+
+  // Fallback : tenter de parser "≈ 4,20 kg CO₂e" depuis total_co2_text
+  const t =
+    cart?.totals?.total_co2_text ??
+    cart?.totals?.totalCo2Text ??
+    cart?.total_co2_text ??
+    "";
+
+  if (typeof t === "string") {
+    const m = t.match(/([0-9]+(?:[.,][0-9]+)?)\s*kg/i);
+    if (m) return safeNumber(m[1], 0);
   }
+
+  return 0;
+}
+
 
   function parseCartDistanceKm(cart) {
-    const raw =
-      cart?.distance_km ??
-      cart?.distanceKm ??
-      cart?.totalDistanceKm ??
-      cart?.distance_total_km ??
-      cart?.distance ??
-      cart?.km;
+  const raw =
+    cart?.totals?.total_distance_km ??
+    cart?.totals?.totalDistanceKm ??
+    cart?.total_distance_km ??
+    cart?.totalDistanceKm ??
+    cart?.distance_km ??
+    cart?.distanceKm ??
+    cart?.totalDistanceKm ??
+    cart?.distance_total_km ??
+    cart?.distance ??
+    cart?.km;
 
-    return safeNumber(raw, 0);
-  }
+  return safeNumber(raw, 0);
+}
+
 
   function parseCartItemsCount(cart) {
-    const raw =
-      cart?.items_count ??
-      cart?.itemsCount ??
-      cart?.productsCount ??
-      cart?.count ??
-      (Array.isArray(cart?.items) ? cart.items.length : null) ??
-      (Array.isArray(cart?.products) ? cart.products.length : null);
+  const raw =
+    cart?.totals?.distinct_products ??
+    cart?.totals?.distinctProducts ??
+    cart?.items_count ??
+    cart?.itemsCount ??
+    cart?.productsCount ??
+    cart?.count ??
+    (Array.isArray(cart?.items) ? cart.items.length : null) ??
+    (Array.isArray(cart?.products) ? cart.products.length : null);
 
-    const n = safeNumber(raw, 0);
-    return Math.max(0, Math.round(n));
-  }
+  const n = safeNumber(raw, 0);
+  return Math.max(0, Math.round(n));
+}
+
+
 
   function readCartHistory() {
     for (const k of STORAGE_KEYS.cartHistoryCandidates) {
@@ -1189,7 +1257,7 @@ function setupHistorySort() {
 (function () {
   const STORAGE_KEYS = {
     cartHistoryCandidates: [
-      "honoua_co2_cart_history",
+      "honoua_cart_history_v1",
       "co2_cart_history",
       "honoua_cart_history",
       "cart_history",
@@ -1240,30 +1308,65 @@ function setupHistorySort() {
   }
 
   function parseCartCo2Kg(cart) {
-    const raw =
-      cart?.co2_kg ??
-      cart?.co2Kg ??
-      cart?.totalCo2Kg ??
-      cart?.co2TotalKg ??
-      cart?.co2_total_kg ??
-      cart?.total_co2_kg ??
-      cart?.totalCo2 ??
-      cart?.co2;
+  // Format Honoua actuel : { ts, items, totals: { total_co2_g, total_co2_text, ... } }
+  const g =
+    cart?.totals?.total_co2_g ??
+    cart?.totals?.totalCo2G ??
+    cart?.total_co2_g ??
+    cart?.totalCo2G ??
+    null;
 
-    return safeNumber(raw, 0);
+  if (g != null) return safeNumber(g, 0) / 1000;
+
+  const kg =
+    cart?.totals?.total_co2_kg ??
+    cart?.totals?.totalCo2Kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2_kg ??
+    cart?.co2Kg ??
+    cart?.totalCo2Kg ??
+    cart?.co2TotalKg ??
+    cart?.co2_total_kg ??
+    cart?.total_co2_kg ??
+    cart?.totalCo2 ??
+    cart?.co2 ??
+    null;
+
+  if (kg != null) return safeNumber(kg, 0);
+
+  // Fallback : tenter de parser "≈ 4,20 kg CO₂e" depuis total_co2_text
+  const t =
+    cart?.totals?.total_co2_text ??
+    cart?.totals?.totalCo2Text ??
+    cart?.total_co2_text ??
+    "";
+
+  if (typeof t === "string") {
+    const m = t.match(/([0-9]+(?:[.,][0-9]+)?)\s*kg/i);
+    if (m) return safeNumber(m[1], 0);
   }
+
+  return 0;
+}
+
 
   function parseCartDistanceKm(cart) {
-    const raw =
-      cart?.distance_km ??
-      cart?.distanceKm ??
-      cart?.totalDistanceKm ??
-      cart?.distance_total_km ??
-      cart?.distance ??
-      cart?.km;
+  const raw =
+    cart?.totals?.total_distance_km ??
+    cart?.totals?.totalDistanceKm ??
+    cart?.total_distance_km ??
+    cart?.totalDistanceKm ??
+    cart?.distance_km ??
+    cart?.distanceKm ??
+    cart?.totalDistanceKm ??
+    cart?.distance_total_km ??
+    cart?.distance ??
+    cart?.km;
 
-    return safeNumber(raw, 0);
-  }
+  return safeNumber(raw, 0);
+}
+
 
   function readCartHistory() {
     for (const k of STORAGE_KEYS.cartHistoryCandidates) {
