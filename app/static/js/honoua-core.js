@@ -4443,6 +4443,8 @@ function renderCo2ChallengesList(challenges) {
     return;
   }
 
+let renderedCount = 0;
+
 challenges.forEach((c) => {
   try {
     $list.appendChild(createCo2ChallengeCard(c));
@@ -4460,10 +4462,6 @@ if (renderedCount === 0) {
   `;
 }
 
-  challenges.forEach((c) => {
-    const card = createCo2ChallengeCard(c);
-    $list.appendChild(card);
-  });
 }
 
 // 4) Initialisation + protection du bouton contre les autres scripts
