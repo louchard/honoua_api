@@ -246,6 +246,17 @@
 
 
   <script src="js/honoua-core.js" charset="utf-8"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof setupCo2ChallengesMvp === 'function') {
+      console.log('[Défis] init suivi-co2');
+      setupCo2ChallengesMvp();
+    } else {
+      console.warn('[Défis] setupCo2ChallengesMvp introuvable (honoua-core.js non chargé ?)');
+    }
+  });
+</script>
+
   <script src="js/suivi-co2.js" charset="utf-8"></script>
   <script src="js/nav.js" charset="utf-8"></script>
 
