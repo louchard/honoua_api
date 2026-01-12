@@ -2346,7 +2346,14 @@ document.addEventListener('DOMContentLoaded', function () {
           ? window.getCo2CartTotals()
           : null;
 
-        honouaSaveCartToHistory(cart, totalsSummary);
+       const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        // Snapshot (évite d’enregistrer une référence mutable)
+        const cartSnapshot = cartNow.map(it => ({ ...it }));
+
+        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+
         honouaRenderLastTwoCartsInReco();
       } catch (e) {
         console.warn('[History] save/render failed', e);
