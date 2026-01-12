@@ -2050,7 +2050,14 @@ if (cart.length === 0) {
           const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
           const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
 
-          honouaSaveCartToHistory(cart, totalsSummary);
+          const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        // Snapshot (évite d’enregistrer une référence mutable)
+        const cartSnapshot = cartNow.map(it => ({ ...it }));
+
+        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
         } catch (e) {
