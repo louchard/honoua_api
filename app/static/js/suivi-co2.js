@@ -1215,12 +1215,12 @@ function setupHistorySort() {
     const slice = history.slice(0, maxItems);
 
     listEl.innerHTML = slice
-      .map((h) => {
+      .map((h, i) => {
         const dateLabel = h.ts ? formatDate(h.ts) : "—";
         const itemsLabel = h.itemsCount ? `${h.itemsCount} produit(s)` : "Panier";
         const kmHtml = h.km > 0 ? `<span class="co2-cart-history-meta">🚚 ${formatKm(h.km)}</span>` : "";
         return `
-          <div class="co2-cart-history-item">
+          <div class="co2-cart-history-item" data-idx="${i}">
             <div class="co2-cart-history-item__top">
               <div class="co2-cart-history-item__title">${itemsLabel}</div>
               <div class="co2-cart-history-item__date">${dateLabel}</div>
@@ -1234,6 +1234,49 @@ function setupHistorySort() {
         `;
       })
       .join("");
+
+      // --- Clic sur un panier -> affichage détail ---
+const detailEl = document.getElementById("co2-cart-history-detail");
+if (detailEl) {
+  // On remplace les handlers à chaque rendu (pas de doublons)
+  listEl.querySelectorAll('.co2-cart-history-item[data-idx]').forEach((el) => {
+    el.onclick = () => {
+      const idx = Number(el.getAttribute("data-idx"));
+      if (!Number.isFinite(idx)) return;
+
+      const h = slice[idx];
+      if (!h) return;
+
+      const raw = h.raw || h;
+      const items =
+        Array.isArray(raw.items) ? raw.items :
+        (Array.isArray(raw.products) ? raw.products : []);
+
+      const dateLabel = h.ts ? formatDate(h.ts) : "—";
+      const kmTxt = (h.km > 0) ? ` — 🚚 ${formatKm(h.km)}` : "";
+
+      const itemsHtml = items.slice(0, 30).map((it) => {
+        const name = escapeHtml(String(it.product_name || it.name || "Produit"));
+        const qty = (it.qty ?? it.quantity ?? 1);
+        return `<li>${name} <span class="co2-muted">×${qty}</span></li>`;
+      }).join("");
+
+      detailEl.innerHTML = `
+        <div class="co2-history-detail-card">
+          <div class="co2-history-detail-title"><strong>Détail du panier</strong> — ${dateLabel}</div>
+          <div class="co2-history-detail-meta">🌿 ${formatKg(h.co2Kg)}${kmTxt}</div>
+          <div class="co2-history-detail-items">
+            <strong>Produits</strong>
+            <ul>${itemsHtml || "<li>Détail indisponible (format ancien)</li>"}</ul>
+          </div>
+        </div>
+      `;
+
+      detailEl.classList.remove("hidden");
+    };
+  });
+}
+
 
     if (history.length > maxItems) {
       const more = history.length - maxItems;
@@ -1628,7 +1671,84 @@ function setMetricActive(metric) {
   }
 })();
 
+ // code nouvelle fonctionnalité
+function showCartHistoryDetailByIndex(idx) {
+  const $detail = document.getElementById("co2-cart-history-detail");
+  if (!$detail) return;
 
+  const history = honouaGetCartHistory();
+  const h = history[idx];
+  if (!h) return;
 
+  const co2g =
+    (h.totals && (h.totals.total_co2_g ?? h.totals.totalCo2G ?? h.totals.total_all_g)) ?? null;
+  const co2kg = (co2g != null && Number.isFinite(Number(co2g))) ? (Number(co2g) / 1000) : null;
+
+  const titleDate = (() => { try { return new Date(h.ts).toLocaleString('fr-FR'); } catch { return ''; } })();
+
+  const items = Array.isArray(h.items) ? h.items : [];
+  const lines = items.slice(0, 30).map((it) => {
+    const name = it.product_name || it.name || "Produit";
+    const qty = it.qty ?? it.quantity ?? 1;
+    return `<li>${escapeHtml(String(name))} <span class="co2-muted">×${qty}</span></li>`;
+  }).join("");
+
+  $detail.innerHTML = `
+    <div class="co2-history-detail-card">
+      <div class="co2-history-detail-title"><strong>Panier</strong> — ${titleDate}</div>
+      <div class="co2-history-detail-meta">Total : ${co2kg != null ? `≈ ${co2kg.toFixed(2).replace('.', ',')} kg CO₂e` : '—'}</div>
+
+      <div class="co2-history-detail-actions">
+        <button id="co2-history-reload-cart" class="honoua-btn">Recharger ce panier</button>
+      </div>
+
+      <div class="co2-history-detail-items">
+        <strong>Produits</strong>
+        <ul>${lines || "<li>Aucun produit.</li>"}</ul>
+      </div>
+    </div>
+  `;
+
+  $detail.classList.remove("hidden");
+
+  const $reload = document.getElementById("co2-history-reload-cart");
+  if ($reload) {
+    $reload.onclick = () => {
+      // Réinjecte dans la clé utilisée par ScanImpact/Honoua core
+      localStorage.setItem("honoua_co2_cart_v1", JSON.stringify(items));
+      alert("Panier rechargé. Retournez sur ScanImpact pour voir les recommandations.");
+    };
+  }
+}
+
+// Petit helper si pas déjà présent
+function escapeHtml(s) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+document.addEventListener("click", (e) => {
+  const el = e.target && e.target.closest ? e.target.closest(".co2-history-item") : null;
+  if (!el) return;
+  const idx = Number(el.getAttribute("data-idx"));
+  if (!Number.isFinite(idx)) return;
+  showCartHistoryDetailByIndex(idx);
+});
+
+// code supplémentaire 
+document.addEventListener("click", (e) => {
+  const el = e.target && e.target.closest ? e.target.closest(".co2-cart-history-item") : null;
+  if (!el) return;
+
+  const idx = Number(el.getAttribute("data-idx"));
+  if (!Number.isFinite(idx)) return;
+
+  console.log("[History] click idx=", idx);
+  // Étape suivante : afficher un détail / recharger le panier
+});
 
 
