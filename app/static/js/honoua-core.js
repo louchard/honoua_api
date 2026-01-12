@@ -1,4 +1,4 @@
-
+﻿
 console.log("[Honoua] build: 2026-01-09-H002");
 
 (async () => {
@@ -886,7 +886,7 @@ if (typeof data.co2_kg_total === "number") {
   showScannerInfo("Scan réussi.");
 }
 
-    // 2ï¸âƒ£ Construction de lâ€™objet ecoProduct pour EcoSELECT
+    // 2ï¸âƒ£ Construction de l’objet ecoProduct pour EcoSELECT
     try {
       // On récupère le total CO₂ en kg depuis les bons champs de l’API
       let co2TotalKg = null;
@@ -2589,7 +2589,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     // 3) Conversion CO₂ total → nombre d’arbres (règle 30 jours = 1 arbre)
 
             // === A52/A53 — Utils arbre (minimal, global) ===
-        // Calibré sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
+        // Calibré sur ton historique: 13,6 kg -> ≈225,6 jours => ≈22 kg/an/arbre
         (function () {
           const TREE_CO2_KG_PER_YEAR = 22; // cohérent avec tes valeurs backend/historique
           const DAYS_PER_YEAR = 365;
@@ -2788,7 +2788,7 @@ if ($recoIntro && $recoList) {
       topHigh.forEach((it) => {
         const li = document.createElement('li');
         li.textContent =
-          `${it.product_name || 'Produit'} â€“ â‰ˆ ${formatNumberFr(Math.round(it.co2_unit_g))} g COâ‚‚e / unitÃ© (Ã  remplacer si possible)`;
+        `${it.product_name || 'Produit'} \u2013 \u2248 ${formatNumberFr(Math.round(it.co2_unit_g))} g CO\u2082e / unit\u00E9 (\u00E0 remplacer si possible)`;
         $recoList.appendChild(li);
       });
     }
@@ -2798,7 +2798,7 @@ if ($recoIntro && $recoList) {
 console.log('[Reco] introEl/listEl:', $recoIntro, $recoList);
 console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
-         // 6) RÃ©partition par catÃ©gories â€“ calcul Ã  partir du panier
+         // 6) RÃ©partition par catÃ©gories – calcul Ã  partir du panier
     if ($catBox) {
        
              // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
@@ -3299,7 +3299,7 @@ function honouaRenderLastTwoCartsInReco() {
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
 // Endpoint /api/cart/history absent en prod (404) : on désactive côté front pour éviter le spam réseau/console.
-// Le jour oÃ¹ lâ€™endpoint est disponible, repasser Ã  false.
+// Le jour oÃ¹ l’endpoint est disponible, repasser Ã  false.
 let __CO2_CART_HISTORY_DISABLED = true;
 
 
@@ -4304,7 +4304,7 @@ function buildChallengesFromAgg(agg, trend) {
   // Respect contrainte : pas de spÃ©culation, donc on affiche "Ã  venir".
   const localStatus = "non_atteint";
   const localProgress = 0;
-  const localMsg = "Ã€ venir : lâ€™origine/label â€œlocalâ€ nâ€™est pas encore enregistrÃ© dans les donnÃ©es.";
+  const localMsg = "Ã€ venir : l’origine/label â€œlocalâ€ n’est pas encore enregistrÃ© dans les donnÃ©es.";
 
   // --- Défi 3 : Réduire la distance totale (dernier mois vs précédent) ---
   // BasÃ© sur total_distance_km agrÃ©gÃ© (dÃ©jÃ  calculÃ© dans agg).
@@ -4556,3 +4556,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 })();
+
