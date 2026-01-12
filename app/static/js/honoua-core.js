@@ -3099,7 +3099,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 })();
 
   window.HonouaReportPie.render(categoryTotals, totalAll);
-        if ($graph) {
+        if (typeof $graph !== "undefined" && $graph) {
           // Catégorie dominante
           if ($dominant) {
             let dominantCat = null;
