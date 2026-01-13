@@ -1233,7 +1233,10 @@ function setupHistorySort() {
           </div>
         `;
       })
-      .join("");
+      .join('');
+
+// --- Historique : permettre le clic pour afficher un détail (délégation) ---
+window.__honouaHistorySlice = slice;
 
       // --- Clic sur un panier -> affichage détail ---
 const detailEl = document.getElementById("co2-cart-history-detail");
@@ -1259,7 +1262,7 @@ if (detailEl) {
         const name = escapeHtml(String(it.product_name || it.name || "Produit"));
         const qty = (it.qty ?? it.quantity ?? 1);
         return `<li>${name} <span class="co2-muted">×${qty}</span></li>`;
-      }).join("");
+      }).join('');
 
       detailEl.innerHTML = `
         <div class="co2-history-detail-card">
@@ -1691,7 +1694,7 @@ function showCartHistoryDetailByIndex(idx) {
     const name = it.product_name || it.name || "Produit";
     const qty = it.qty ?? it.quantity ?? 1;
     return `<li>${escapeHtml(String(name))} <span class="co2-muted">×${qty}</span></li>`;
-  }).join("");
+  }).join('');
 
   $detail.innerHTML = `
     <div class="co2-history-detail-card">
