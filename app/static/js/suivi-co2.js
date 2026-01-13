@@ -1238,11 +1238,19 @@ function setupHistorySort() {
 // --- Historique : permettre le clic pour afficher un détail (délégation) ---
 window.__honouaHistorySlice = slice;
 
-      // --- Clic sur un panier -> affichage détail ---
+   // HISTORY_DETAIL_V1 — clic panier => panneau détail
 const detailEl = document.getElementById("co2-cart-history-detail");
 if (detailEl) {
-  // On remplace les handlers à chaque rendu (pas de doublons)
-  listEl.querySelectorAll('.co2-cart-history-item[data-idx]').forEach((el) => {
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[ch]));
+
+  listEl.querySelectorAll(".co2-cart-history-item[data-idx]").forEach((el) => {
+    // On écrase tout handler précédent pour être sûr
     el.onclick = () => {
       const idx = Number(el.getAttribute("data-idx"));
       if (!Number.isFinite(idx)) return;
@@ -1258,11 +1266,13 @@ if (detailEl) {
       const dateLabel = h.ts ? formatDate(h.ts) : "—";
       const kmTxt = (h.km > 0) ? ` — 🚚 ${formatKm(h.km)}` : "";
 
-      const itemsHtml = items.slice(0, 30).map((it) => {
-        const name = escapeHtml(String(it.product_name || it.name || "Produit"));
+      const itemsHtml = hasItems ? items.slice(0, 30).map((it) => {
+
+        const hasItems = Array.isArray(items) && items.length > 0;
+        const name = escapeHtml(it.product_name || it.name || "Produit");
         const qty = (it.qty ?? it.quantity ?? 1);
         return `<li>${name} <span class="co2-muted">×${qty}</span></li>`;
-      }).join('');
+      }).join(""): "";
 
       detailEl.innerHTML = `
         <div class="co2-history-detail-card">
@@ -1270,15 +1280,23 @@ if (detailEl) {
           <div class="co2-history-detail-meta">🌿 ${formatKg(h.co2Kg)}${kmTxt}</div>
           <div class="co2-history-detail-items">
             <strong>Produits</strong>
-            <ul>${itemsHtml || "<li>Détail indisponible (format ancien)</li>"}</ul>
+            <ul>${
+  hasItems
+    ? itemsHtml
+    : `<li>Le détail des produits n’est pas disponible pour ce panier (format ancien).</li>
+       <li><span class="co2-muted">Résumé :</span> ${h.itemsCount || 0} produit(s) — 🌿 ${formatKg(h.co2Kg)}${kmTxt}</li>`
+}</ul>
+
           </div>
         </div>
       `;
 
       detailEl.classList.remove("hidden");
+      console.log("[HISTORY_DETAIL_V1] detail OK idx=", idx, "items=", items.length);
     };
   });
 }
+  
 
 
     if (history.length > maxItems) {
