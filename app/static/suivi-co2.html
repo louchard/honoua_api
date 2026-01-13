@@ -268,6 +268,16 @@
     }
   });
 </script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('co2-challenges-list');
+    if (!list) return;
+
+    if (typeof window.setupCo2ChallengesMvp === 'function') {
+      window.setupCo2ChallengesMvp();
+    }
+  });
+</script>
 
 </body>
 </html>
