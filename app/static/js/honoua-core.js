@@ -4504,6 +4504,10 @@ window.addEventListener("load", () => {
   }, 3000);
 });
 
+// Expose pour la page Suivi CO₂ (appel depuis suivi-co2.html)
+window.setupCo2ChallengesMvp = setupCo2ChallengesMvp;
+
+
 // =========================
 // SAFE: Honoua cart history writer (no-crash guard)
 // =========================

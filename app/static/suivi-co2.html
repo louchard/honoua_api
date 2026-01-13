@@ -260,5 +260,14 @@
   <script src="js/suivi-co2.js" charset="utf-8"></script>
   <script src="js/nav.js" charset="utf-8"></script>
 
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!window.__honouaChallengesInitDone && typeof window.setupCo2ChallengesMvp === 'function') {
+      window.__honouaChallengesInitDone = true;
+      window.setupCo2ChallengesMvp();
+    }
+  });
+</script>
+
 </body>
 </html>
