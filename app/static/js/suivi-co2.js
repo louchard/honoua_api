@@ -1219,6 +1219,9 @@ function setupHistorySort() {
         const dateLabel = h.ts ? formatDate(h.ts) : "—";
         const itemsLabel = h.itemsCount ? `${h.itemsCount} produit(s)` : "Panier";
         const kmHtml = h.km > 0 ? `<span class="co2-cart-history-meta">🚚 ${formatKm(h.km)}</span>` : "";
+        const avgKm = (h.km > 0 && h.itemsCount > 0) ? (h.km / h.itemsCount) : 0;
+        const avgKmHtml = avgKm > 0 ? `<span class="co2-cart-history-meta">📍 ${formatKm(avgKm)} moy.</span>` : "";
+
         return `
           <div class="co2-cart-history-item" data-idx="${i}">
             <div class="co2-cart-history-item__top">
@@ -1227,9 +1230,10 @@ function setupHistorySort() {
             </div>
 
             <div class="co2-cart-history-item__stats">
-              <span class="co2-cart-history-meta">🌿 ${formatKg(h.co2Kg)}</span>
-              ${kmHtml}
-            </div>
+            <span class="co2-cart-history-meta">🌿 ${formatKg(h.co2Kg)}</span>
+            ${kmHtml}
+            ${avgKmHtml}
+          </div>
           </div>
         `;
       })
@@ -1268,6 +1272,9 @@ if (detailEl) {
 
       const dateLabel = h.ts ? formatDate(h.ts) : "—";
       const kmTxt = (h.km > 0) ? ` — 🚚 ${formatKm(h.km)}` : "";
+      const avgKm = (h.km > 0 && (h.itemsCount || 0) > 0) ? (h.km / h.itemsCount) : 0;
+      const avgKmTxt = avgKm > 0 ? ` — 📍 ${formatKm(avgKm)} moy.` : "";
+
 
       const itemsHtml = hasItems ? items.slice(0, 30).map((it) => {
       const name = escapeHtml(it.product_name || it.name || "Produit");
@@ -1279,7 +1286,7 @@ if (detailEl) {
       detailEl.innerHTML = `
         <div class="co2-history-detail-card">
           <div class="co2-history-detail-title"><strong>Détail du panier</strong> — ${dateLabel}</div>
-          <div class="co2-history-detail-meta">🌿 ${formatKg(h.co2Kg)}${kmTxt}</div>
+          <div class="co2-history-detail-meta">🌿 ${formatKg(h.co2Kg)}${kmTxt}${avgKmTxt}</div>
           <div class="co2-history-detail-items">
             <strong>Produits</strong>
             <ul>${
