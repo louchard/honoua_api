@@ -1211,7 +1211,7 @@ function setupHistorySort() {
       return;
     }
 
-    const maxItems = 20;
+    const maxItems = 5;
     const slice = history.slice(0, maxItems);
 
     listEl.innerHTML = slice
