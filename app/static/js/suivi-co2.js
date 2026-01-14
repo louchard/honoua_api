@@ -1263,16 +1263,18 @@ if (detailEl) {
         Array.isArray(raw.items) ? raw.items :
         (Array.isArray(raw.products) ? raw.products : []);
 
+      const hasItems = Array.isArray(items) && items.length > 0;
+
+
       const dateLabel = h.ts ? formatDate(h.ts) : "—";
       const kmTxt = (h.km > 0) ? ` — 🚚 ${formatKm(h.km)}` : "";
 
       const itemsHtml = hasItems ? items.slice(0, 30).map((it) => {
+      const name = escapeHtml(it.product_name || it.name || "Produit");
+      const qty = (it.qty ?? it.quantity ?? 1);
+      return `<li>${name} <span class="co2-muted">×${qty}</span></li>`;
+      }).join("") : "";
 
-        const hasItems = Array.isArray(items) && items.length > 0;
-        const name = escapeHtml(it.product_name || it.name || "Produit");
-        const qty = (it.qty ?? it.quantity ?? 1);
-        return `<li>${name} <span class="co2-muted">×${qty}</span></li>`;
-      }).join(""): "";
 
       detailEl.innerHTML = `
         <div class="co2-history-detail-card">
@@ -1293,6 +1295,8 @@ if (detailEl) {
 
       detailEl.classList.remove("hidden");
       console.log("[HISTORY_DETAIL_V1] detail OK idx=", idx, "items=", items.length);
+      
+
     };
   });
 }
