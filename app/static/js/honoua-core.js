@@ -2550,13 +2550,42 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
 
     const totalCo2Kg = totalCo2G / 1000;
     // =========================
-// Suivi CO2 — sauvegarde du panier (MVP)
-// =========================
-    window.honouaAppendCartToHistory({
-      co2Kg: totalCo2Kg,
-      distanceKm: 0, // distance non gérée dans getCartTotals() pour l’instant
-      itemsCount: totals.distinct_products || co2Cart.length || 0
-    });
+      // Suivi CO2 — sauvegarde du panier (MVP)
+      // =========================
+    // Distance totale (pondérée par quantité) — pour historique localStorage
+  // Parse robuste: accepte number, string, "12,3", " 12.3 "
+        const toNum = (v) => {
+          if (v == null) return 0;
+          if (typeof v === 'string') v = v.replace(/\s/g, '').replace(',', '.');
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
+
+        const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        let totalDistanceKm = 0;
+        for (const it of cartNow) {
+          let qty = toNum(it.quantity ?? it.qty ?? 1);
+          if (!(qty > 0)) qty = 1;
+
+         const d = toNum(
+            it.distance_km ??
+            it.distanceKm ??
+            it.total_distance_km ??
+            it.transport_km ??
+            it.transportKm ??
+            0
+          );
+
+          if (Number.isFinite(d) && d > 0) totalDistanceKm += d * qty;
+        }
+
+        window.honouaAppendCartToHistory({
+          co2Kg: totalCo2Kg,
+          distanceKm: totalDistanceKm,
+          itemsCount: totals.distinct_products || cartNow.length || 0
+        });
 
 
     if ($reportEmissionsTotal) {
@@ -2715,8 +2744,8 @@ if ($treeIcons && $treeBadge) {
         countDistanceItems += qty;
       }
     }
+    const totalDistanceKmFromCart = sumDistanceKm;
 
-    const totalDistanceKm = sumDistanceKm;
     const avgDistanceKm = countDistanceItems > 0 ? (sumDistanceKm / countDistanceItems) : 0;
     const localThreshold = 250;
 
