@@ -2552,25 +2552,11 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     // =========================
 // Suivi CO2 — sauvegarde du panier (MVP)
 // =========================
-    // Distance totale (pondérée par quantité) — pour historique localStorage
-    
-        const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
-
-        let totalDistanceKm = 0;
-        for (const it of cartNow) {
-          let qty = Number(it.quantity ?? it.qty ?? 1);
-          if (!Number.isFinite(qty) || qty <= 0) qty = 1;
-
-          const d = Number(it.distance_km ?? it.distanceKm ?? 0);
-          if (Number.isFinite(d) && d > 0) totalDistanceKm += d * qty;
-        }
-
-        window.honouaAppendCartToHistory({
-          co2Kg: totalCo2Kg,
-          distanceKm: totalDistanceKmFromCart,
-          itemsCount: totals.distinct_products || co2Cart.length || 0
-        });
+    window.honouaAppendCartToHistory({
+      co2Kg: totalCo2Kg,
+      distanceKm: 0, // distance non gérée dans getCartTotals() pour l’instant
+      itemsCount: totals.distinct_products || co2Cart.length || 0
+    });
 
 
     if ($reportEmissionsTotal) {
@@ -2730,7 +2716,7 @@ if ($treeIcons && $treeBadge) {
       }
     }
 
-    const totalDistanceKmFromCart = sumDistanceKm;
+    const totalDistanceKm = sumDistanceKm;
     const avgDistanceKm = countDistanceItems > 0 ? (sumDistanceKm / countDistanceItems) : 0;
     const localThreshold = 250;
 
