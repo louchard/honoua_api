@@ -202,15 +202,14 @@ def get_active_challenges(
                 NULL::timestamp AS last_evaluated_at
             FROM public.challenge_instances ci
             JOIN public.challenges c ON c.id = ci.challenge_id
-            WHERE ci.target_type = 'user'
-              AND ci.target_id = :user_id
+            WHERE ci.user_id = :user_id
               AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
             ORDER BY ci.created_at DESC
         """)
 
 
     try:
-        rows = db.execute(sql, {"user_id": user_id}).mappings().all()
+        rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
     except Exception as e:
         print("[A54][WARN] Impossible de charger les défis actifs (table manquante ?) → retour []. Détail :", e)
         return []
