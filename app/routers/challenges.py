@@ -181,32 +181,32 @@ def get_active_challenges(
     - Si l'une des deux tables n'existe pas → renvoie [] sans planter.
     """
 
-        sql = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            c.metric,
-            c.logic_type,
-            c.period_type,
-            ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
-            NULL::numeric   AS reference_value,
-            NULL::numeric   AS current_value,
-            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            NULL::numeric   AS progress_percent,
-            ci.created_at,
-            NULL::timestamp AS last_evaluated_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.target_type = 'user'
-          AND ci.target_id = :user_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-        ORDER BY ci.created_at DESC
-    """)
+    sql = text("""
+            SELECT
+                ci.id AS instance_id,
+                ci.challenge_id,
+                c.code,
+                COALESCE(c.name, c.title, c.code) AS name,
+                c.description,
+                c.metric,
+                c.logic_type,
+                c.period_type,
+                ci.status,
+                ci.period_start AS start_date,
+                ci.period_end   AS end_date,
+                NULL::numeric   AS reference_value,
+                NULL::numeric   AS current_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                NULL::numeric   AS progress_percent,
+                ci.created_at,
+                NULL::timestamp AS last_evaluated_at
+            FROM public.challenge_instances ci
+            JOIN public.challenges c ON c.id = ci.challenge_id
+            WHERE ci.target_type = 'user'
+              AND ci.target_id = :user_id
+              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+            ORDER BY ci.created_at DESC
+        """)
 
 
     try:
