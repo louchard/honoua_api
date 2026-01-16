@@ -282,9 +282,9 @@ def evaluate_challenge(
             ci.last_evaluated_at,
             c.code,
             c.name,
-            c.metric,
-            c.logic_type,
-            c.period_type
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
         FROM challenge_instances AS ci
         JOIN challenges AS c
             ON ci.challenge_id = c.id
