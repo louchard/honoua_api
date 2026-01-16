@@ -203,7 +203,7 @@ def get_active_challenges(
             FROM public.challenge_instances ci
             JOIN public.challenges c ON c.id = ci.challenge_id
             WHERE ci.user_id = :user_id
-              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+              AND UPPER(ci.status) = 'ACTIVE'
             ORDER BY ci.created_at DESC
         """)
 
@@ -217,29 +217,14 @@ def get_active_challenges(
     # Construction du modèle Pydantic
     results = []
     for r in rows:
-        results.append(
-            ChallengeInstanceRead(
-                instance_id=r["instance_id"],
-                challenge_id=r["challenge_id"],
-                code=r["code"],
-                name=r["name"],
-                description=r["description"],
-                metric=r["metric"],
-                logic_type=r["logic_type"],
-                period_type=r["period_type"],
-                status=r["status"],
-                start_date=r["start_date"],
-                end_date=r["end_date"],
-                reference_value=r["reference_value"],
-                current_value=r["current_value"],
-                target_value=r["target_value"],
-                progress_percent=r["progress_percent"],
-                created_at=r["created_at"],
-                last_evaluated_at=r["last_evaluated_at"],
-            )
-        )
+        try:
+            results.append(ChallengeInstanceRead(**r))
+        except Exception as e:
+            print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
+            continue
 
     return results
+
 
 
 
