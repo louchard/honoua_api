@@ -182,32 +182,32 @@ def get_active_challenges(
     """
 
     sql = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            c.name,
-            c.description,
-            c.metric,
-            c.logic_type,
-            c.period_type,
-            ci.status,
-            ci.start_date,
-            ci.end_date,
-            ci.reference_value,
-            ci.current_value,
-            ci.target_value,
-            ci.progress_percent,
-            ci.created_at,
-            ci.last_evaluated_at
-        FROM challenge_instances AS ci
-        JOIN challenges AS c
-            ON ci.challenge_id = c.id
-        WHERE ci.target_type = 'user'
-          AND ci.target_id = :user_id
-          AND ci.status = 'en_cours'
-        ORDER BY ci.created_at DESC
-    """)
+            SELECT
+                ci.id AS instance_id,
+                ci.challenge_id,
+                c.code,
+                COALESCE(c.name, c.title, c.code) AS name,
+                c.description,
+                c.metric,
+                c.logic_type,
+                c.period_type,
+                ci.status,
+                ci.period_start AS start_date,
+                ci.period_end   AS end_date,
+                NULL::numeric   AS reference_value,
+                NULL::numeric   AS current_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                NULL::numeric   AS progress_percent,
+                ci.created_at,
+                NULL::timestamp AS last_evaluated_at
+            FROM public.challenge_instances ci
+            JOIN public.challenges c ON c.id = ci.challenge_id
+            WHERE ci.target_type = 'user'
+              AND ci.target_id = :user_id
+              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+            ORDER BY ci.created_at DESC
+        """)
+
 
     try:
         rows = db.execute(sql, {"user_id": user_id}).mappings().all()
