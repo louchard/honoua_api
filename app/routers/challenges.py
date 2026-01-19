@@ -227,9 +227,6 @@ def get_active_challenges(
 
 
 
-
-
-
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
 
 @router.post(
