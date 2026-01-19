@@ -431,7 +431,11 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
-    target_value_pct = (float(row["target_value"]) / 100.0) if row.get("target_value") is not None else 0.10
+        # target_value est stocké en "pourcentage" côté défi (ex: 10.0 pour 10%)
+    target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
+
+    # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
+    target_value_pct = (target_value / 100.0) if target_value > 1 else target_value
 
 
     # 4) Calcul de la réduction et de la progression
