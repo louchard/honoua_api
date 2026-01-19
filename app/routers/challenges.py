@@ -270,34 +270,28 @@ def evaluate_challenge(
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
-            ci.target_type,
-            ci.target_id,
-            ci.start_date,
-            ci.end_date,
+            ci.user_id,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
             ci.status,
-            ci.reference_value,
-            ci.current_value,
-            ci.target_value,
-            ci.progress_percent,
             ci.created_at,
-            ci.last_evaluated_at,
+            ci.updated_at,
             c.code,
-            c.name,
+            COALESCE(c.name, c.title, c.code) AS name,
             COALESCE(c.metric, 'CO2') AS metric,
             COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
             COALESCE(c.period_type, 'DAYS') AS period_type,
-        FROM challenge_instances AS ci
-        JOIN challenges AS c
-            ON ci.challenge_id = c.id
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.id = :instance_id
-          AND ci.target_type = 'user'
-          AND ci.target_id = :user_id
+          AND ci.user_id::text = :user_id
         """
     )
 
     row = db.execute(
         select_sql,
-        {"instance_id": instance_id, "user_id": user_id},
+        {"instance_id": instance_id, "user_id": str(user_id)},
     ).mappings().first()
 
     if row is None:
