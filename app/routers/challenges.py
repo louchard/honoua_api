@@ -181,38 +181,66 @@ def get_active_challenges(
     - Si l'une des deux tables n'existe pas → renvoie [] sans planter.
     """
 
-    sql = text("""
-            SELECT
-                ci.id AS instance_id,
-                ci.challenge_id,
-                c.code,
-                COALESCE(c.name, c.title, c.code) AS name,
-                c.description,
-                c.metric,
-                c.logic_type,
-                c.period_type,
-                ci.status,
-                ci.period_start AS start_date,
-                ci.period_end   AS end_date,
-                NULL::numeric   AS reference_value,
-                NULL::numeric   AS current_value,
-                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-                NULL::numeric   AS progress_percent,
-                ci.created_at,
-                NULL::timestamp AS last_evaluated_at
-            FROM public.challenge_instances ci
-            JOIN public.challenges c ON c.id = ci.challenge_id
-            WHERE ci.user_id::text = :user_id
-              AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
-            ORDER BY ci.created_at DESC
-        """)
+# SELECT complet (si le schéma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
+    full_sql = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            ci.reference_value,
+            ci.current_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            ci.progress_percent,
+            ci.created_at,
+            ci.last_evaluated_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
+        ORDER BY ci.created_at DESC
+    """)
 
+# Fallback minimal (si certaines colonnes n'existent pas)
+    fallback_sql = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS progress_percent,
+            ci.created_at,
+            NULL::timestamp AS last_evaluated_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
+        ORDER BY ci.created_at DESC
+    """)
 
     try:
-        rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
-    except Exception as e:
-        print("[A54][WARN] Impossible de charger les défis actifs (table manquante ?) → retour []. Détail :", e)
-        return []
+        rows = db.execute(full_sql, {"user_id": str(user_id)}).mappings().all()
+    except (ProgrammingError, OperationalError) as e:
+        print("[A54][WARN] /challenges/active full_sql KO -> fallback. Détail :", e)
+        rows = db.execute(fallback_sql, {"user_id": str(user_id)}).mappings().all()
+
 
     # Construction du modèle Pydantic
     results = []
@@ -403,8 +431,8 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
+    target_value_pct = (float(row["target_value"]) / 100.0) if row.get("target_value") is not None else 0.10
 
-    target_value = float(row["target_value"]) if row["target_value"] is not None else 0.10
 
     # 4) Calcul de la réduction et de la progression
     progress_percent: float | None = None
