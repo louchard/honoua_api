@@ -473,34 +473,60 @@ def evaluate_challenge(
                     f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise à jour de l'instance dans la base
-    update_sql = text(
+    # 5) Mise à jour de l'instance dans la base (tolérant au schéma prod)
+    full_update_sql = text(
         """
-        UPDATE challenge_instances
+        UPDATE public.challenge_instances
         SET
             reference_value = :reference_value,
             current_value = :current_value,
             target_value = :target_value,
             progress_percent = :progress_percent,
             status = :status,
-            last_evaluated_at = :last_evaluated_at
+            last_evaluated_at = :last_evaluated_at,
+            updated_at = NOW()
         WHERE id = :instance_id
         """
     )
 
-    db.execute(
-        update_sql,
-        {
-            "reference_value": reference_value,
-            "current_value": current_value,
-            "target_value": target_value,
-            "progress_percent": progress_percent,
-            "status": status,
-            "last_evaluated_at": now.isoformat(),
-            "instance_id": instance_id,
-        },
+    fallback_update_sql = text(
+        """
+        UPDATE public.challenge_instances
+        SET
+            status = :status,
+            updated_at = NOW()
+        WHERE id = :instance_id
+        """
     )
-    db.commit()
+
+    try:
+        db.execute(
+            full_update_sql,
+            {
+                "reference_value": reference_value,
+                "current_value": current_value,
+                "target_value": target_value,
+                "progress_percent": progress_percent,
+                "status": status,
+                "last_evaluated_at": now.isoformat(),
+                "instance_id": instance_id,
+            },
+        )
+        db.commit()
+
+    except (ProgrammingError, OperationalError) as e:
+        db.rollback()
+        print("[A54][WARN] UPDATE complet impossible (schéma prod différent ?) -> fallback. Détail :", e)
+
+        try:
+            db.execute(
+                fallback_update_sql,
+                {"status": status, "instance_id": instance_id},
+            )
+            db.commit()
+        except Exception as e2:
+            db.rollback()
+            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
 
     # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
