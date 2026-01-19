@@ -182,34 +182,7 @@ def get_active_challenges(
     """
 
 # SELECT complet (si le schéma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
-    full_sql = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
-            ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
-            ci.reference_value,
-            ci.current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            ci.progress_percent,
-            ci.created_at,
-            ci.last_evaluated_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text = :user_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-        ORDER BY ci.created_at DESC
-    """)
-
-    # Fallback minimal (si certaines colonnes n'existent pas en prod)
-    fallback_sql = text("""
+    sql = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -236,19 +209,16 @@ def get_active_challenges(
     """)
 
     try:
-        rows = db.execute(full_sql, {"user_id": str(user_id)}).mappings().all()
-    except (ProgrammingError, OperationalError) as e:
-        print("[A54][WARN] /challenges/active full_sql KO -> fallback. Détail :", e)
-        rows = db.execute(fallback_sql, {"user_id": str(user_id)}).mappings().all()
+        rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
     except Exception as e:
-        print("[A54][WARN] /challenges/active erreur inattendue -> retour []. Détail :", e)
+        print("[A54][WARN] /challenges/active SQL KO -> retour []. Détail :", e)
         return []
 
     results = []
     for r in rows:
         data = dict(r)
 
-        # Sécurisation des champs string (évite les 500 Pydantic si NULL)
+        # Sécuriser les champs string (évite crash Pydantic si NULL)
         data["metric"] = data.get("metric") or "CO2"
         data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
         data["period_type"] = data.get("period_type") or "DAYS"
@@ -258,6 +228,8 @@ def get_active_challenges(
         except Exception as e:
             print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
             continue
+
+    return results
 
     return results
 
