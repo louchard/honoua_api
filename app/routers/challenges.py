@@ -202,8 +202,8 @@ def get_active_challenges(
                 NULL::timestamp AS last_evaluated_at
             FROM public.challenge_instances ci
             JOIN public.challenges c ON c.id = ci.challenge_id
-            WHERE ci.user_id = :user_id
-              AND UPPER(ci.status) = 'ACTIVE'
+            WHERE ci.user_id::text = :user_id
+              AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
             ORDER BY ci.created_at DESC
         """)
 
@@ -224,8 +224,6 @@ def get_active_challenges(
             continue
 
     return results
-
-
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
 
