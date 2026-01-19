@@ -298,25 +298,45 @@ def evaluate_challenge(
         raise HTTPException(status_code=404, detail="Instance de défi introuvable pour cet utilisateur.")
 
     # Vérifier qu'on est bien sur le défi CO2 30 jours
-    if not (
-        row["metric"] == "co2"
-        and row["logic_type"] == "reduction_relative"
-        and row["period_type"] == "30_jours_glissants"
-    ):
+        # Vérifier qu'on est bien sur le défi supporté (prod)
+
+    if (row.get("code") or "").upper() != "CO2_30D_MINUS_10":
         raise HTTPException(
             status_code=400,
             detail="Ce type de défi n'est pas encore pris en charge par l'évaluation."
         )
 
+           
+
     # 2) Convertir les dates stockées (ISO texte) en datetime
+    # 2) Convertir / normaliser les dates (prod): period_start/period_end -> start_date/end_date
     try:
-        start_date = datetime.fromisoformat(row["start_date"])
-        end_date = datetime.fromisoformat(row["end_date"])
+        start_raw = row["start_date"]
+        end_raw = row["end_date"]
+
+        # start_date
+        if isinstance(start_raw, datetime):
+            start_date = start_raw
+        elif isinstance(start_raw, str):
+            start_date = datetime.fromisoformat(start_raw)
+        else:
+            # date (ou objet date-like)
+            start_date = datetime.combine(start_raw, datetime.min.time())
+
+        # end_date
+        if isinstance(end_raw, datetime):
+            end_date = end_raw
+        elif isinstance(end_raw, str):
+            end_date = datetime.fromisoformat(end_raw)
+        else:
+            end_date = datetime.combine(end_raw, datetime.min.time())
+
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Format de date invalide dans l'instance de défi."
         )
+
 
     # Périodes de calcul
     # Période de référence: 30 jours AVANT le début du défi
@@ -496,4 +516,3 @@ def evaluate_challenge(
         last_evaluated_at=now,
         message=message,
     )
-
