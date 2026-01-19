@@ -204,11 +204,11 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
         ORDER BY ci.created_at DESC
     """)
 
-# Fallback minimal (si certaines colonnes n'existent pas)
+    # Fallback minimal (si certaines colonnes n'existent pas en prod)
     fallback_sql = text("""
         SELECT
             ci.id AS instance_id,
@@ -231,7 +231,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) IN ('ACTIVE', 'EN_COURS')
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
         ORDER BY ci.created_at DESC
     """)
 
@@ -240,31 +240,18 @@ def get_active_challenges(
     except (ProgrammingError, OperationalError) as e:
         print("[A54][WARN] /challenges/active full_sql KO -> fallback. Détail :", e)
         rows = db.execute(fallback_sql, {"user_id": str(user_id)}).mappings().all()
+    except Exception as e:
+        print("[A54][WARN] /challenges/active erreur inattendue -> retour []. Détail :", e)
+        return []
 
-
-    # Construction du modèle Pydantic
     results = []
     for r in rows:
         data = dict(r)
 
-        # --- Defaults pour éviter les ValidationError Pydantic ---
-        if data.get("metric") is None:
-            data["metric"] = "CO2"
-        if data.get("logic_type") is None:
-            data["logic_type"] = "REDUCTION_PCT"
-        if data.get("period_type") is None:
-            data["period_type"] = "DAYS"
-        if data.get("name") is None:
-            data["name"] = data.get("code") or "CHALLENGE"
-
-        # --- Normalisation dates (date -> datetime à minuit) ---
-        sd = data.get("start_date")
-        if sd is not None and not isinstance(sd, datetime) and hasattr(sd, "year"):
-            data["start_date"] = datetime.combine(sd, datetime.min.time())
-
-        ed = data.get("end_date")
-        if ed is not None and not isinstance(ed, datetime) and hasattr(ed, "year"):
-            data["end_date"] = datetime.combine(ed, datetime.min.time())
+        # Sécurisation des champs string (évite les 500 Pydantic si NULL)
+        data["metric"] = data.get("metric") or "CO2"
+        data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
+        data["period_type"] = data.get("period_type") or "DAYS"
 
         try:
             results.append(ChallengeInstanceRead(**data))
@@ -273,6 +260,7 @@ def get_active_challenges(
             continue
 
     return results
+
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
 
