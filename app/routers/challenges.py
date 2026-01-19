@@ -217,8 +217,29 @@ def get_active_challenges(
     # Construction du modèle Pydantic
     results = []
     for r in rows:
+        data = dict(r)
+
+        # --- Defaults pour éviter les ValidationError Pydantic ---
+        if data.get("metric") is None:
+            data["metric"] = "CO2"
+        if data.get("logic_type") is None:
+            data["logic_type"] = "REDUCTION_PCT"
+        if data.get("period_type") is None:
+            data["period_type"] = "DAYS"
+        if data.get("name") is None:
+            data["name"] = data.get("code") or "CHALLENGE"
+
+        # --- Normalisation dates (date -> datetime à minuit) ---
+        sd = data.get("start_date")
+        if sd is not None and not isinstance(sd, datetime) and hasattr(sd, "year"):
+            data["start_date"] = datetime.combine(sd, datetime.min.time())
+
+        ed = data.get("end_date")
+        if ed is not None and not isinstance(ed, datetime) and hasattr(ed, "year"):
+            data["end_date"] = datetime.combine(ed, datetime.min.time())
+
         try:
-            results.append(ChallengeInstanceRead(**r))
+            results.append(ChallengeInstanceRead(**data))
         except Exception as e:
             print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
             continue
