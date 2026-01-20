@@ -2584,7 +2584,8 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
         window.honouaAppendCartToHistory({
           co2Kg: totalCo2Kg,
           distanceKm: totalDistanceKm,
-          itemsCount: totals.distinct_products || cartNow.length || 0
+          itemsCount: (totals && totals.distinct_products) ? totals.distinct_products : (cartNow ? cartNow.length : 0),
+
         });
 
 
@@ -4518,20 +4519,37 @@ function setupCo2ChallengesMvp() {
 }
 
 // 5) On attend que tout soit chargé, puis on force quelques re-rendus
+// 5) On attend que tout soit chargé, puis on initialise (une seule fois)
 window.addEventListener("load", () => {
-  setupCo2ChallengesMvp();
+  if (window.__honouaChallengesInitDone) return;
+  window.__honouaChallengesInitDone = true;
 
-  // Si un autre script touche Ã  la liste aprÃ¨s coup, on repasse derriÃ¨re
+  // Petit délai pour laisser les autres scripts stabiliser le DOM (nav, suivi, etc.)
   setTimeout(() => {
-    console.log("[Défis CO2][MVP] re-render +1000ms");
-    renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
-  }, 1000);
+    if (typeof setupCo2ChallengesMvp !== "function") {
+      console.warn("[Défis CO2][MVP] setupCo2ChallengesMvp introuvable au load");
+      return;
+    }
 
-  setTimeout(() => {
-    console.log("[Défis CO2][MVP] re-render +3000ms");
-    renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
-  }, 3000);
+    setupCo2ChallengesMvp();
+
+    // Si un autre script touche à la liste après coup, on repasse derrière
+    setTimeout(() => {
+      console.log("[Défis CO2][MVP] re-render +1000ms");
+      renderCo2ChallengesList(
+        buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend)
+      );
+    }, 1000);
+
+    setTimeout(() => {
+      console.log("[Défis CO2][MVP] re-render +3000ms");
+      renderCo2ChallengesList(
+        buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend)
+      );
+    }, 3000);
+  }, 300);
 });
+
 
 // Expose pour la page Suivi CO₂ (appel depuis suivi-co2.html)
 window.setupCo2ChallengesMvp = setupCo2ChallengesMvp;
