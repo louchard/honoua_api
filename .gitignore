@@ -8,4 +8,9 @@ api.log
 * . d b  # Front statique Honoua (Render)
 !app/static/index.html
 
- 
+ # local artifacts
+*.zip
+*.db
+payload.json
+eval_payload.json
+openapi_prod.json
