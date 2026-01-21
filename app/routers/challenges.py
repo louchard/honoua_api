@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
@@ -126,20 +126,17 @@ def activate_challenge(
             old_ids = [r["id"] for r in existing_rows[1:]]
 
             # 1bis) Annuler les doublons
-            if old_ids:
-                db.execute(
-                    text(
-                        """
-                        UPDATE public.challenge_instances
-                        SET status = 'CANCELED',
-                            updated_at = :now
-                        WHERE id = ANY(:old_ids)
-                        """
-                    ),
-                    {"old_ids": old_ids, "now": now},
-                )
+            # Nettoyer les doublons : on garde la plus récente et on supprime les autres (MVP)
+        if old_ids:
+            cleanup_sql = (
+                text("""
+                    DELETE FROM public.challenge_instances
+                    WHERE id IN :old_ids
+                """)
+                .bindparams(bindparam("old_ids", expanding=True))
+            )
+            db.execute(cleanup_sql, {"old_ids": old_ids})
 
-            db.commit()
 
             # 1ter) Retourner l'instance conservée
             row = db.execute(
