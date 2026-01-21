@@ -103,7 +103,7 @@ def activate_challenge(
             ci.period_end   AS end_date,
             NULL AS reference_value,
             NULL AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL AS progress_percent,
             ci.created_at,
             NULL AS last_evaluated_at
@@ -112,7 +112,7 @@ def activate_challenge(
         WHERE ci.user_id::text = :user_id
           AND ci.challenge_id = :challenge_id
           AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-          AND ci.period_end >= :today
+          AND ci.period_end::date >= :today
         ORDER BY ci.created_at DESC
         LIMIT 1
     """)
@@ -131,7 +131,7 @@ def activate_challenge(
         db.execute(
             text("""
                 UPDATE public.challenge_instances
-                SET status = 'INACTIVE'
+                SET status = 'ARCHIVED'
                 WHERE user_id::text = :user_id
                   AND challenge_id = :challenge_id
                   AND id <> :keep_id
@@ -191,6 +191,7 @@ def activate_challenge(
 
         result = db.execute(
             text("""
+
                 INSERT INTO public.challenge_instances (
                     challenge_id,
                     user_id,
