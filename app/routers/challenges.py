@@ -86,6 +86,66 @@ def activate_challenge(
 
     if challenge_row is None:
         raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
+        
+    # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
+    existing_sql = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            NULL AS reference_value,
+            NULL AS current_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL AS progress_percent,
+            ci.created_at,
+            NULL AS last_evaluated_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND ci.challenge_id = :challenge_id
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+          AND ci.period_end >= :today
+        ORDER BY ci.created_at DESC
+        LIMIT 1
+    """)
+
+    existing = db.execute(
+        existing_sql,
+        {
+            "user_id": str(user_id),
+            "challenge_id": payload.challenge_id,
+            "today": datetime.utcnow().date(),
+        },
+    ).mappings().first()
+
+    if existing is not None:
+        # Nettoyage : désactiver les doublons encore actifs (même défi, même user)
+        db.execute(
+            text("""
+                UPDATE public.challenge_instances
+                SET status = 'INACTIVE'
+                WHERE user_id::text = :user_id
+                  AND challenge_id = :challenge_id
+                  AND id <> :keep_id
+                  AND (UPPER(status) = 'ACTIVE' OR status = 'en_cours')
+            """),
+            {
+                "user_id": str(user_id),
+                "challenge_id": payload.challenge_id,
+                "keep_id": existing["instance_id"],
+            },
+        )
+        db.commit()
+        return ChallengeInstanceRead(**existing)
+
 
     # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
     existing_sql = text("""
@@ -327,6 +387,7 @@ def get_active_challenges(
 
     return results
 
+    return results
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
