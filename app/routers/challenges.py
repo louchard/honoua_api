@@ -86,7 +86,7 @@ def activate_challenge(
 
     if challenge_row is None:
         raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
-        
+
     # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
     existing_sql = text("""
         SELECT
@@ -148,44 +148,80 @@ def activate_challenge(
 
 
     # 2) Calcul period_start / period_end (schema prod)
-    today = datetime.utcnow().date()
-    period_days = int(challenge_row.get("period_days") or 30)
-    period_start = today
-    period_end = today + timedelta(days=period_days)
+    
+# 2) Idempotence + nettoyage : une seule instance ACTIVE/en_cours par (user_id, challenge_id)
+    user_id_str = str(user_id)
+    challenge_id = int(challenge_row["id"])
 
-    # 3) Insérer l'instance (schema prod)
-    result = db.execute(
+    keep_id = db.execute(
         text("""
-            INSERT INTO public.challenge_instances (
-                challenge_id,
-                user_id,
-                period_start,
-                period_end,
-                status,
-                created_at,
-                updated_at
-            )
-            VALUES (
-                :challenge_id,
-                :user_id,
-                :period_start,
-                :period_end,
-                'ACTIVE',
-                NOW(),
-                NOW()
-            )
-            RETURNING id
+            SELECT id
+            FROM public.challenge_instances
+            WHERE challenge_id = :challenge_id
+              AND user_id::text = :user_id
+              AND (UPPER(status) = 'ACTIVE' OR status = 'en_cours')
+            ORDER BY created_at DESC
+            LIMIT 1
         """),
-        {
-            "challenge_id": int(challenge_row["id"]),
-            "user_id": str(user_id),
-            "period_start": period_start,
-            "period_end": period_end,
-        },
-    )
+        {"challenge_id": challenge_id, "user_id": user_id_str},
+    ).scalar()
 
-    instance_id = result.scalar_one()
-    db.commit()
+    if keep_id is not None:
+        # On garde la plus récente, on archive les autres doublons
+        db.execute(
+            text("""
+                UPDATE public.challenge_instances
+                SET status = 'ARCHIVED', updated_at = NOW()
+                WHERE challenge_id = :challenge_id
+                  AND user_id::text = :user_id
+                  AND id <> :keep_id
+                  AND (UPPER(status) = 'ACTIVE' OR status = 'en_cours')
+            """),
+            {"challenge_id": challenge_id, "user_id": user_id_str, "keep_id": int(keep_id)},
+        )
+        db.commit()
+        instance_id = int(keep_id)
+
+    else:
+        # Aucune instance active -> on en crée une
+        today = datetime.utcnow().date()
+        period_days = int(challenge_row.get("period_days") or 30)
+        period_start = today
+        period_end = today + timedelta(days=period_days)
+
+        result = db.execute(
+            text("""
+                INSERT INTO public.challenge_instances (
+                    challenge_id,
+                    user_id,
+                    period_start,
+                    period_end,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :challenge_id,
+                    :user_id,
+                    :period_start,
+                    :period_end,
+                    'ACTIVE',
+                    NOW(),
+                    NOW()
+                )
+                RETURNING id
+            """),
+            {
+                "challenge_id": challenge_id,
+                "user_id": user_id_str,
+                "period_start": period_start,
+                "period_end": period_end,
+            },
+        )
+
+        instance_id = int(result.scalar_one())
+        db.commit()
+
 
     # 4) Relire et retourner une réponse compatible avec ChallengeInstanceRead
     row = db.execute(
