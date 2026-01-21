@@ -86,6 +86,36 @@ def activate_challenge(
 
     if challenge_row is None:
         raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
+        
+    # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
+    existing_sql = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            NULL AS reference_value,
+            NULL AS current_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL AS progress_percent,
+            ci.created_at,
+            NULL AS last_evaluated_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND ci.challenge_id = :challenge_id
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+          AND ci.period_end >= :today
+        ORDER BY ci.created_at DESC
+        LIMIT 1
+    """)
 
     # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
     existing_sql = text("""
@@ -191,7 +221,6 @@ def activate_challenge(
 
         result = db.execute(
             text("""
-
                 INSERT INTO public.challenge_instances (
                     challenge_id,
                     user_id,
@@ -328,6 +357,7 @@ def get_active_challenges(
 
     return results
 
+    return results
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
