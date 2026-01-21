@@ -117,36 +117,6 @@ def activate_challenge(
         LIMIT 1
     """)
 
-    existing = db.execute(
-        existing_sql,
-        {
-            "user_id": str(user_id),
-            "challenge_id": payload.challenge_id,
-            "today": datetime.utcnow().date(),
-        },
-    ).mappings().first()
-
-    if existing is not None:
-        # Nettoyage : désactiver les doublons encore actifs (même défi, même user)
-        db.execute(
-            text("""
-                UPDATE public.challenge_instances
-                SET status = 'INACTIVE'
-                WHERE user_id::text = :user_id
-                  AND challenge_id = :challenge_id
-                  AND id <> :keep_id
-                  AND (UPPER(status) = 'ACTIVE' OR status = 'en_cours')
-            """),
-            {
-                "user_id": str(user_id),
-                "challenge_id": payload.challenge_id,
-                "keep_id": existing["instance_id"],
-            },
-        )
-        db.commit()
-        return ChallengeInstanceRead(**existing)
-
-
     # 1bis) Idempotence + nettoyage : si une instance ACTIVE existe déjà, on la réutilise
     existing_sql = text("""
         SELECT
@@ -163,7 +133,7 @@ def activate_challenge(
             ci.period_end   AS end_date,
             NULL AS reference_value,
             NULL AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL AS progress_percent,
             ci.created_at,
             NULL AS last_evaluated_at
@@ -172,7 +142,7 @@ def activate_challenge(
         WHERE ci.user_id::text = :user_id
           AND ci.challenge_id = :challenge_id
           AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-          AND ci.period_end >= :today
+          AND ci.period_end::date >= :today
         ORDER BY ci.created_at DESC
         LIMIT 1
     """)
@@ -191,7 +161,7 @@ def activate_challenge(
         db.execute(
             text("""
                 UPDATE public.challenge_instances
-                SET status = 'INACTIVE'
+                SET status = 'ARCHIVED'
                 WHERE user_id::text = :user_id
                   AND challenge_id = :challenge_id
                   AND id <> :keep_id
