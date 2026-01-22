@@ -285,6 +285,7 @@ def get_active_challenges(
 
     return results
 
+    return results
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
