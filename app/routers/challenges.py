@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
+from sqlalchemy import bindparam
 from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -74,6 +75,13 @@ def activate_challenge(
     now = datetime.utcnow()
     today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+        # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
+        {"uid": user_id, "cid": challenge_id},
+    )
+
+
     # SQL commun pour retourner une instance au format ChallengeInstanceRead
     select_instance_sql = text(
         """
@@ -125,18 +133,22 @@ def activate_challenge(
             keep_id = existing_rows[0]["id"]
             old_ids = [r["id"] for r in existing_rows[1:]]
 
-            # 1bis) Annuler les doublons
-            # Nettoyer les doublons : on garde la plus récente et on supprime les autres (MVP)
-        if old_ids:
-            cleanup_sql = (
-                text("""
-                    DELETE FROM public.challenge_instances
-                    WHERE id IN :old_ids
-                """)
-                .bindparams(bindparam("old_ids", expanding=True))
-            )
-            db.execute(cleanup_sql, {"old_ids": old_ids})
+            # 1bis) Annuler les doublons (au lieu de DELETE)
+            if old_ids:
+                cancel_sql = (
+                    text("""
+                        UPDATE public.challenge_instances
+                        SET
+                            status = 'CANCELED',
+                            updated_at = :now
+                        WHERE id IN :old_ids
+                    """)
+                    .bindparams(bindparam("old_ids", expanding=True))
+                )
+                db.execute(cancel_sql, {"old_ids": old_ids, "now": now})
 
+            # Important : persister le nettoyage / annulation
+            db.commit()
 
             # 1ter) Retourner l'instance conservée
             row = db.execute(
@@ -148,6 +160,7 @@ def activate_challenge(
                 raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
 
             return ChallengeInstanceRead(**row)
+
 
         # 2) Sinon : créer une nouvelle instance
         start_date = today0
