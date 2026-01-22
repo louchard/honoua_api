@@ -63,10 +63,10 @@ def activate_challenge(
     db: Session = Depends(get_db),
 ):
     """
-    Option 1 (idempotence + nettoyage) :
+    Idempotence + nettoyage :
     - Si une instance ACTIVE/en_cours existe déjà pour (user_id, challenge_id) :
         * on conserve la plus récente
-        * on annule les doublons (CANCELED)
+        * on SUPPRIME les doublons (DELETE) pour rester compatible avec chk_challenge_instances_status
         * on ne recrée pas
     - Sinon : on crée une nouvelle instance.
     """
@@ -75,12 +75,11 @@ def activate_challenge(
     now = datetime.utcnow()
     today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
+    # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
     db.execute(
         text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
         {"uid": user_id, "cid": challenge_id},
     )
-
 
     # SQL commun pour retourner une instance au format ChallengeInstanceRead
     select_instance_sql = text(
@@ -129,33 +128,33 @@ def activate_challenge(
             {"user_id": user_id_str, "challenge_id": challenge_id},
         ).mappings().all()
 
-            # 1bis) Nettoyer les doublons : on garde la plus récente et on supprime les autres
-            # (DELETE = compatible avec chk_challenge_instances_status)
-        if old_ids:
+        # 1bis) Si existe : garder la plus récente + supprimer les doublons
+        if existing_rows:
+            keep_id = existing_rows[0]["id"]
+            old_ids = [r["id"] for r in existing_rows[1:]]
+
+            if old_ids:
                 cleanup_sql = (
-                    text("""
+                    text(
+                        """
                         DELETE FROM public.challenge_instances
                         WHERE id IN :old_ids
-                    """)
-                    .bindparams(bindparam("old_ids", expanding=True))
+                        """
+                    ).bindparams(bindparam("old_ids", expanding=True))
                 )
                 db.execute(cleanup_sql, {"old_ids": old_ids})
 
+            db.commit()
 
-            # Important : persister le nettoyage / annulation
-        db.commit()
-
-            # 1ter) Retourner l'instance conservée
-        row = db.execute(
+            row = db.execute(
                 select_instance_sql,
                 {"instance_id": keep_id, "user_id": user_id_str},
             ).mappings().first()
 
-        if row is None:
+            if row is None:
                 raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
 
-        return ChallengeInstanceRead(**row)
-
+            return ChallengeInstanceRead(**row)
 
         # 2) Sinon : créer une nouvelle instance
         start_date = today0
@@ -216,7 +215,6 @@ def activate_challenge(
     except Exception:
         db.rollback()
         raise
-
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
