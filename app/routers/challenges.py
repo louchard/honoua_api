@@ -129,37 +129,32 @@ def activate_challenge(
             {"user_id": user_id_str, "challenge_id": challenge_id},
         ).mappings().all()
 
-        if existing_rows:
-            keep_id = existing_rows[0]["id"]
-            old_ids = [r["id"] for r in existing_rows[1:]]
-
-            # 1bis) Annuler les doublons (au lieu de DELETE)
-            if old_ids:
-                cancel_sql = (
+            # 1bis) Nettoyer les doublons : on garde la plus récente et on supprime les autres
+            # (DELETE = compatible avec chk_challenge_instances_status)
+        if old_ids:
+                cleanup_sql = (
                     text("""
-                        UPDATE public.challenge_instances
-                        SET
-                            status = 'CANCELLED',
-                            updated_at = :now
+                        DELETE FROM public.challenge_instances
                         WHERE id IN :old_ids
                     """)
                     .bindparams(bindparam("old_ids", expanding=True))
                 )
-                db.execute(cancel_sql, {"old_ids": old_ids, "now": now})
+                db.execute(cleanup_sql, {"old_ids": old_ids})
+
 
             # Important : persister le nettoyage / annulation
-            db.commit()
+        db.commit()
 
             # 1ter) Retourner l'instance conservée
-            row = db.execute(
+        row = db.execute(
                 select_instance_sql,
                 {"instance_id": keep_id, "user_id": user_id_str},
             ).mappings().first()
 
-            if row is None:
+        if row is None:
                 raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
 
-            return ChallengeInstanceRead(**row)
+        return ChallengeInstanceRead(**row)
 
 
         # 2) Sinon : créer une nouvelle instance
