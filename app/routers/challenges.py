@@ -139,7 +139,7 @@ def activate_challenge(
                     text("""
                         UPDATE public.challenge_instances
                         SET
-                            status = 'CANCELED',
+                            status = 'CANCELLED',
                             updated_at = :now
                         WHERE id IN :old_ids
                     """)
