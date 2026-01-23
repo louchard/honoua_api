@@ -98,7 +98,7 @@ def activate_challenge(
                 ci.period_end   AS end_date,
                 NULL::numeric AS reference_value,
                 NULL::numeric AS current_value,
-                COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
                 NULL::numeric AS progress_percent,
                 NULL::timestamp AS last_evaluated_at,
                 ci.created_at
@@ -588,3 +588,4 @@ def evaluate_challenge(
         last_evaluated_at=now,
         message=message,
     )
+
