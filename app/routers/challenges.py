@@ -588,4 +588,3 @@ def evaluate_challenge(
         last_evaluated_at=now,
         message=message,
     )
-
