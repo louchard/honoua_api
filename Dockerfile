@@ -1,19 +1,40 @@
-﻿FROM python:3.11-slim
+﻿# A34.b — Étape 3/5 : runtime (Gunicorn/Uvicorn)
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    APP_MODULE="app.main:app" \
+    WORKERS=2
+
+# Déps système minimales; on complètera plus tard si besoin (ex: libpq)
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Venv isolé
+RUN python -m venv /opt/venv
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Déps Python (si fichier présent)
+COPY requirements.txt .
+RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
 
-RUN pip install --no-cache-dir --upgrade pip
+# Code
+COPY . .
 
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app /app/app
-COPY bootstrap.sql /app/bootstrap.sql
+# Sécurité: non-root
+RUN useradd -m -U -s /usr/sbin/nologin appuser
+USER appuser:appuser
 
 EXPOSE 8000
 
-CMD ["bash", "-lc", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
-
+# CMD de prod (Gunicorn). Adapter APP_MODULE à ta vraie app (ex: app.main:app)
+CMD exec gunicorn "$APP_MODULE" \
+  --bind "$HOST:$PORT" \
+  --workers "$WORKERS" \
+  --access-logfile "-" \
+  --error-logfile "-" \
+  --timeout 60

@@ -13,6 +13,33 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/favicon.ico">
+<style>
+  .home-actions{
+    display:flex;
+    gap:12px;
+    justify-content:center;
+    align-items:center;
+    margin:16px auto;
+    padding:0 16px;
+    max-width:520px;
+  }
+  .home-actions a{
+    flex:1;
+    display:inline-flex;
+    justify-content:center;
+    align-items:center;
+    padding:14px 16px;
+    border-radius:12px;
+    font-weight:700;
+    text-decoration:none;
+    line-height:1;
+    user-select:none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-actions a.primary{ background:#062909; color:#ffffff; }
+  .home-actions a.secondary{ background:#F5C147; color:#062909; }
+  .home-actions a:active{ transform:scale(0.98); }
+</style>
 
 
 
@@ -83,7 +110,7 @@
     Comparez et sélectionnez les produits les plus <br />éco-responsables.
   </p>
 
-  <button class="honoua-feature__cta" data-target="eco">
+  <button class="honoua-feature__cta" data-target="eco" type="button">
     Accéder à EcoSelect
   </button>
 </section>
@@ -105,7 +132,7 @@
     votre empreinte carbone.
   </p>
 
-  <button class="honoua-feature__cta" data-target="scan">
+  <button class="honoua-feature__cta" data-target="scan" type="button">
     Accéder à ScanImpact
   </button>
 </section>
@@ -123,7 +150,7 @@
     <span class="honoua-footer-nav__label">Accueil</span>
   </button>
 
-  <button class="honoua-footer-nav__item "data-page="eco" type="button">
+  <button class="honoua-footer-nav__item " data-page="eco" type="button">
     <span class="honoua-footer-nav__icon">⛶</span>
     <span class="honoua-footer-nav__label">EcoSelect</span>
   </button>
@@ -139,7 +166,29 @@
   </button>
 </footer>
 
-<script src="js/honoua-core.js"></script>
-<script src="js/nav.js"></script>
+<script src="js/honoua-core.js" charset="utf-8"></script>
+<script src="js/nav.js" charset="utf-8"></script>
+<script>
+  // Redirection CTA de la home (EcoSelect / ScanImpact)
+  (function () {
+    const routes = {
+      eco: "eco-select.html",
+      scan: "scan-impact.html",
+    };
+
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest(".honoua-feature__cta[data-target]");
+      if (!btn) return;
+
+      const target = btn.dataset.target;
+      const url = routes[target];
+      if (!url) return;
+
+      console.log("[Honoua] index CTA redirect ->", target, url);
+      window.location.href = url;
+    });
+  })();
+</script>
+
 </body>
 </html>

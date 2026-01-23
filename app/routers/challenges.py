@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
-from sqlalchemy import text
+from sqlalchemy import bindparam
+from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
@@ -161,7 +162,19 @@ def activate_challenge(
 
     return ChallengeInstanceRead(**row)
 
+        row = db.execute(
+            select_instance_sql,
+            {"instance_id": new_id, "user_id": user_id_str},
+        ).mappings().first()
 
+        if row is None:
+            raise HTTPException(status_code=404, detail="Instance créée mais introuvable.")
+
+        return ChallengeInstanceRead(**row)
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
@@ -181,69 +194,57 @@ def get_active_challenges(
     - Si l'une des deux tables n'existe pas → renvoie [] sans planter.
     """
 
+# SELECT complet (si le schéma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
     sql = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
-            c.name,
+            COALESCE(c.name, c.title, c.code) AS name,
             c.description,
-            c.metric,
-            c.logic_type,
-            c.period_type,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
             ci.status,
-            ci.start_date,
-            ci.end_date,
-            ci.reference_value,
-            ci.current_value,
-            ci.target_value,
-            ci.progress_percent,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS progress_percent,
             ci.created_at,
-            ci.last_evaluated_at
-        FROM challenge_instances AS ci
-        JOIN challenges AS c
-            ON ci.challenge_id = c.id
-        WHERE ci.target_type = 'user'
-          AND ci.target_id = :user_id
-          AND ci.status = 'en_cours'
+            NULL::timestamp AS last_evaluated_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
         ORDER BY ci.created_at DESC
     """)
 
     try:
-        rows = db.execute(sql, {"user_id": user_id}).mappings().all()
+        rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
     except Exception as e:
-        print("[A54][WARN] Impossible de charger les défis actifs (table manquante ?) → retour []. Détail :", e)
+        print("[A54][WARN] /challenges/active SQL KO -> retour []. Détail :", e)
         return []
 
-    # Construction du modèle Pydantic
     results = []
     for r in rows:
-        results.append(
-            ChallengeInstanceRead(
-                instance_id=r["instance_id"],
-                challenge_id=r["challenge_id"],
-                code=r["code"],
-                name=r["name"],
-                description=r["description"],
-                metric=r["metric"],
-                logic_type=r["logic_type"],
-                period_type=r["period_type"],
-                status=r["status"],
-                start_date=r["start_date"],
-                end_date=r["end_date"],
-                reference_value=r["reference_value"],
-                current_value=r["current_value"],
-                target_value=r["target_value"],
-                progress_percent=r["progress_percent"],
-                created_at=r["created_at"],
-                last_evaluated_at=r["last_evaluated_at"],
-            )
-        )
+        data = dict(r)
+
+        # Sécuriser les champs string (évite crash Pydantic si NULL)
+        data["metric"] = data.get("metric") or "CO2"
+        data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
+        data["period_type"] = data.get("period_type") or "DAYS"
+
+        try:
+            results.append(ChallengeInstanceRead(**data))
+        except Exception as e:
+            print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
+            continue
 
     return results
 
-
-
+    return results
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
@@ -270,59 +271,73 @@ def evaluate_challenge(
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
-            ci.target_type,
-            ci.target_id,
-            ci.start_date,
-            ci.end_date,
+            ci.user_id,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
             ci.status,
-            ci.reference_value,
-            ci.current_value,
-            ci.target_value,
-            ci.progress_percent,
             ci.created_at,
-            ci.last_evaluated_at,
+            ci.updated_at,
             c.code,
-            c.name,
-            c.metric,
-            c.logic_type,
-            c.period_type
-        FROM challenge_instances AS ci
-        JOIN challenges AS c
-            ON ci.challenge_id = c.id
+            COALESCE(c.name, c.title, c.code) AS name,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.id = :instance_id
-          AND ci.target_type = 'user'
-          AND ci.target_id = :user_id
+          AND ci.user_id::text = :user_id
         """
     )
 
     row = db.execute(
         select_sql,
-        {"instance_id": instance_id, "user_id": user_id},
+        {"instance_id": instance_id, "user_id": str(user_id)},
     ).mappings().first()
 
     if row is None:
         raise HTTPException(status_code=404, detail="Instance de défi introuvable pour cet utilisateur.")
 
     # Vérifier qu'on est bien sur le défi CO2 30 jours
-    if not (
-        row["metric"] == "co2"
-        and row["logic_type"] == "reduction_relative"
-        and row["period_type"] == "30_jours_glissants"
-    ):
+        # Vérifier qu'on est bien sur le défi supporté (prod)
+
+    if (row.get("code") or "").upper() != "CO2_30D_MINUS_10":
         raise HTTPException(
             status_code=400,
             detail="Ce type de défi n'est pas encore pris en charge par l'évaluation."
         )
 
+           
+
     # 2) Convertir les dates stockées (ISO texte) en datetime
+    # 2) Convertir / normaliser les dates (prod): period_start/period_end -> start_date/end_date
     try:
-        start_date = datetime.fromisoformat(row["start_date"])
-        end_date = datetime.fromisoformat(row["end_date"])
+        start_raw = row["start_date"]
+        end_raw = row["end_date"]
+
+        # start_date
+        if isinstance(start_raw, datetime):
+            start_date = start_raw
+        elif isinstance(start_raw, str):
+            start_date = datetime.fromisoformat(start_raw)
+        else:
+            # date (ou objet date-like)
+            start_date = datetime.combine(start_raw, datetime.min.time())
+
+        # end_date
+        if isinstance(end_raw, datetime):
+            end_date = end_raw
+        elif isinstance(end_raw, str):
+            end_date = datetime.fromisoformat(end_raw)
+        else:
+            end_date = datetime.combine(end_raw, datetime.min.time())
+
     except Exception:
         raise HTTPException(
             status_code=500,
             detail="Format de date invalide dans l'instance de défi."
         )
+
 
     # Périodes de calcul
     # Période de référence: 30 jours AVANT le début du défi
@@ -389,8 +404,12 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
+        # target_value est stocké en "pourcentage" côté défi (ex: 10.0 pour 10%)
+    target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
 
-    target_value = float(row["target_value"]) if row["target_value"] is not None else 0.10
+    # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
+    target_value_pct = (target_value / 100.0) if target_value > 1 else target_value
+
 
     # 4) Calcul de la réduction et de la progression
     progress_percent: float | None = None
@@ -459,34 +478,60 @@ def evaluate_challenge(
                     f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise à jour de l'instance dans la base
-    update_sql = text(
+    # 5) Mise à jour de l'instance dans la base (tolérant au schéma prod)
+    full_update_sql = text(
         """
-        UPDATE challenge_instances
+        UPDATE public.challenge_instances
         SET
             reference_value = :reference_value,
             current_value = :current_value,
             target_value = :target_value,
             progress_percent = :progress_percent,
             status = :status,
-            last_evaluated_at = :last_evaluated_at
+            last_evaluated_at = :last_evaluated_at,
+            updated_at = NOW()
         WHERE id = :instance_id
         """
     )
 
-    db.execute(
-        update_sql,
-        {
-            "reference_value": reference_value,
-            "current_value": current_value,
-            "target_value": target_value,
-            "progress_percent": progress_percent,
-            "status": status,
-            "last_evaluated_at": now.isoformat(),
-            "instance_id": instance_id,
-        },
+    fallback_update_sql = text(
+        """
+        UPDATE public.challenge_instances
+        SET
+            status = :status,
+            updated_at = NOW()
+        WHERE id = :instance_id
+        """
     )
-    db.commit()
+
+    try:
+        db.execute(
+            full_update_sql,
+            {
+                "reference_value": reference_value,
+                "current_value": current_value,
+                "target_value": target_value,
+                "progress_percent": progress_percent,
+                "status": status,
+                "last_evaluated_at": now.isoformat(),
+                "instance_id": instance_id,
+            },
+        )
+        db.commit()
+
+    except (ProgrammingError, OperationalError) as e:
+        db.rollback()
+        print("[A54][WARN] UPDATE complet impossible (schéma prod différent ?) -> fallback. Détail :", e)
+
+        try:
+            db.execute(
+                fallback_update_sql,
+                {"status": status, "instance_id": instance_id},
+            )
+            db.commit()
+        except Exception as e2:
+            db.rollback()
+            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
 
     # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
@@ -502,4 +547,3 @@ def evaluate_challenge(
         last_evaluated_at=now,
         message=message,
     )
-

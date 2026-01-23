@@ -1,4 +1,5 @@
- 
+﻿
+console.log("[Honoua] build: 2026-01-09-H002");
 
 (async () => {
   const $video = document.getElementById('preview');
@@ -16,7 +17,7 @@
 
 
     // === Config API Honoua ===
-  // Priorité des sources (de la plus forte à la plus faible) :
+  // PrioritÃ© des sources (de la plus forte Ã  la plus faible) :
   // 1) window.HONOUA_API_BASE_OVERRIDE (utile en debug)
   // 2) <meta name="honoua-api-base" content="https://api.honoua.com">
   // 3) localStorage('honoua_api_base')
@@ -117,7 +118,7 @@
     }
 
     // IMPORTANT : éviter conflits caméra → stoppe ton stream avant Quagga
-    await stopStream(); // stopStream appelle déjà stopZXing; on va y ajouter stopQuagga plus bas
+    await stopStream(); // stopStream appelle dÃ©jÃ  stopZXing; on va y ajouter stopQuagga plus bas
 
     // Quagga va créer son propre flux ; on masque la vidéo native
     try { if ($video) $video.style.display = 'none'; } catch(_) {}
@@ -170,7 +171,7 @@
               window.handleEanDetected(code);
             }
 
-            // Stoppe après détection (optionnel, mais utile pour éviter “rafales”)
+            // Stoppe aprÃ¨s dÃ©tection (optionnel, mais utile pour Ã©viter â€œrafalesâ€)
             stopQuagga();
           } catch(_) {}
         });
@@ -183,16 +184,60 @@
 
   let torchSupported = false;
   let torchOn = false;
+
+  async function detectTorchSupport(track){
+  torchSupported = false;
+  torchOn = false;
+
+  try {
+    if ($torch) {
+      $torch.disabled = true;
+      $torch.classList.remove('torch-on');
+      $torch.textContent = 'Lampe';
+    }
+  } catch (_) {}
+
+  try {
+    if (!track || !track.getCapabilities) return false;
+    const caps = track.getCapabilities();
+    torchSupported = !!caps.torch;
+
+    try { if ($torch) $torch.disabled = !torchSupported; } catch (_) {}
+    return torchSupported;
+  } catch (_) {
+    torchSupported = false;
+    try { if ($torch) $torch.disabled = true; } catch (_) {}
+    return false;
+  }
+}
+
+
+
   let lastChallengeAutoEval = 0;
 
   // --- ZXing (EAN/Code-barres) : iPhone stable ---
-  // Important : on évite decodeFromVideoDevice (double ouverture caméra). On scanne depuis le stream déjà ouvert.
+  // Important : on Ã©vite decodeFromVideoDevice (double ouverture camÃ©ra). On scanne depuis le stream dÃ©jÃ  ouvert.
   let __zxingReader = null;
   let __zxingControls = null;
   let __lastZxingText = '';
   let __lastZxingAt = 0;
 
+  let __stableEan = '';
+  let __stableHits = 0;
+  let __stableAt = 0;
+  // H-007: anti-répétition (évite ajout en boucle si l’EAN reste dans le champ)
+  let __lastAcceptedEan = '';
+  let __lastAcceptedAt = 0;
+
+
+
   function stopZXing() {
+    // Reset du reader réellement utilisé (singleton global)
+try {
+    const r = window.__HONOUA_ZXING_READER__;
+        if (r && typeof r.reset === 'function') r.reset();
+      } catch (_) {}
+
     try { if (__zxingControls && typeof __zxingControls.stop === 'function') __zxingControls.stop(); } catch (_) {}
     __zxingControls = null;
 
@@ -201,104 +246,139 @@
 
     __lastZxingText = '';
     __lastZxingAt = 0;
+   
+    __stableEan = '';
+    __stableHits = 0;
+    __stableAt = 0;
+
+  }
+   
+   async function startZXingFromStream(stream) {
+  // iOS SAFE MODE
+  // Do NOT use decodeFromStream (can trigger cleanVideoSource / aborted play on iOS)
+
+  const video = document.getElementById('preview');
+  if (!video) {
+    throw new Error('Missing <video id="preview">');
   }
 
-  async function startZXingFromStream(stream) {
-  // Selon la build UMD, le global peut être ZXingBrowser ou ZXing
-  const ZX = window.ZXingBrowser || window.ZXing;
+  // Bind stream to the video element (stable path)
+  video.srcObject = stream;
+  video.setAttribute('playsinline', '');
+  video.muted = true;
 
-  // Diagnostics UI (visible sur iPhone)
-  let loops = 0;
-  let detected = 0;
-  let startedAt = Date.now();
-  let watchdogTimer = null;
+try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exception */ }
 
-  function ui(msg, ok) {
-    try {
-      if (typeof setStatus === 'function') setStatus(msg, !!ok);
-    } catch (_) {}
-    try {
-      if ($badge) $badge.textContent = ok ? "OK" : "KO";
-    } catch (_) {}
+  // Reuse a singleton reader to avoid multiple concurrent decoders
+  if (!window.__HONOUA_ZXING_READER__) {
+    window.__HONOUA_ZXING_READER__ = new ZXingBrowser.BrowserMultiFormatReader();
   }
+  const reader = window.__HONOUA_ZXING_READER__;
+  __zxingReader = reader; // IMPORTANT: stopZXing() resettera le bon reader
 
-  if (!ZX) {
-    console.warn('[ZXing] Global ZXing introuvable. Script UMD non chargé ou bloqué.');
-    ui("ZXing: NON CHARGÉ", false);
-    try { showScannerError("Lecteur EAN non chargé (ZXing). Vérifie le script ZXing dans la page."); } catch(_) {}
-    return;
-  }
+  if (window.__HONOUA_SCAN_LOCK__) return;
 
-  if (!$video || !stream) {
-    ui("ZXing: vidéo/stream manquant", false);
-    return;
-  }
 
-  stopZXing();
+  // Decode from the VIDEO ELEMENT (not from stream)
+  reader.decodeFromVideoElement(video, (result, err) => {
+  // Après un scan validé, ignorer TOUT (résultats + erreurs) pour éviter spam + instabilité iOS
+  if (window.__HONOUA_SCAN_LOCK__) return;
 
-  // Hints (EAN/UPC) + TRY_HARDER
-  const hints = new Map();
-  try {
-    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
-      ZX.BarcodeFormat.EAN_13,
-      ZX.BarcodeFormat.EAN_8,
-      ZX.BarcodeFormat.UPC_A,
-      ZX.BarcodeFormat.UPC_E,
-      ZX.BarcodeFormat.CODE_128
-    ]);
-  } catch (_) {}
+  // 1) Erreurs attendues en scan continu : ne pas fermer la caméra
+  if ((!result || !result.text) && err) {
+    const name = err?.name || err?.constructor?.name || '';
 
-  // timeBetweenScansMs : laisse l’autofocus iPhone travailler
-  __zxingReader = new ZX.BrowserMultiFormatReader(hints, 250);
-
-  // Affiche la résolution réelle (crucial sur iPhone)
-  ui(`ZXing: démarrage (${ $video.videoWidth }x${ $video.videoHeight })`, true);
-
-  // Watchdog : si aucune détection après 8s, on le dit clairement
-  watchdogTimer = setTimeout(() => {
-    if (detected === 0) {
-      ui(`ZXing: 0 détection (8s) (${ $video.videoWidth }x${ $video.videoHeight })`, false);
-      try { showScannerError("Aucune détection EAN. Approche le code-barres, évite les reflets, et vérifie que l'image est nette."); } catch(_) {}
+    if (
+      name.includes('NotFound') ||
+      name.includes('Checksum') ||
+      name.includes('Format') ||
+      name.includes('IndexSizeError')
+    ) {
+      return;
     }
-  }, 8000);
 
-  __zxingControls = await __zxingReader.decodeFromStream(stream, $video, (result, err) => {
-    try {
-      loops++;
 
-      // Heartbeat UI (toutes les ~2s environ)
-      if (loops % 8 === 0) {
-        ui(`ZXing: actif (${detected}) (${ $video.videoWidth }x${ $video.videoHeight })`, true);
-      }
+    // Trop bruyant en scan continu (iOS/Firefox). On ignore.
+    return;
 
-      if (result && result.getText) {
-        const text = String(result.getText()).trim();
-        const now = Date.now();
+  }
 
-        if (!text) return;
-        if (text === __lastZxingText && (now - __lastZxingAt) < 1200) return;
+  if (result && result.text) {
+    const ean = String(result.text).trim();
+    if (!ean) return;
 
-        __lastZxingText = text;
-        __lastZxingAt = now;
-        detected++;
+    // Filtre anti faux-positifs : EAN-8 (8), UPC-A (12), EAN-13 (13), EAN-14 (14)
+    if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(ean)) return;
+    
+    // Checksum GTIN : bloque les faux positifs (très fréquent sur iPhone)
+    if (!isValidGTIN(ean)) return;
 
-        if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
+    // 2) Stabilisation iOS : exiger 2 détections identiques rapprochées
+    const now = Date.now();
+    if (__stableEan === ean && (now - __stableAt) < 900) {
+      __stableHits += 1;
+    } else {
+      __stableEan = ean;
+      __stableHits = 1;
+    }
+    __stableAt = now;
 
-        ui(`ZXing: détecté ${text}`, true);
-        console.info('[ZXing] code détecté:', text);
+    if (__stableHits < 2) return;
 
-        if (typeof window.handleEanDetected === 'function') window.handleEanDetected(text);
-      }
-    } catch (e) {
-      console.warn('[ZXing] callback error:', e);
+    // H-007: anti-répétition "même EAN" sur une courte fenêtre
+      const t = Date.now();
+      if (ean === __lastAcceptedEan && (t - __lastAcceptedAt) < 3500) return;
+      __lastAcceptedEan = ean;
+      __lastAcceptedAt = t;
+
+
+    // Verrou anti double-détection ...
+      if (window.__HONOUA_SCAN_LOCK__) return;
+      window.__HONOUA_SCAN_LOCK__ = true;
+      console.log('[Scan OK]', ean);
+
+        // On traite l’EAN (même chemin que manuel)
+        if (typeof fetchCo2ForEan === 'function') {
+          fetchCo2ForEan(ean);
+        } else if (typeof handleEAN === 'function') {
+          handleEAN(ean);
+        }
+
+        // IMPORTANT : on NE COUPE PAS la caméra sur iOS (évite écran noir / "crash").
+        // On met juste un cooldown puis on réarme le scan.
+        setTimeout(() => {
+          window.__HONOUA_SCAN_LOCK__ = false;
+          __stableEan = '';
+          __stableHits = 0;
+          __stableAt = 0;
+        }, 1200);
+
+        return;
+
     }
   });
 }
+    
 
 
- 
-    // === Localisation utilisateur (GPS) ===
+     function isValidGTIN(code) {
+  if (!/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(code)) return false;
+
+  const len = code.length;
+  let sum = 0;
+
+  // On calcule sur tous les digits sauf le dernier (check digit), en partant de la droite
+  for (let i = 0; i < len - 1; i++) {
+    const digit = code.charCodeAt((len - 2) - i) - 48; // de droite vers gauche
+    const weight = (i % 2 === 0) ? 3 : 1;            // alternance 3,1,3,1...
+    sum += digit * weight;
+  }
+
+  const check = (10 - (sum % 10)) % 10;
+  const last = code.charCodeAt(len - 1) - 48;
+  return check === last;
+}
+
   // === Localisation utilisateur (GPS) ===
   const userLocation = {
     lat: null,
@@ -312,7 +392,7 @@
 
   // Fonction unique pour initialiser la localisation
   function initUserLocation() {
-    // 1) Essayer d'abord de relire une localisation déjà stockée
+    // 1) Essayer d'abord de relire une localisation dÃ©jÃ  stockÃ©e
     try {
       const raw = localStorage.getItem('honoua_user_location');
       if (raw) {
@@ -535,6 +615,7 @@ function showScannerError(text, persistent = false) {
     });
   }
 
+
   // === Affichage / masquage de la fiche produit CO₂ ===
   if ($co2SummaryInfoBtn && $co2Details) {
     $co2SummaryInfoBtn.addEventListener('click', () => {
@@ -549,6 +630,10 @@ function showScannerError(text, persistent = false) {
       }
     });
   }
+
+
+
+
 
 
   function setCo2Waiting(){
@@ -676,7 +761,7 @@ function showScannerError(text, persistent = false) {
         icon = '🟡';
         text = 'Fiabilité moyenne';
       } else if (level === 'faible') {
-        icon = '🟠';
+        icon = '🔴';
         text = 'Fiabilité faible';
       }
 
@@ -688,7 +773,7 @@ function showScannerError(text, persistent = false) {
       $co2ReliabilityLabel.textContent = text;
     }
 
-    // Etiquette à droite du total
+    // Etiquette Ã  droite du total
     if ($co2PackageLabel) {
       $co2PackageLabel.textContent = 'Type d’emballage';
     }
@@ -791,7 +876,7 @@ function showScannerError(text, persistent = false) {
 
     const data = await resp.json();
 
-    // 1️⃣ Mise à jour de la carte CO₂ (comportement existant)
+    // 1ï¸âƒ£ Mise Ã  jour de la carte COâ‚‚ (comportement existant)
     renderCo2Result(data);
 
     // A55.10 — Message succès
@@ -801,7 +886,7 @@ if (typeof data.co2_kg_total === "number") {
   showScannerInfo("Scan réussi.");
 }
 
-    // 2️⃣ Construction de l’objet ecoProduct pour EcoSELECT
+    // 2ï¸âƒ£ Construction de l’objet ecoProduct pour EcoSELECT
     try {
       // On récupère le total CO₂ en kg depuis les bons champs de l’API
       let co2TotalKg = null;
@@ -815,7 +900,7 @@ if (typeof data.co2_kg_total === "number") {
 
       const hasCo2Data = co2TotalKg !== null;
 
-      // Distance : priorité à distance_km
+      // Distance : prioritÃ© Ã  distance_km
       let distanceKm = null;
       if (typeof data.distance_km === 'number' && !isNaN(data.distance_km)) {
         distanceKm = data.distance_km;
@@ -846,7 +931,7 @@ if (typeof data.co2_kg_total === "number") {
         reliabilityLevel
       };
 
-      // 3️⃣ Envoi à EcoSELECT (si dispo)
+      // 3ï¸âƒ£ Envoi Ã  EcoSELECT (si dispo)
       if (typeof window.ecoSelectAddProduct === 'function') {
         window.ecoSelectAddProduct(ecoProduct);
       } else {
@@ -864,7 +949,7 @@ if (typeof data.co2_kg_total === "number") {
     try {
       addToCartFromApiResponse(data, ean);
 
-      // Mise à jour de l'UI du panier
+      // Mise Ã  jour de l'UI du panier
       if (typeof renderCo2Cart === 'function') {
         renderCo2Cart();
       }
@@ -916,21 +1001,49 @@ if (typeof data.co2_kg_total === "number") {
     if(on) vibrate(50);
   }
 
-  async function stopStream(){
+   async function stopStream(reason = 'user'){
     // Stop le décodage EAN si actif
     stopZXing();
     stopQuagga();
 
-    if(currentStream){
-      currentStream.getTracks().forEach(t=>t.stop());
-      currentStream=null; currentTrack=null;
-    }
-    $video.srcObject=null;
+    // IMPORTANT: sur success, on ne stoppe pas les tracks (évite écran noir iPhone)
+  if (reason !== 'success' && currentStream){
+        currentStream.getTracks().forEach(t=>t.stop());
+        currentStream=null; currentTrack=null;
+      }
+
+    // iOS: éviter écran noir brutal -> on garde la dernière frame
+  try { $video.pause(); } catch (_) {}
+  
+
+  // iOS: éviter écran noir brutal -> on pause et on libère le flux avec un léger délai
+  try { $video.pause(); } catch (_) {}
+
+  const _old = $video.srcObject;
+  // NE PAS faire srcObject=null tout de suite (sinon écran noir immédiat sur iOS)
+  if (reason !== 'success') {
+  setTimeout(() => {
+    try { $video.srcObject = null; } catch (_) {}
+  }, 250);
+}
+// Sur succès : on ne null pas srcObject => évite écran noir (frame figée)
+
+
     $torch.disabled = true; $torch.classList.remove('torch-on'); $torch.textContent='Lampe';
     setStatus('Flux arrêté',false);
 
      // A55.13 — message d'information
-    showScannerInfo("Caméra arrêtée. Relancez le scanner pour continuer.");
+   if (reason === 'success') {
+      showScannerInfo("EAN détecté. Chargement…", 1200);
+    } else {
+      if (reason === 'success') {
+          showScannerInfo("EAN détecté. Chargement…", 1200);
+        } else {
+          showScannerInfo("Caméra arrêtée. Relancez le scanner pour continuer.");
+        }
+
+    }
+
 
   }
 
@@ -940,7 +1053,7 @@ if (typeof data.co2_kg_total === "number") {
     $cams.innerHTML='';
     videos.forEach(d=>{
       const opt=document.createElement('option');
-      opt.value=d.deviceId; opt.textContent=d.label||'Caméra';
+      opt.value=d.deviceId; opt.textContent=d.label||'Caméra ';
       $cams.appendChild(opt);
     });
     if (videos.length===0) {
@@ -1015,7 +1128,7 @@ if (typeof data.co2_kg_total === "number") {
   async function waitForVideoReady(video, timeoutMs = 2500) {
     if (!video) return false;
 
-    // Si déjà prêt
+    // Si dÃ©jÃ  prÃªt
     if (video.videoWidth > 0 && video.videoHeight > 0) return true;
 
     return await new Promise((resolve) => {
@@ -1044,12 +1157,25 @@ async function startWith(deviceId){
   try{
     await stopStream();
 
+        // H-005: reset propre avant un NOUVEAU scan
+    window.__HONOUA_SCAN_LOCK__ = false;
+    __stableEan = '';
+    __stableHits = 0;
+    __stableAt = 0;
+
+
         // iPhone : utiliser Quagga2 (plus robuste que ZXing en live sur iOS)
-    if (isIphoneIOS() && window.Quagga) {
+       // iPhone : tenter Quagga2 en priorité, mais NE PAS bloquer si Quagga échoue
+    if (false && isIphoneIOS() && window.Quagga) {
       setStatus('Caméra active', true);
-      await startQuaggaInTarget();
-      return;
+
+      const ok = await startQuaggaInTarget();
+      if (ok) return;
+
+      console.warn('[Quagga] Échec init → fallback caméra native + ZXing.');
+      // IMPORTANT : on continue (pas de return)
     }
+
 
 
     // iOS: stabilise la lecture vidéo (indispensable pour analyse frame/ZXing)
@@ -1060,23 +1186,82 @@ async function startWith(deviceId){
       $video.autoplay = true;
     }
 
-    // Résolution plus exploitable pour EAN
-    const constraints = deviceId
-      ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } }
-      : { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    // Résolution/contraintes robustes iOS pour EAN (tentatives successives)
+    const baseVideo = {
+      width: { ideal: 1280, min: 640 },
+      height: { ideal: 720, min: 480 },
+      aspectRatio: { ideal: 16 / 9 },
+      frameRate: { ideal: 30, max: 60 }
+    };
+
+    // Certaines contraintes avancées ne sont pas supportées partout : iOS les ignore si non supportées.
+    const advanced = [
+      { focusMode: "continuous" },
+      { exposureMode: "continuous" },
+      { whiteBalanceMode: "continuous" }
+    ];
+
+    const candidates = [];
+
+    // 1) Si l’utilisateur impose un deviceId (dropdown), on essaie en priorité
+    if (deviceId) {
+      candidates.push({
+        video: {
+          ...baseVideo,
+          deviceId: { exact: deviceId },
+          advanced
+        }
+      });
+    }
+
+    // 2) iOS/Android : tenter environment EXACT d’abord (si dispo)
+    candidates.push({
+      video: {
+        ...baseVideo,
+        facingMode: { exact: "environment" },
+        advanced
+      }
+    });
+
+    // 3) Puis environment IDEAL
+    candidates.push({
+      video: {
+        ...baseVideo,
+        facingMode: { ideal: "environment" },
+        advanced
+      }
+    });
+
+    // 4) Fallback ultime
+    candidates.push({ video: true });
 
     let stream = null;
+    let firstError = null;
 
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (e1) {
-      // Fallback desktop : certaines contraintes (facingMode env / deviceId exact) peuvent échouer
+    for (const c of candidates) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      } catch (e2) {
-        throw e1; // on garde l’erreur initiale pour ton message UX
+        stream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (err) {
+        if (!firstError) firstError = err;
       }
     }
+
+    if (!stream) {
+      throw firstError || new Error("getUserMedia failed");
+    }
+
+    // Diagnostic utile (iPhone)
+    try {
+      const t = stream.getVideoTracks && stream.getVideoTracks()[0];
+      if (t && t.getSettings) {
+        console.info("[Cam] settings:", t.getSettings());
+      }
+      if (t && t.getConstraints) {
+        console.info("[Cam] constraints:", t.getConstraints());
+      }
+    } catch (_) {}
+
 
     currentStream = stream;
     $video.srcObject = stream;
@@ -1085,6 +1270,8 @@ async function startWith(deviceId){
 
     // IMPORTANT iPhone : attendre les dimensions réelles de la vidéo avant ZXing
     await waitForVideoReady($video, 3000);
+    await startZXingFromStream(stream);
+
 
     currentTrack = stream.getVideoTracks()[0] || null;
     setStatus('Caméra active', true);
@@ -1106,13 +1293,24 @@ async function startWith(deviceId){
     await startZXingFromStream(stream);
 
 
-  } catch(e) {
+      } catch (e) {
+    console.warn('[Scan] startWith error:', e);
     setStatus('Erreur ou refus caméra', false);
-    showScannerError("Accès à la caméra refusé. Autorisez la caméra dans les réglages.");
-  }
-}
 
-    if ($start) {
+    const name = (e && e.name) ? e.name : '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      showScannerError("Accès caméra refusé. Autorisez la caméra dans Safari (Réglages).", true);
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      showScannerError("Caméra introuvable ou contraintes incompatibles. Essayez sans sélection caméra.", true);
+    } else if (name === 'NotReadableError') {
+      showScannerError("Caméra occupée par une autre app. Fermez les apps utilisant la caméra puis réessayez.", true);
+    } else {
+      showScannerError("Impossible d’ouvrir la caméra. Détail console: " + (name || 'Erreur inconnue'), true);
+    }
+  }
+
+ 
+   } if ($start) {
     $start.onclick = async () => {
       try {
         const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -1147,15 +1345,14 @@ async function startWith(deviceId){
    if(!('mediaDevices' in navigator)){
   setStatus('API média non supportée', false);
   showScannerError("Caméra non supportée sur cet appareil.");
+  return;
    }
-
-  })();
 
    // Fallback global pour être sûr que handleEanDetected existe
   window.handleEanDetected = function(ean){
     if (!ean) return;
 
-    // Marque une détection (empêche le watchdog de conclure à une absence de scan)
+    // Marque une dÃ©tection (empÃªche le watchdog de conclure Ã  une absence de scan)
     markEanDetected();
 
     console.log('handleEanDetected (fallback) appelé avec :', ean);
@@ -1386,7 +1583,7 @@ window.co2Cart = co2Cart;
 
 
 /**
- * Trouve l'index d'un produit dans le panier à partir de son EAN.
+ * Trouve l'index d'un produit dans le panier Ã  partir de son EAN.
  * @param {string|number} ean
  * @returns {number} index ou -1 si non trouvé
  */
@@ -1396,7 +1593,7 @@ function findCartItemIndex(ean) {
 }
 
 /**
- * Ajoute / met à jour un produit dans le panier à partir de la réponse API.
+ * Ajoute / met Ã  jour un produit dans le panier Ã  partir de la rÃ©ponse API.
  * NE GÈRE PAS LE DOM.
  * @param {object} apiData - données renvoyées par /api/v1/co2/product/{ean}
  * @param {string|number} ean - code-barres scanné
@@ -1406,7 +1603,7 @@ function findCartItemIndex(ean) {
   const eanStr = String(ean);
 
   // ==== 1. Normalisation des champs depuis l'API ====
-  // ⚠️ Adapte ici les noms exacts de champs de ton API si besoin.
+  // âš ï¸ Adapte ici les noms exacts de champs de ton API si besoin.
  
   const productName =
     apiData.product_name ||      // cas 1 : nom "standard"
@@ -1420,12 +1617,12 @@ function findCartItemIndex(ean) {
   // CO2 par unité (en g CO2e)
   let co2UnitG = null;
 
-  // 1) Ancien format : déjà en grammes
+  // 1) Ancien format : dÃ©jÃ  en grammes
   if (typeof apiData.co2_total_g === "number") {
     co2UnitG = apiData.co2_total_g;
 
   } else if (typeof apiData.co2_total === "number") {
-    // Peut déjà être en g dans certains anciens endpoints
+    // Peut dÃ©jÃ  Ãªtre en g dans certains anciens endpoints
     co2UnitG = apiData.co2_total;
 
   // 2) Nouveau format : en kilogrammes → on convertit en g
@@ -1482,7 +1679,7 @@ function findCartItemIndex(ean) {
 
   const hasCo2Data = Number.isFinite(co2UnitG) && co2UnitG > 0;
 
-  // ==== 2. Mise à jour du panier ====
+  // ==== 2. Mise Ã  jour du panier ====
   const idx = findCartItemIndex(eanStr);
   const now = Date.now();
 
@@ -1534,10 +1731,10 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
     co2Cart.push(newItem);
   } else {
-    // ♻️ Produit déjà présent → demander confirmation avant d'augmenter la quantité
+    // â™»ï¸ Produit dÃ©jÃ  prÃ©sent â†’ demander confirmation avant d'augmenter la quantitÃ©
     const item = co2Cart[idx];
 
-    // On met à jour les infos les plus récentes (même si l'utilisateur refuse)
+    // On met Ã  jour les infos les plus rÃ©centes (mÃªme si l'utilisateur refuse)
     if (distanceKm != null) item.distance_km = distanceKm;
     if (co2PackagingG != null) item.co2_packaging_g = co2PackagingG;
     if (origin != null) item.origin = origin;
@@ -1545,14 +1742,14 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
     const currentQty = item.quantity || 1;
         const confirmMsg =
-          `Produit déjà scanné (quantité actuelle : x${currentQty}).\n\n` +
-          `Ajouter à nouveau ?`;
+          `Produit dÃ©jÃ  scannÃ© (quantitÃ© actuelle : x${currentQty}).\n\n` +
+          `Ajouter Ã  nouveau ?`;
 
         const ok = window.confirm(confirmMsg);
 
 
     if (!ok) {
-      // ❌ L'utilisateur refuse : on ne change pas la quantité ni le total CO₂
+      // âŒ L'utilisateur refuse : on ne change pas la quantitÃ© ni le total COâ‚‚
       item.last_scan_at = now;
       return;
     }
@@ -1565,9 +1762,9 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
       item.co2_unit_g = co2UnitG;
     }
 
-    // Mise à jour du total CO2 (0 si pas de données CO2)
+    // Mise Ã  jour du total CO2 (0 si pas de donnÃ©es CO2)
     if (item.has_co2_data || hasCo2Data) {
-      // Si l'item avait déjà des données CO2 ou en a maintenant
+      // Si l'item avait dÃ©jÃ  des donnÃ©es CO2 ou en a maintenant
       item.has_co2_data = item.has_co2_data || hasCo2Data;
       const unit = item.co2_unit_g;
       item.co2_total_g = Number.isFinite(unit) ? unit * item.quantity : 0;
@@ -1731,28 +1928,26 @@ function mapCategoryForGraph(rawCategoryText) {
   return "Autres";
 }
 /**
- * Couleur associée à chaque catégorie pour le graphique.
+ * Couleur associÃ©e Ã  chaque catÃ©gorie pour le graphique.
  * (Version globale, utilisable partout)
  */
 function getCategoryColor(cat) {
   switch (cat) {
-    case 'Viande':
-      return '#D9534F'; // rouge doux
-    case 'Végétaux':
-      return '#5CB85C'; // vert
-    case 'Épicerie':
-      return '#F0AD4E'; // orange
-    case 'Boisson':
-      return '#5BC0DE'; // bleu
-    case 'Autres':
-      return '#999999'; // gris
-    default:
-      return '#CCCCCC';
+    case 'Viande':   return '#D9534F';
+    case 'Végétaux': return '#5CB85C';
+    case 'Épicerie': return '#F0AD4E';
+    case 'Boisson':  return '#5BC0DE';
+    case 'Autres':   return '#999999';
+    default:         return '#CCCCCC';
   }
 }
 
+// Expose la palette des catégories pour le graphique
+window.getCategoryColor = getCategoryColor;
+
+
 /**
- * Dessine un camembert simple à partir des totaux CO₂ par catégorie.
+ * Dessine un camembert simple Ã  partir des totaux COâ‚‚ par catÃ©gorie.
  *
  * @param {Object} totals - ex : { 'Viande': 1234, 'Végétaux': 567, ... } en g
  * @param {number} totalAll - somme de toutes les catégories en g
@@ -1823,7 +2018,7 @@ if (cart.length === 0) {
 
           const history = honouaGetCartHistory().slice(0, 2);
 
-          // Supprime l'ancien bloc si déjà rendu
+          // Supprime l'ancien bloc si dÃ©jÃ  rendu
           ul.querySelectorAll('li[data-lastcarts="1"]').forEach(n => n.remove());
 
           const li = document.createElement('li');
@@ -1851,11 +2046,18 @@ if (cart.length === 0) {
 
       // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
         try {
-          // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
+          // Totaux : on prend ce que tu affiches dÃ©jÃ  dans le DOM (robuste)
           const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
           const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
 
-          honouaSaveCartToHistory(cart, totalsSummary);
+          const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        // Snapshot (évite d’enregistrer une référence mutable)
+        const cartSnapshot = cartNow.map(it => ({ ...it }));
+
+        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
         } catch (e) {
@@ -1890,7 +2092,7 @@ function formatNumberFr(value, decimals = 0) {
 }
 
 /**
- * Met à jour l'affichage du panier CO₂ dans la section HTML dédiée
+ * Met Ã  jour l'affichage du panier COâ‚‚ dans la section HTML dÃ©diÃ©e
  * + les 4 cercles + les 3 lignes de résumé sous les cercles.
  */
 function renderCo2Cart() {
@@ -1905,7 +2107,7 @@ function renderCo2Cart() {
   const $circleAvgDist     = document.getElementById('co2-circle-avg-distance-value');
 
   if (!$list || !$totalItems || !$distinctProducts || !$totalCo2) {
-    console.warn('[Panier CO2] Éléments DOM manquants pour le rendu.');
+    //console.warn('[Panier CO2] Éléments DOM manquants pour le rendu.');
     return;
   }
 
@@ -2018,7 +2220,7 @@ function renderCo2Cart() {
   }
 
   // =========================
-  // 2) Mise à jour des 4 cercles
+  // 2) Mise Ã  jour des 4 cercles
   // =========================
   if ($circleTotalCo2 && $circleTotalDist && $circleAvgCo2 && $circleAvgDist) {
     let totalCo2G        = 0;
@@ -2144,7 +2346,14 @@ document.addEventListener('DOMContentLoaded', function () {
           ? window.getCo2CartTotals()
           : null;
 
-        honouaSaveCartToHistory(cart, totalsSummary);
+       const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        // Snapshot (évite d’enregistrer une référence mutable)
+        const cartSnapshot = cartNow.map(it => ({ ...it }));
+
+        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+
         honouaRenderLastTwoCartsInReco();
       } catch (e) {
         console.warn('[History] save/render failed', e);
@@ -2341,13 +2550,43 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
 
     const totalCo2Kg = totalCo2G / 1000;
     // =========================
-// Suivi CO2 — sauvegarde du panier (MVP)
-// =========================
-    window.honouaAppendCartToHistory({
-      co2Kg: totalCo2Kg,
-      distanceKm: 0, // distance non gérée dans getCartTotals() pour l’instant
-      itemsCount: totals.distinct_products || co2Cart.length || 0
-    });
+      // Suivi CO2 — sauvegarde du panier (MVP)
+      // =========================
+    // Distance totale (pondérée par quantité) — pour historique localStorage
+  // Parse robuste: accepte number, string, "12,3", " 12.3 "
+        const toNum = (v) => {
+          if (v == null) return 0;
+          if (typeof v === 'string') v = v.replace(/\s/g, '').replace(',', '.');
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
+
+        const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+
+        let totalDistanceKm = 0;
+        for (const it of cartNow) {
+          let qty = toNum(it.quantity ?? it.qty ?? 1);
+          if (!(qty > 0)) qty = 1;
+
+         const d = toNum(
+            it.distance_km ??
+            it.distanceKm ??
+            it.total_distance_km ??
+            it.transport_km ??
+            it.transportKm ??
+            0
+          );
+
+          if (Number.isFinite(d) && d > 0) totalDistanceKm += d * qty;
+        }
+
+        window.honouaAppendCartToHistory({
+          co2Kg: totalCo2Kg,
+          distanceKm: totalDistanceKm,
+          itemsCount: (totals && totals.distinct_products) ? totals.distinct_products : (cartNow ? cartNow.length : 0),
+
+        });
 
 
     if ($reportEmissionsTotal) {
@@ -2380,7 +2619,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     // 3) Conversion CO₂ total → nombre d’arbres (règle 30 jours = 1 arbre)
 
             // === A52/A53 — Utils arbre (minimal, global) ===
-        // Calibré sur ton historique: 13,6 kg -> ~225,6 jours => ~22 kg/an/arbre
+        // Calibré sur ton historique: 13,6 kg -> ≈225,6 jours => ≈22 kg/an/arbre
         (function () {
           const TREE_CO2_KG_PER_YEAR = 22; // cohérent avec tes valeurs backend/historique
           const DAYS_PER_YEAR = 365;
@@ -2419,7 +2658,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
         // Règle : 1 arbre = 30 jours de captation
         const treeEquivalent = daysCaptured / 30;
 
-        // Mise à jour du petit bloc numérique
+        // Mise Ã  jour du petit bloc numÃ©rique
         if ($treeNumber) {
           if (treeEquivalent < 1) {
             $treeNumber.textContent = '< 1';
@@ -2469,7 +2708,7 @@ if ($treeIcons && $treeBadge) {
 
     $treeIcons.textContent = icons;
 
-    // Mise à jour du nombre réel
+    // Mise Ã  jour du nombre rÃ©el
     if (treeEquivalent < 1) {
       $treeBadge.textContent = "(< 1)";
     } else {
@@ -2506,8 +2745,8 @@ if ($treeIcons && $treeBadge) {
         countDistanceItems += qty;
       }
     }
+    const totalDistanceKmFromCart = sumDistanceKm;
 
-    const totalDistanceKm = sumDistanceKm;
     const avgDistanceKm = countDistanceItems > 0 ? (sumDistanceKm / countDistanceItems) : 0;
     const localThreshold = 250;
 
@@ -2579,7 +2818,7 @@ if ($recoIntro && $recoList) {
       topHigh.forEach((it) => {
         const li = document.createElement('li');
         li.textContent =
-          `${it.product_name || 'Produit'} – ≈ ${formatNumberFr(Math.round(it.co2_unit_g))} g CO₂e / unité (à remplacer si possible)`;
+        `${it.product_name || 'Produit'} \u2013 \u2248 ${formatNumberFr(Math.round(it.co2_unit_g))} g CO\u2082e / unit\u00E9 (\u00E0 remplacer si possible)`;
         $recoList.appendChild(li);
       });
     }
@@ -2589,7 +2828,7 @@ if ($recoIntro && $recoList) {
 console.log('[Reco] introEl/listEl:', $recoIntro, $recoList);
 console.log('[Reco] recoList HTML:', $recoList ? $recoList.innerHTML : null);
 
-         // 6) Répartition par catégories – calcul à partir du panier
+         // 6) RÃ©partition par catÃ©gories – calcul Ã  partir du panier
     if ($catBox) {
        
              // Fonction locale (défensive) : mappe une catégorie brute → catégorie graphique
@@ -2904,7 +3143,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 })();
 
   window.HonouaReportPie.render(categoryTotals, totalAll);
-        if ($graph) {
+        if (typeof $graph !== "undefined" && $graph) {
           // Catégorie dominante
           if ($dominant) {
             let dominantCat = null;
@@ -3090,7 +3329,7 @@ function honouaRenderLastTwoCartsInReco() {
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
 // Endpoint /api/cart/history absent en prod (404) : on désactive côté front pour éviter le spam réseau/console.
-// Le jour où l’endpoint est disponible, repasser à false.
+// Le jour oÃ¹ l’endpoint est disponible, repasser Ã  false.
 let __CO2_CART_HISTORY_DISABLED = true;
 
 
@@ -3278,7 +3517,7 @@ if (typeof refreshBudgetFromApi === 'function') {
   }
 
   /**
-   * Calcule l'état du budget annuel à partir de l'historique.
+   * Calcule l'Ã©tat du budget annuel Ã  partir de l'historique.
    * @param {Array} items - historique des paniers
    * @returns {Object} budgetState
    */
@@ -3352,7 +3591,7 @@ if (typeof refreshBudgetFromApi === 'function') {
       statusLabel = "Budget maîtrisé";
       statusLevel = "green";
     } else if (statusKey === "warning") {
-      statusLabel = "Budget à surveiller";
+      statusLabel = "Budget Ã  surveiller";
       statusLevel = "orange";
     } else {
       statusLabel = "Budget dépassé";
@@ -3374,7 +3613,7 @@ if (typeof refreshBudgetFromApi === 'function') {
   }
 
   /**
-   * Met à jour le DOM du Bloc Budget à partir de budgetState.
+   * Met Ã  jour le DOM du Bloc Budget Ã  partir de budgetState.
    * @param {Object} state
    */
   function renderBudgetFromState(state) {
@@ -3560,7 +3799,7 @@ function aggregateHistoryByPeriod(items) {
 
 
   /**
-   * Récupère l'historique et met à jour le bloc Budget.
+   * RÃ©cupÃ¨re l'historique et met Ã  jour le bloc Budget.
    */
   async function refreshBudgetFromApi() {
     const $budgetStatus = document.getElementById('budget-status');
@@ -3589,7 +3828,7 @@ function aggregateHistoryByPeriod(items) {
   
         });
 
-    // ✅ Défis : auto-refresh après mise à jour des données (guard anti-régression)
+    // âœ… DÃ©fis : auto-refresh aprÃ¨s mise Ã  jour des donnÃ©es (guard anti-rÃ©gression)
     if (typeof buildChallengesFromAgg === "function" && typeof renderCo2ChallengesList === "function") {
       renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
     }
@@ -4027,7 +4266,7 @@ console.log("[Défis CO2][MVP] script inline chargé");
 const PERSONAL_CHALLENGES_MVP = [
   {
     id: "reduce_10_percent_30_days",
-    icon: "🏆",
+    icon: "🆙",
     name: "Réduire ton CO₂ de 10 % sur 30 jours",
     status: "en_cours",
     progressPct: 63,
@@ -4035,7 +4274,7 @@ const PERSONAL_CHALLENGES_MVP = [
   },
   {
     id: "local_week",
-    icon: "🌍",
+    icon: "🅲",
     name: "Une semaine 100 % locale",
     status: "en_cours",
     progressPct: 40,
@@ -4092,13 +4331,13 @@ function buildChallengesFromAgg(agg, trend) {
   }
 
   // --- Défi 2 : Une semaine 100% locale (donnée indisponible pour l’instant) ---
-  // Respect contrainte : pas de spéculation, donc on affiche "à venir".
+  // Respect contrainte : pas de spÃ©culation, donc on affiche "Ã  venir".
   const localStatus = "non_atteint";
   const localProgress = 0;
-  const localMsg = "À venir : l’origine/label “local” n’est pas encore enregistré dans les données.";
+  const localMsg = "Ã€ venir : l’origine/label â€œlocalâ€ n’est pas encore enregistrÃ© dans les donnÃ©es.";
 
   // --- Défi 3 : Réduire la distance totale (dernier mois vs précédent) ---
-  // Basé sur total_distance_km agrégé (déjà calculé dans agg).
+  // BasÃ© sur total_distance_km agrÃ©gÃ© (dÃ©jÃ  calculÃ© dans agg).
   let distStatus = "en_cours";
   let distProgress = 0;
   let distMsg = "Historique insuffisant : il faut au moins 2 mois de données.";
@@ -4142,7 +4381,7 @@ function buildChallengesFromAgg(agg, trend) {
   return [
     {
       id: "reduce_10_percent_30_days",
-      icon: "🏆",
+      icon: "Co²",
       name: "Réduire ton CO₂ de 10 % (dernier mois vs précédent)",
       status: reduceStatus,
       progressPct: reduceProgress,
@@ -4150,8 +4389,8 @@ function buildChallengesFromAgg(agg, trend) {
     },
     {
       id: "local_week",
-      icon: "🌍",
-      name: "Une semaine 100 % locale (à venir)",
+      icon: "🏆",
+      name: "Une semaine 100 % locale (Ã  venir)",
       status: localStatus,
       progressPct: localProgress,
       message: localMsg
@@ -4190,7 +4429,7 @@ function createCo2ChallengeCard(challenge) {
 
   card.innerHTML = `
     <div class="co2-challenge-header">
-      <span class="co2-challenge-icon">${challenge.icon || "🏆"}</span>
+      <span class="co2-challenge-icon">${challenge.icon || "🆙"}</span>
       <span class="co2-challenge-name">
         ${challenge.name || "Défi CO₂"}
       </span>
@@ -4234,10 +4473,25 @@ function renderCo2ChallengesList(challenges) {
     return;
   }
 
-  challenges.forEach((c) => {
-    const card = createCo2ChallengeCard(c);
-    $list.appendChild(card);
-  });
+let renderedCount = 0;
+
+challenges.forEach((c) => {
+  try {
+    $list.appendChild(createCo2ChallengeCard(c));
+    renderedCount++;
+  } catch (err) {
+    console.error("[Défis CO2] Erreur rendu carte défi:", err, c);
+  }
+});
+
+if (renderedCount === 0) {
+  $list.innerHTML = `
+    <div class="co2-challenge-empty">
+      Impossible d’afficher les défis (erreur front). Recharge la page.
+    </div>
+  `;
+}
+
 }
 
 // 4) Initialisation + protection du bouton contre les autres scripts
@@ -4265,20 +4519,41 @@ function setupCo2ChallengesMvp() {
 }
 
 // 5) On attend que tout soit chargé, puis on force quelques re-rendus
+// 5) On attend que tout soit chargé, puis on initialise (une seule fois)
 window.addEventListener("load", () => {
-  setupCo2ChallengesMvp();
+  if (window.__honouaChallengesInitDone) return;
+  window.__honouaChallengesInitDone = true;
 
-  // Si un autre script touche à la liste après coup, on repasse derrière
+  // Petit délai pour laisser les autres scripts stabiliser le DOM (nav, suivi, etc.)
   setTimeout(() => {
-    console.log("[Défis CO2][MVP] re-render +1000ms");
-    renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
-  }, 1000);
+    if (typeof setupCo2ChallengesMvp !== "function") {
+      console.warn("[Défis CO2][MVP] setupCo2ChallengesMvp introuvable au load");
+      return;
+    }
 
-  setTimeout(() => {
-    console.log("[Défis CO2][MVP] re-render +3000ms");
-    renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
-  }, 3000);
+    setupCo2ChallengesMvp();
+
+    // Si un autre script touche à la liste après coup, on repasse derrière
+    setTimeout(() => {
+      console.log("[Défis CO2][MVP] re-render +1000ms");
+      renderCo2ChallengesList(
+        buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend)
+      );
+    }, 1000);
+
+    setTimeout(() => {
+      console.log("[Défis CO2][MVP] re-render +3000ms");
+      renderCo2ChallengesList(
+        buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend)
+      );
+    }, 3000);
+  }, 300);
 });
+
+
+// Expose pour la page Suivi CO₂ (appel depuis suivi-co2.html)
+window.setupCo2ChallengesMvp = setupCo2ChallengesMvp;
+
 
 // =========================
 // SAFE: Honoua cart history writer (no-crash guard)
@@ -4311,4 +4586,23 @@ window.addEventListener("load", () => {
   };
 })();
 
+document.addEventListener('DOMContentLoaded', () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('[Scanner] getUserMedia indisponible');
+    // si tu as une fonction d’erreur existante :
+    // showScannerError("Votre navigateur ne supporte pas l'accÃ¨s Ã  la camÃ©ra.", true);
+    return;
+  }
+
+  const isSecure =
+    location.protocol === 'https:' ||
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1';
+
+  if (!isSecure) {
+    console.warn('[Scanner] Contexte non sécurisé (HTTPS requis hors localhost)');
+  }
+});
+
+})();
 

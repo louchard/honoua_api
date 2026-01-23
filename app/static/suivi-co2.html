@@ -176,10 +176,12 @@
       </div>
 
       <div id="co2-cart-history-list" class="co2-cart-history-list">
-        <p class="co2-cart-history-empty">
-          Chargement de votre historique...
+         <p class="co2-cart-history-empty">
+    Chargement de votre historique...
         </p>
       </div>
+
+      <div id="co2-cart-history-detail" class="co2-cart-history-detail hidden"></div>
     </section>
 
     <!-- BLOC 4 – Défis CO₂ -->
@@ -242,9 +244,40 @@
     </button>
   </footer>
 
-  <script src="js/honoua-core.js"></script>
-  <script src="js/suivi-co2.js"></script>
-  <script src="js/nav.js"></script>
- 
+
+  <script src="js/honoua-core.js" charset="utf-8"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof setupCo2ChallengesMvp === 'function') {
+      console.log('[Défis] init suivi-co2');
+      setupCo2ChallengesMvp();
+    } else {
+      console.warn('[Défis] setupCo2ChallengesMvp introuvable (honoua-core.js non chargé ?)');
+    }
+  });
+</script>
+
+  <script src="js/suivi-co2.js" charset="utf-8"></script>
+  <script src="js/nav.js" charset="utf-8"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!window.__honouaChallengesInitDone && typeof window.setupCo2ChallengesMvp === 'function') {
+      window.__honouaChallengesInitDone = true;
+      window.setupCo2ChallengesMvp();
+    }
+  });
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('co2-challenges-list');
+    if (!list) return;
+
+    if (typeof window.setupCo2ChallengesMvp === 'function') {
+      window.setupCo2ChallengesMvp();
+    }
+  });
+</script>
+
 </body>
 </html>
