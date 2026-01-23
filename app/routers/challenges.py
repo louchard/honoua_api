@@ -62,145 +62,105 @@ def activate_challenge(
     payload: ChallengeActivateRequest,
     db: Session = Depends(get_db),
 ):
-    """
-    Idempotence + nettoyage :
-    - Si une instance ACTIVE/en_cours existe déjà pour (user_id, challenge_id) :
-        * on conserve la plus récente
-        * on SUPPRIME les doublons (DELETE) pour rester compatible avec chk_challenge_instances_status
-        * on ne recrée pas
-    - Sinon : on crée une nouvelle instance.
-    """
-    user_id_str = str(user_id)
-    challenge_id = int(payload.challenge_id)
-    now = datetime.utcnow()
-    today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # 1) Charger le challenge (Postgres-friendly, champs non nuls)
+    challenge_row = db.execute(
+        text("""
+            SELECT
+                id,
+                code,
+                COALESCE(name, title, code) AS name,
+                description,
+                COALESCE(metric, 'CO2') AS metric,
+                COALESCE(logic_type, 'REDUCTION_PCT') AS logic_type,
+                COALESCE(period_type, 'DAYS') AS period_type,
+                COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
+                COALESCE(scope_type, 'CART') AS scope_type,
+                COALESCE(active, is_active, TRUE) AS active,
+                COALESCE(period_days, 30) AS period_days
+            FROM public.challenges
+            WHERE id = :challenge_id
+              AND COALESCE(active, is_active, TRUE) = TRUE
+            LIMIT 1
+        """),
+        {"challenge_id": payload.challenge_id},
+    ).mappings().first()
 
-    # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
-    db.execute(
-        text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
-        {"uid": user_id, "cid": challenge_id},
-    )
+    if challenge_row is None:
+        raise HTTPException(status_code=404, detail="Défi introuvable ou inactif.")
 
-    # SQL commun pour retourner une instance au format ChallengeInstanceRead
-    select_instance_sql = text(
-        """
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
-            ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
-            NULL::numeric AS reference_value,
-            NULL::numeric AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            NULL::numeric AS progress_percent,
-            NULL::timestamp AS last_evaluated_at,
-            ci.created_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.id = :instance_id
-          AND ci.user_id::text = :user_id
-        """
-    )
+    # 2) Calcul period_start / period_end (schema prod)
+    today = datetime.utcnow().date()
+    period_days = int(challenge_row.get("period_days") or 30)
+    period_start = today
+    period_end = today + timedelta(days=period_days)
 
-    # 1) Verrouiller et récupérer les instances actives (si doublons)
-    existing_ids_sql = text(
-        """
-        SELECT ci.id
-        FROM public.challenge_instances ci
-        WHERE ci.user_id::text = :user_id
-          AND ci.challenge_id = :challenge_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-        ORDER BY ci.created_at DESC, ci.id DESC
-        FOR UPDATE
-        """
-    )
-
-    try:
-        existing_rows = db.execute(
-            existing_ids_sql,
-            {"user_id": user_id_str, "challenge_id": challenge_id},
-        ).mappings().all()
-
-        # 1bis) Si existe : garder la plus récente + supprimer les doublons
-        if existing_rows:
-            keep_id = existing_rows[0]["id"]
-            old_ids = [r["id"] for r in existing_rows[1:]]
-
-            if old_ids:
-                cleanup_sql = (
-                    text(
-                        """
-                        DELETE FROM public.challenge_instances
-                        WHERE id IN :old_ids
-                        """
-                    ).bindparams(bindparam("old_ids", expanding=True))
-                )
-                db.execute(cleanup_sql, {"old_ids": old_ids})
-
-            db.commit()
-
-            row = db.execute(
-                select_instance_sql,
-                {"instance_id": keep_id, "user_id": user_id_str},
-            ).mappings().first()
-
-            if row is None:
-                raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
-
-            return ChallengeInstanceRead(**row)
-
-        # 2) Sinon : créer une nouvelle instance
-        start_date = today0
-        end_date = today0 + timedelta(days=30)
-
-        insert_sql = text(
-            """
+    # 3) Insérer l'instance (schema prod)
+    result = db.execute(
+        text("""
             INSERT INTO public.challenge_instances (
-                user_id,
                 challenge_id,
-                status,
+                user_id,
                 period_start,
                 period_end,
+                status,
                 created_at,
-                updated_at,
-                target_value
+                updated_at
             )
             VALUES (
-                :user_id,
                 :challenge_id,
+                :user_id,
+                :period_start,
+                :period_end,
                 'ACTIVE',
-                :start_date,
-                :end_date,
-                :now,
-                :now,
-                COALESCE(
-                    (SELECT default_target_value FROM public.challenges WHERE id = :challenge_id),
-                    0
-                )
+                NOW(),
+                NOW()
             )
             RETURNING id
-            """
-        )
+        """),
+        {
+            "challenge_id": int(challenge_row["id"]),
+            "user_id": str(user_id),
+            "period_start": period_start,
+            "period_end": period_end,
+        },
+    )
 
-        new_id = db.execute(
-            insert_sql,
-            {
-                "user_id": user_id_str,
-                "challenge_id": challenge_id,
-                "start_date": start_date,
-                "end_date": end_date,
-                "now": now,
-            },
-        ).scalar()
+    instance_id = result.scalar_one()
+    db.commit()
 
-        db.commit()
+    # 4) Relire et retourner une réponse compatible avec ChallengeInstanceRead
+    row = db.execute(
+        text("""
+            SELECT
+                ci.id AS instance_id,
+                ci.challenge_id,
+                c.code,
+                COALESCE(c.name, c.title, c.code) AS name,
+                c.description,
+                COALESCE(c.metric, 'CO2') AS metric,
+                COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+                COALESCE(c.period_type, 'DAYS') AS period_type,
+                ci.status,
+                ci.period_start AS start_date,
+                ci.period_end   AS end_date,
+                NULL::numeric   AS reference_value,
+                NULL::numeric   AS current_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                NULL::numeric   AS progress_percent,
+                ci.created_at,
+                NULL::timestamp AS last_evaluated_at
+            FROM public.challenge_instances ci
+            JOIN public.challenges c ON c.id = ci.challenge_id
+            WHERE ci.id = :instance_id
+            LIMIT 1
+        """),
+        {"instance_id": instance_id},
+    ).mappings().first()
+
+    if row is None:
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de l'instance de défi.")
+
+    return ChallengeInstanceRead(**row)
 
         row = db.execute(
             select_instance_sql,
@@ -215,6 +175,7 @@ def activate_challenge(
     except Exception:
         db.rollback()
         raise
+
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
