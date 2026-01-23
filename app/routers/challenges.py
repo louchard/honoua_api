@@ -7,7 +7,6 @@ from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 
-
 from app.schemas.challenges import (
     ChallengeRead,
     ChallengeActivateRequest,
@@ -75,54 +74,54 @@ def activate_challenge(
     now = datetime.utcnow()
     today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
-    db.execute(
-        text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
-        {"uid": user_id, "cid": challenge_id},
-    )
-
-    # SQL commun pour retourner une instance au format ChallengeInstanceRead
-    select_instance_sql = text(
-        """
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
-            ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
-            NULL::numeric AS reference_value,
-            NULL::numeric AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            NULL::numeric AS progress_percent,
-            NULL::timestamp AS last_evaluated_at,
-            ci.created_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.id = :instance_id
-          AND ci.user_id::text = :user_id
-        """
-    )
-
-    # 1) Verrouiller et récupérer les instances actives (si doublons)
-    existing_ids_sql = text(
-        """
-        SELECT ci.id
-        FROM public.challenge_instances ci
-        WHERE ci.user_id::text = :user_id
-          AND ci.challenge_id = :challenge_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
-        ORDER BY ci.created_at DESC, ci.id DESC
-        FOR UPDATE
-        """
-    )
-
     try:
+        # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
+            {"uid": user_id, "cid": challenge_id},
+        )
+
+        # SQL commun pour retourner une instance au format ChallengeInstanceRead
+        select_instance_sql = text(
+            """
+            SELECT
+                ci.id AS instance_id,
+                ci.challenge_id,
+                c.code,
+                COALESCE(c.name, c.title, c.code) AS name,
+                c.description,
+                COALESCE(c.metric, 'CO2') AS metric,
+                COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+                COALESCE(c.period_type, 'DAYS') AS period_type,
+                ci.status,
+                ci.period_start AS start_date,
+                ci.period_end   AS end_date,
+                NULL::numeric AS reference_value,
+                NULL::numeric AS current_value,
+                COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                NULL::numeric AS progress_percent,
+                NULL::timestamp AS last_evaluated_at,
+                ci.created_at
+            FROM public.challenge_instances ci
+            JOIN public.challenges c ON c.id = ci.challenge_id
+            WHERE ci.id = :instance_id
+              AND ci.user_id::text = :user_id
+            """
+        )
+
+        # 1) Verrouiller et récupérer les instances actives (si doublons)
+        existing_ids_sql = text(
+            """
+            SELECT ci.id
+            FROM public.challenge_instances ci
+            WHERE ci.user_id::text = :user_id
+              AND ci.challenge_id = :challenge_id
+              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+            ORDER BY ci.created_at DESC, ci.id DESC
+            FOR UPDATE
+            """
+        )
+
         existing_rows = db.execute(
             existing_ids_sql,
             {"user_id": user_id_str, "challenge_id": challenge_id},
@@ -192,7 +191,7 @@ def activate_challenge(
         new_id = db.execute(
             insert_sql,
             {
-                "user_id": user_id,
+                "user_id": user_id_str,
                 "challenge_id": challenge_id,
                 "start_date": start_date,
                 "end_date": end_date,
@@ -216,11 +215,10 @@ def activate_challenge(
         db.rollback()
         raise
 
-<<<<<<< HEAD
+
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
-=======
+
 # ---------- 3) Lister les dÃ©fis actifs d'un utilisateur ---------- #
->>>>>>> ba96078 (Fix: activate_challenge idempotent (delete duplicate active instances))
 
 @router.get(
     "/users/{user_id}/challenges/active",
