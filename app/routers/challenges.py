@@ -463,14 +463,14 @@ def evaluate_challenge(
             status = "en_cours"
             progress_percent = None
             message = (
-                "Pas encore assez d'historique CO,, pour évaluer ce défi. "
+                "Pas encore assez d'historique CO2 pour évaluer ce défi. "
                 "Continue à scanner des produits."
             )
         else:
             status = "expire"
             progress_percent = None
             message = (
-                "Le défi est terminé mais il n'y avait pas assez d'historique CO,, "
+                "Le défi est terminé mais il n'y avait pas assez d'historique CO2 "
                 "pour calculer une réduction."
             )
     else:
@@ -498,24 +498,24 @@ def evaluate_challenge(
             status = "reussi"
             if now < end_date:
                 message = (
-                    "Bravo ! Tu as déjà atteint ton objectif de réduction de CO,, YZ?"
+                    "Bravo ! Tu as déjà atteint ton objectif de réduction de CO2 YZ?"
                 )
             else:
                 message = (
-                    "Bravo ! Tu as réussi ton défi de réduction de CO,, sur 30 jours YZ?"
+                    "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours YZ?"
                 )
         else:
             # Objectif pas encore atteint
             if now < end_date:
                 status = "en_cours"
                 message = (
-                    f"Tu as réduit ton CO,, de {reduction * 100:.1f} %, "
+                    f"Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
                     f"objectif : {target_value * 100:.0f} %. Continue !"
                 )
             else:
                 status = "echoue"
                 message = (
-                    f"Le défi est terminé. Tu as réduit ton CO,, de {reduction * 100:.1f} %, "
+                    f"Le défi est terminé. Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
                     f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
                 )
 
