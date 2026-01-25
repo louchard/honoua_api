@@ -1,6 +1,7 @@
 import os
 import json
-import requests
+import urllib.request
+import urllib.error
 
 
 BASE = os.getenv("HONOUA_BASE", "https://api.honoua.com").rstrip("/")
@@ -28,10 +29,30 @@ FORBIDDEN_IN_NAME = [
 ]
 
 
+class _Resp:
+    def __init__(self, status_code: int, content: bytes):
+        self.status_code = status_code
+        self.content = content
+        try:
+            self.text = content.decode("utf-8", errors="replace")
+        except Exception:
+            self.text = repr(content)
+
+
 def _evaluate():
     url = f"{BASE}/users/{USER_ID}/challenges/{INSTANCE_ID}/evaluate"
-    r = requests.post(url, json={}, headers={"Content-Type": "application/json"})
-    return r
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return _Resp(resp.getcode(), resp.read())
+    except urllib.error.HTTPError as e:
+        # retourne quand même un objet exploitable pour les assertions
+        return _Resp(e.code, e.read())
 
 
 def test_evaluate_is_utf8_and_json_parses():
