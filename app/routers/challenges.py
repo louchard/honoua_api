@@ -20,6 +20,28 @@ router = APIRouter(
     tags=["challenges"]
 )
 
+# --- Challenge status mapping (DB <-> API) ---
+DB_STATUS_ACTIVE = "ACTIVE"
+DB_STATUS_SUCCESS = "SUCCESS"
+DB_STATUS_FAILED = "FAILED"
+
+API_STATUS_MAP = {
+    DB_STATUS_ACTIVE: "en_cours",
+    DB_STATUS_SUCCESS: "reussi",
+    DB_STATUS_FAILED: "echoue",
+}
+
+def to_api_status(db_status: str) -> str:
+    return API_STATUS_MAP.get((db_status or "").upper(), (db_status or ""))
+
+def to_db_status(db_status: str) -> str:
+    # hard-normalize to allowed DB values
+    s = (db_status or "").upper()
+    if s in (DB_STATUS_ACTIVE, DB_STATUS_SUCCESS, DB_STATUS_FAILED):
+        return s
+    # fallback: treat unknown as ACTIVE to avoid CHECK violations
+    return DB_STATUS_ACTIVE
+
 
 # ---------- 1) Lister les défis disponibles ---------- #
 @router.get("/challenges", response_model=list[ChallengeRead])
