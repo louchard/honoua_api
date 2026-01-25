@@ -483,7 +483,7 @@ def evaluate_challenge(
         else:
             progress_percent = None
 
-        # On peut borner pour l'affichage si tu veux rester entre 0 à 100
+        # On peut borner pour l'affichage si tu veux rester à 0?"100
         if progress_percent is not None:
             if progress_percent < 0:
                 progress_percent = 0.0
