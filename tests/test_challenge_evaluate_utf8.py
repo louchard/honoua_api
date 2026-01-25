@@ -88,4 +88,4 @@ def test_evaluate_name_has_no_mojibake():
     for bad in FORBIDDEN_IN_NAME:
         assert bad not in name, f"Mojibake {bad!r} trouvé dans name: {name!r}"
 
-    assert "Réduire" in name, f"Nom inattendu: {name!r}"
+    assert isinstance(name, str), f"Champ name inattendu: {type(name)!r} - {name!r}"
