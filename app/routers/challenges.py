@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+﻿from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
@@ -43,7 +43,7 @@ def to_db_status(db_status: str) -> str:
     return DB_STATUS_ACTIVE
 
 
-# ---------- 1) Lister les dÃ©fis disponibles ---------- #
+# ---------- 1) Lister les défis disponibles ---------- #
 @router.get("/challenges", response_model=list[ChallengeRead])
 def list_challenges(db: Session = Depends(get_db)):
     try:
@@ -72,7 +72,7 @@ def list_challenges(db: Session = Depends(get_db)):
         return []
 
 
-# ---------- 2) Activer un dÃ©fi pour un utilisateur ---------- #
+# ---------- 2) Activer un défi pour un utilisateur ---------- #
 
 @router.post(
     "/users/{user_id}/challenges/activate",
@@ -85,11 +85,11 @@ def activate_challenge(
 ):
     """
     Idempotence + nettoyage :
-    - Si une instance ACTIVE/en_cours existe dÃ©jÃ  pour (user_id, challenge_id) :
-        * on conserve la plus rÃ©cente
+    - Si une instance ACTIVE/en_cours existe déjà pour (user_id, challenge_id) :
+        * on conserve la plus récente
         * on SUPPRIME les doublons (DELETE) pour rester compatible avec chk_challenge_instances_status
-        * on ne recrÃ©e pas
-    - Sinon : on crÃ©e une nouvelle instance.
+        * on ne recrée pas
+    - Sinon : on crée une nouvelle instance.
     """
     user_id_str = str(user_id)
     challenge_id = int(payload.challenge_id)
@@ -97,7 +97,7 @@ def activate_challenge(
     today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     try:
-        # Verrou transactionnel : empÃªche deux activations concurrentes du mÃªme (user_id, challenge_id)
+        # Verrou transactionnel : empêche deux activations concurrentes du même (user_id, challenge_id)
         db.execute(
             text("SELECT pg_advisory_xact_lock(:uid, :cid)"),
             {"uid": user_id, "cid": challenge_id},
@@ -131,14 +131,14 @@ def activate_challenge(
             """
         )
 
-        # 1) Verrouiller et rÃ©cupÃ©rer les instances actives (si doublons)
+        # 1) Verrouiller et récupérer les instances actives (si doublons)
         existing_ids_sql = text(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
             WHERE ci.user_id::text = :user_id
               AND ci.challenge_id = :challenge_id
-              AND UPPER(ci.status) = 'ACTIVE'
+              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
             ORDER BY ci.created_at DESC, ci.id DESC
             FOR UPDATE
             """
@@ -149,7 +149,7 @@ def activate_challenge(
             {"user_id": user_id_str, "challenge_id": challenge_id},
         ).mappings().all()
 
-        # 1bis) Si existe : garder la plus rÃ©cente + supprimer les doublons
+        # 1bis) Si existe : garder la plus récente + supprimer les doublons
         if existing_rows:
             keep_id = existing_rows[0]["id"]
             old_ids = [r["id"] for r in existing_rows[1:]]
@@ -173,11 +173,11 @@ def activate_challenge(
             ).mappings().first()
 
             if row is None:
-                raise HTTPException(status_code=404, detail="Instance introuvable aprÃ¨s nettoyage.")
+                raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
 
             return ChallengeInstanceRead(**row)
 
-        # 2) Sinon : crÃ©er une nouvelle instance
+        # 2) Sinon : créer une nouvelle instance
         start_date = today0
         end_date = today0 + timedelta(days=30)
 
@@ -229,7 +229,7 @@ def activate_challenge(
         ).mappings().first()
 
         if row is None:
-            raise HTTPException(status_code=404, detail="Instance crÃ©Ã©e mais introuvable.")
+            raise HTTPException(status_code=404, detail="Instance créée mais introuvable.")
 
         return ChallengeInstanceRead(**row)
 
@@ -238,9 +238,9 @@ def activate_challenge(
         raise
 
 
-# ---------- 3) Lister les dÃ©fis actifs d'un utilisateur ---------- #
+# ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
-# ---------- 3) Lister les dÃ©fis actifs d'un utilisateur ---------- #
+# ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
 @router.get(
     "/users/{user_id}/challenges/active",
@@ -251,13 +251,13 @@ def get_active_challenges(
     db: Session = Depends(get_db),
 ):
     """
-    Retourne la liste des dÃ©fis actifs pour un utilisateur.
+    Retourne la liste des défis actifs pour un utilisateur.
     Version robuste :
     - Si les tables 'challenge_instances' et 'challenges' existent ?' OK.
     - Si l'une des deux tables n'existe pas ?' renvoie [] sans planter.
     """
 
-# SELECT complet (si le schÃ©ma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
+# SELECT complet (si le schéma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
     sql = text("""
         SELECT
             ci.id AS instance_id,
@@ -280,21 +280,21 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) = 'ACTIVE'
+          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
         ORDER BY ci.created_at DESC
     """)
 
     try:
         rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
     except Exception as e:
-        print("[A54][WARN] /challenges/active SQL KO -> retour []. DÃ©tail :", e)
+        print("[A54][WARN] /challenges/active SQL KO -> retour []. Détail :", e)
         return []
 
     results = []
     for r in rows:
         data = dict(r)
 
-        # SÃ©curiser les champs string (Ã©vite crash Pydantic si NULL)
+        # Sécuriser les champs string (évite crash Pydantic si NULL)
         data["metric"] = data.get("metric") or "CO2"
         data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
         data["period_type"] = data.get("period_type") or "DAYS"
@@ -302,7 +302,7 @@ def get_active_challenges(
         try:
             results.append(ChallengeInstanceRead(**data))
         except Exception as e:
-            print("[A54][WARN] Row invalide dans /challenges/active (skip). DÃ©tail :", e)
+            print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
             continue
 
     return results
@@ -310,7 +310,7 @@ def get_active_challenges(
     return results
 
 
-# ---------- 4) RÃ©Ã©valuer un dÃ©fi pour un utilisateur ---------- #
+# ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
 
 @router.post(
     "/users/{user_id}/challenges/{instance_id}/evaluate",
@@ -322,13 +322,13 @@ def evaluate_challenge(
     db: Session = Depends(get_db),
 ):
     """
-    RÃ©Ã©value un dÃ©fi (recalcule la progression et le statut) pour un utilisateur.
-    Version A54.19 : prise en charge du dÃ©fi CO2 30 jours (CO2_30D_MINUS_10).
+    Réévalue un défi (recalcule la progression et le statut) pour un utilisateur.
+    Version A54.19 : prise en charge du défi CO2 30 jours (CO2_30D_MINUS_10).
     """
 
     now = datetime.utcnow()
 
-    # 1) RÃ©cupÃ©rer l'instance + le dÃ©fi associÃ©
+    # 1) Récupérer l'instance + le défi associé
     select_sql = text(
         """
         SELECT
@@ -359,20 +359,20 @@ def evaluate_challenge(
     ).mappings().first()
 
     if row is None:
-        raise HTTPException(status_code=404, detail="Instance de dÃ©fi introuvable pour cet utilisateur.")
+        raise HTTPException(status_code=404, detail="Instance de défi introuvable pour cet utilisateur.")
 
-    # VÃ©rifier qu'on est bien sur le dÃ©fi CO2 30 jours
-        # VÃ©rifier qu'on est bien sur le dÃ©fi supportÃ© (prod)
+    # Vérifier qu'on est bien sur le défi CO2 30 jours
+        # Vérifier qu'on est bien sur le défi supporté (prod)
 
     if (row.get("code") or "").upper() != "CO2_30D_MINUS_10":
         raise HTTPException(
             status_code=400,
-            detail="Ce type de dÃ©fi n'est pas encore pris en charge par l'Ã©valuation."
+            detail="Ce type de défi n'est pas encore pris en charge par l'évaluation."
         )
 
            
 
-    # 2) Convertir les dates stockÃ©es (ISO texte) en datetime
+    # 2) Convertir les dates stockées (ISO texte) en datetime
     # 2) Convertir / normaliser les dates (prod): period_start/period_end -> start_date/end_date
     try:
         start_raw = row["start_date"]
@@ -398,25 +398,25 @@ def evaluate_challenge(
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail="Format de date invalide dans l'instance de dÃ©fi."
+            detail="Format de date invalide dans l'instance de défi."
         )
 
 
-    # PÃ©riodes de calcul
-    # PÃ©riode de rÃ©fÃ©rence: 30 jours AVANT le dÃ©but du dÃ©fi
+    # Périodes de calcul
+    # Période de référence: 30 jours AVANT le début du défi
     periode_ref_fin = start_date
     periode_ref_debut = start_date - timedelta(days=30)
 
-    # PÃ©riode actuelle: pendant le dÃ©fi (limitÃ©e Ã  now ou end_date)
+    # Période actuelle: pendant le défi (limitée à now ou end_date)
     periode_actuelle_debut = start_date
     periode_actuelle_fin = end_date if now > end_date else now
 
     # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nÃ©cessaire.
+    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nécessaire.
        # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # On utilise la table rÃ©elle: co2_cart_history
+    # On utilise la table réelle: co2_cart_history
     # - total_co2_g : CO2 en grammes
-    # - created_at  : date de crÃ©ation de l'agrÃ©gat
+    # - created_at  : date de création de l'agrégat
     ref_sql = text(
         """
         SELECT SUM(total_co2_g) AS total_co2_g
@@ -456,7 +456,7 @@ def evaluate_challenge(
         },
     ).mappings().first()
 
-    # Conversion en kg CO2 pour le dÃ©fi
+    # Conversion en kg CO2 pour le défi
     if ref_row["total_co2_g"] is not None:
         reference_value = float(ref_row["total_co2_g"]) / 1000.0
     else:
@@ -467,83 +467,81 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
-        # target_value est stockÃ© en "pourcentage" cÃ´tÃ© dÃ©fi (ex: 10.0 pour 10%)
+        # target_value est stocké en "pourcentage" côté défi (ex: 10.0 pour 10%)
     target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
 
     # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
     target_value_pct = (target_value / 100.0) if target_value > 1 else target_value
 
 
-    # 4) Calcul de la rÃ©duction et de la progression
+    # 4) Calcul de la réduction et de la progression
     progress_percent: float | None = None
-
-    # Statuts : DB (strict) vs API (FR)
-    db_status = to_db_status(row.get("status"))
-    api_status = to_api_status(db_status)
+    status = row["status"]
     message = ""
 
     if reference_value is None or reference_value <= 0:
-        # Pas assez d'historique pour calculer une rÃ©duction
+        # Pas assez d'historique pour calculer une réduction
         if now < end_date:
-            db_status = DB_STATUS_ACTIVE
-            api_status = "en_cours"
+            status = "en_cours"
             progress_percent = None
             message = (
-                "Pas encore assez d'historique CO2 pour Ã©valuer ce dÃ©fi. "
-                "Continue Ã  scanner des produits."
+                "Pas encore assez d'historique CO2 pour évaluer ce défi. "
+                "Continue à scanner des produits."
             )
         else:
-            # DÃ©fi terminÃ© sans historique exploitable
-            db_status = DB_STATUS_FAILED
-            api_status = "expire"
+            status = "expire"
             progress_percent = None
             message = (
-                "Le dÃ©fi est terminÃ© mais il n'y avait pas assez d'historique CO2 "
-                "pour calculer une rÃ©duction."
+                "Le défi est terminé mais il n'y avait pas assez d'historique CO2 "
+                "pour calculer une réduction."
             )
     else:
-        # Il y a une rÃ©fÃ©rence, on peut calculer la rÃ©duction
+        # Il y a une référence, on peut calculer la réduction
         reduction = 1.0 - (current_value / reference_value) if reference_value > 0 else 0.0
 
-        # Progression par rapport Ã  l'objectif (target_value = 0.10 pour 10%)
+        # Progression par rapport à l'objectif (target_value = 0.10 pour 10%)
         if target_value > 0:
             progress_percent = (reduction / target_value) * 100.0
         else:
             progress_percent = None
 
-        # Borne affichage 0â€“100
+        # On peut borner pour l'affichage si tu veux rester à 0?"100
         if progress_percent is not None:
             if progress_percent < 0:
                 progress_percent = 0.0
+            # On pourrait laisser > 100 pour montrer qu'il a dépassé l'objectif,
+            # mais pour un affichage simple on peut limiter à 100.
             if progress_percent > 100:
                 progress_percent = 100.0
 
-        # DÃ©termination du statut
+        # Détermination du statut
         if reduction >= target_value:
-            db_status = DB_STATUS_SUCCESS
-            api_status = "reussi"
+            # Objectif atteint
+            status = "reussi"
             if now < end_date:
-                message = "Bravo ! Tu as dÃ©jÃ  atteint ton objectif de rÃ©duction de CO2."
-            else:
-                message = "Bravo ! Tu as rÃ©ussi ton dÃ©fi de rÃ©duction de CO2 sur 30 jours."
-        else:
-            if now < end_date:
-                db_status = DB_STATUS_ACTIVE
-                api_status = "en_cours"
                 message = (
-                    f"Tu as rÃ©duit ton CO2 de {reduction * 100:.1f} %, "
+                    "Bravo ! Tu as déjà atteint ton objectif de réduction de CO2 YZ?"
+                )
+            else:
+                message = (
+                    "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours YZ?"
+                )
+        else:
+            # Objectif pas encore atteint
+            if now < end_date:
+                status = "en_cours"
+                message = (
+                    f"Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
                     f"objectif : {target_value * 100:.0f} %. Continue !"
                 )
             else:
-                db_status = DB_STATUS_FAILED
-                api_status = "echoue"
+                status = "echoue"
                 message = (
-                    f"Le dÃ©fi est terminÃ©. Tu as rÃ©duit ton CO2 de {reduction * 100:.1f} %, "
-                    f"mais l'objectif Ã©tait {target_value * 100:.0f} %. "
-                    "Tu peux retenter un nouveau dÃ©fi."
+                    f"Le défi est terminé. Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
+                    f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise Ã  jour de l'instance dans la base (tolÃ©rant au schÃ©ma prod)
+    # 5) Mise à jour de l'instance dans la base (tolérant au schéma prod)
     full_update_sql = text(
         """
         UPDATE public.challenge_instances
@@ -577,7 +575,7 @@ def evaluate_challenge(
                 "current_value": current_value,
                 "target_value": target_value,
                 "progress_percent": progress_percent,
-                "status": db_status,
+                "status": status,
                 "last_evaluated_at": now.isoformat(),
                 "instance_id": instance_id,
             },
@@ -586,25 +584,25 @@ def evaluate_challenge(
 
     except (ProgrammingError, OperationalError) as e:
         db.rollback()
-        print("[A54][WARN] UPDATE complet impossible (schÃ©ma prod diffÃ©rent ?) -> fallback. DÃ©tail :", e)
+        print("[A54][WARN] UPDATE complet impossible (schéma prod différent ?) -> fallback. Détail :", e)
 
         try:
             db.execute(
                 fallback_update_sql,
-                {"status": db_status, "instance_id": instance_id},
+                {"status": status, "instance_id": instance_id},
             )
             db.commit()
         except Exception as e2:
             db.rollback()
-            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand mÃªme la rÃ©ponse. DÃ©tail :", e2)
+            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
 
-    # 6) Construire la rÃ©ponse Pydantic
+    # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
         instance_id=row["instance_id"],
         challenge_id=row["challenge_id"],
         code=row["code"],
         name=row["name"],
-        status=api_status,
+        status=status,
         current_value=current_value,
         reference_value=reference_value,
         target_value=target_value,
