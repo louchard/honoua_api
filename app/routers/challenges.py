@@ -372,7 +372,7 @@ def evaluate_challenge(
 
            
 
-    # 2) Convertir les dates stockÃ©es (ISO texte) en datetime
+    # 2) Convertir les dates stockées (ISO texte) en datetime
     # 2) Convertir / normaliser les dates (prod): period_start/period_end -> start_date/end_date
     try:
         start_raw = row["start_date"]
@@ -402,8 +402,8 @@ def evaluate_challenge(
         )
 
 
-    # PÃ©riodes de calcul
-    # PÃ©riode de rÃ©fÃ©rence: 30 jours AVANT le dÃ©but du dÃ©fi
+    # Périodes de calcul
+    # Période de référence: 30 jours AVANT le début du défi
     periode_ref_fin = start_date
     periode_ref_debut = start_date - timedelta(days=30)
 
@@ -412,9 +412,9 @@ def evaluate_challenge(
     periode_actuelle_fin = end_date if now > end_date else now
 
     # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nÃ©cessaire.
+    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nécessaire.
        # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # On utilise la table rÃ©elle: co2_cart_history
+    # On utilise la table réelle: co2_cart_history
     # - total_co2_g : CO2 en grammes
     # - created_at  : date de crÃ©ation de l'agrÃ©gat
     ref_sql = text(
@@ -456,7 +456,7 @@ def evaluate_challenge(
         },
     ).mappings().first()
 
-    # Conversion en kg CO2 pour le dÃ©fi
+    # Conversion en kg CO2 pour le défi
     if ref_row["total_co2_g"] is not None:
         reference_value = float(ref_row["total_co2_g"]) / 1000.0
     else:
@@ -467,7 +467,7 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
-        # target_value est stockÃ© en "pourcentage" cÃ´tÃ© dÃ©fi (ex: 10.0 pour 10%)
+        # target_value est stocké en "pourcentage" pour le défi (ex: 10.0 pour 10%)
     target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
 
     # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
@@ -483,26 +483,26 @@ def evaluate_challenge(
     message = ""
 
     if reference_value is None or reference_value <= 0:
-        # Pas assez d'historique pour calculer une rÃ©duction
+        # Pas assez d'historique pour calculer une réduction
         if now < end_date:
             db_status = DB_STATUS_ACTIVE
             api_status = "en_cours"
             progress_percent = None
             message = (
-                "Pas encore assez d'historique CO2 pour Ã©valuer ce dÃ©fi. "
+                "Pas encore assez d'historique CO2 pour évaluer ce défi. "
                 "Continue Ã  scanner des produits."
             )
         else:
-            # DÃ©fi terminÃ© sans historique exploitable
+            # Défi terminé sans historique exploitable
             db_status = DB_STATUS_FAILED
             api_status = "expire"
             progress_percent = None
             message = (
-                "Le dÃ©fi est terminÃ© mais il n'y avait pas assez d'historique CO2 "
-                "pour calculer une rÃ©duction."
+                "Le défi est terminé mais il n'y avait pas assez d'historique CO2 "
+                "pour calculer une réduction."
             )
     else:
-        # Il y a une rÃ©fÃ©rence, on peut calculer la rÃ©duction
+        # Il y a une référence, on peut calculer la réduction
         reduction = 1.0 - (current_value / reference_value) if reference_value > 0 else 0.0
 
         # Progression par rapport Ã  l'objectif (target_value = 0.10 pour 10%)
@@ -511,39 +511,39 @@ def evaluate_challenge(
         else:
             progress_percent = None
 
-        # Borne affichage 0â€“100
+        # Borne affichage 0 à “100
         if progress_percent is not None:
             if progress_percent < 0:
                 progress_percent = 0.0
             if progress_percent > 100:
                 progress_percent = 100.0
 
-        # DÃ©termination du statut
+        # Détermination du statut
         if reduction >= target_value:
             db_status = DB_STATUS_SUCCESS
             api_status = "reussi"
             if now < end_date:
-                message = "Bravo ! Tu as dÃ©jÃ  atteint ton objectif de rÃ©duction de CO2."
+                message = "Bravo ! Tu as déjà  atteint ton objectif de réduction de CO2."
             else:
-                message = "Bravo ! Tu as rÃ©ussi ton dÃ©fi de rÃ©duction de CO2 sur 30 jours."
+                message = "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours."
         else:
             if now < end_date:
                 db_status = DB_STATUS_ACTIVE
                 api_status = "en_cours"
                 message = (
-                    f"Tu as rÃ©duit ton CO2 de {reduction * 100:.1f} %, "
+                    f"Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
                     f"objectif : {target_value * 100:.0f} %. Continue !"
                 )
             else:
                 db_status = DB_STATUS_FAILED
                 api_status = "echoue"
                 message = (
-                    f"Le dÃ©fi est terminÃ©. Tu as rÃ©duit ton CO2 de {reduction * 100:.1f} %, "
-                    f"mais l'objectif Ã©tait {target_value * 100:.0f} %. "
-                    "Tu peux retenter un nouveau dÃ©fi."
+                    f"Le défi est terminé. Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
+                    f"mais l'objectif était {target_value * 100:.0f} %. "
+                    "Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise Ã  jour de l'instance dans la base (tolÃ©rant au schÃ©ma prod)
+    # 5) Mise Ã  jour de l'instance dans la base (tolérant au schéma prod)
     full_update_sql = text(
         """
         UPDATE public.challenge_instances
@@ -586,7 +586,7 @@ def evaluate_challenge(
 
     except (ProgrammingError, OperationalError) as e:
         db.rollback()
-        print("[A54][WARN] UPDATE complet impossible (schÃ©ma prod diffÃ©rent ?) -> fallback. DÃ©tail :", e)
+        print("[A54][WARN] UPDATE complet impossible (schéma prod différent ?) -> fallback. Détail :", e)
 
         try:
             db.execute(
@@ -596,9 +596,9 @@ def evaluate_challenge(
             db.commit()
         except Exception as e2:
             db.rollback()
-            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand mÃªme la rÃ©ponse. DÃ©tail :", e2)
+            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
 
-    # 6) Construire la rÃ©ponse Pydantic
+    # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
         instance_id=row["instance_id"],
         challenge_id=row["challenge_id"],
