@@ -138,7 +138,7 @@ def activate_challenge(
             FROM public.challenge_instances ci
             WHERE ci.user_id::text = :user_id
               AND ci.challenge_id = :challenge_id
-              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+              AND UPPER(ci.status) = 'ACTIVE'
             ORDER BY ci.created_at DESC, ci.id DESC
             FOR UPDATE
             """
@@ -280,7 +280,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+          AND UPPER(ci.status) = 'ACTIVE'
         ORDER BY ci.created_at DESC
     """)
 
