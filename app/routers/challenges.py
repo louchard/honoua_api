@@ -1,4 +1,5 @@
-﻿from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
@@ -42,6 +43,23 @@ def to_db_status(db_status: str) -> str:
     # fallback: treat unknown as ACTIVE to avoid CHECK violations
     return DB_STATUS_ACTIVE
 
+def repair_mojibake(s: str) -> str:
+    """
+    Répare les cas typiques: UTF-8 décodé comme Latin-1 (ex: 'A\xa0' au lieu de 'à').
+    Safe: ne fait rien si aucun marqueur n'est présent.
+    """
+    if not s:
+        return s
+
+    markers = ("A", "A", "O", "\ufffd")
+    if not any(m in s for m in markers):
+        return s
+
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except UnicodeError:
+        # Fallback minimal: remplace NBSP si présent
+        return s.replace("\u00A0", " ")
 
 # ---------- 1) Lister les défis disponibles ---------- #
 @router.get("/challenges", response_model=list[ChallengeRead])
@@ -138,7 +156,7 @@ def activate_challenge(
             FROM public.challenge_instances ci
             WHERE ci.user_id::text = :user_id
               AND ci.challenge_id = :challenge_id
-              AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+              AND UPPER(ci.status) = 'ACTIVE'
             ORDER BY ci.created_at DESC, ci.id DESC
             FOR UPDATE
             """
@@ -280,7 +298,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND (UPPER(ci.status) = 'ACTIVE' OR ci.status = 'en_cours')
+          AND UPPER(ci.status) = 'ACTIVE'
         ORDER BY ci.created_at DESC
     """)
 
@@ -304,8 +322,6 @@ def get_active_challenges(
         except Exception as e:
             print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
             continue
-
-    return results
 
     return results
 
@@ -467,7 +483,7 @@ def evaluate_challenge(
     else:
         current_value = 0.0
 
-        # target_value est stocké en "pourcentage" côté défi (ex: 10.0 pour 10%)
+        # target_value est stocké en "pourcentage" pour le défi (ex: 10.0 pour 10%)
     target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
 
     # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
@@ -476,20 +492,26 @@ def evaluate_challenge(
 
     # 4) Calcul de la réduction et de la progression
     progress_percent: float | None = None
-    status = row["status"]
+
+    # Statuts : DB (strict) vs API (FR)
+    db_status = to_db_status(row.get("status"))
+    api_status = to_api_status(db_status)
     message = ""
 
     if reference_value is None or reference_value <= 0:
         # Pas assez d'historique pour calculer une réduction
         if now < end_date:
-            status = "en_cours"
+            db_status = DB_STATUS_ACTIVE
+            api_status = "en_cours"
             progress_percent = None
             message = (
                 "Pas encore assez d'historique CO2 pour évaluer ce défi. "
                 "Continue à scanner des produits."
             )
         else:
-            status = "expire"
+            # Défi terminé sans historique exploitable
+            db_status = DB_STATUS_FAILED
+            api_status = "expire"
             progress_percent = None
             message = (
                 "Le défi est terminé mais il n'y avait pas assez d'historique CO2 "
@@ -505,40 +527,36 @@ def evaluate_challenge(
         else:
             progress_percent = None
 
-        # On peut borner pour l'affichage si tu veux rester à 0?"100
+        # Borne affichage 0 à 100
         if progress_percent is not None:
             if progress_percent < 0:
                 progress_percent = 0.0
-            # On pourrait laisser > 100 pour montrer qu'il a dépassé l'objectif,
-            # mais pour un affichage simple on peut limiter à 100.
             if progress_percent > 100:
                 progress_percent = 100.0
 
         # Détermination du statut
         if reduction >= target_value:
-            # Objectif atteint
-            status = "reussi"
+            db_status = DB_STATUS_SUCCESS
+            api_status = "reussi"
             if now < end_date:
-                message = (
-                    "Bravo ! Tu as déjà atteint ton objectif de réduction de CO2 YZ?"
-                )
+                message = "Bravo ! Tu as déjà atteint ton objectif de réduction de CO2."
             else:
-                message = (
-                    "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours YZ?"
-                )
+                message = "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours."
         else:
-            # Objectif pas encore atteint
             if now < end_date:
-                status = "en_cours"
+                db_status = DB_STATUS_ACTIVE
+                api_status = "en_cours"
                 message = (
                     f"Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
                     f"objectif : {target_value * 100:.0f} %. Continue !"
                 )
             else:
-                status = "echoue"
+                db_status = DB_STATUS_FAILED
+                api_status = "echoue"
                 message = (
                     f"Le défi est terminé. Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
-                    f"mais l'objectif était {target_value * 100:.0f} %. Tu peux retenter un nouveau défi."
+                    f"mais l'objectif était {target_value * 100:.0f} %. "
+                    "Tu peux retenter un nouveau défi."
                 )
 
     # 5) Mise à jour de l'instance dans la base (tolérant au schéma prod)
@@ -575,7 +593,7 @@ def evaluate_challenge(
                 "current_value": current_value,
                 "target_value": target_value,
                 "progress_percent": progress_percent,
-                "status": status,
+                "status": db_status,
                 "last_evaluated_at": now.isoformat(),
                 "instance_id": instance_id,
             },
@@ -589,12 +607,14 @@ def evaluate_challenge(
         try:
             db.execute(
                 fallback_update_sql,
-                {"status": status, "instance_id": instance_id},
+                {"status": db_status, "instance_id": instance_id},
             )
             db.commit()
         except Exception as e2:
             db.rollback()
             print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
+
+    message = repair_mojibake(message)
 
     # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
@@ -602,7 +622,7 @@ def evaluate_challenge(
         challenge_id=row["challenge_id"],
         code=row["code"],
         name=row["name"],
-        status=status,
+        status=api_status,
         current_value=current_value,
         reference_value=reference_value,
         target_value=target_value,

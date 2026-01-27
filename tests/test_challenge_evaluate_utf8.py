@@ -21,14 +21,14 @@ FORBIDDEN_IN_MESSAGE = [
     "\u201A",        # single low-9 quotation mark (often shows as ",,")
     "CO2,,",
     "CO,,",
-    "CO\u00E2",      # "COâ"
-    "\u00C3",        # "Ã"
-    "\u00F0\u0178",  # "ðŸ" (mojibake emoji prefix)
+    "CO\u00E2",      # "COÃƒÂ¢"
+    "\u00C3",        # "ÃƒÆ’"
+    "\u00F0\u0178",  # "ÃƒÂ°Ã…Â¸" (mojibake emoji prefix)
 ]
 
 FORBIDDEN_IN_NAME = [
     "\uFFFD",
-    "R\u00C3",       # "RÃ"
+    "R\u00C3",       # "RÃƒÆ’"
     "CO\u00E2",
     "\u00F0\u0178",
 ]
@@ -72,7 +72,7 @@ def test_evaluate_message_has_no_artifacts():
     msg = data.get("message") or ""
 
     for bad in FORBIDDEN_IN_MESSAGE:
-        assert bad not in msg, f"Artefact {bad!r} trouvé dans message: {msg!r}"
+        assert bad not in msg, f"Artefact {bad!r} trouvÃƒÂ© dans message: {msg!r}"
 
     assert ("CO2" in msg) or ("CO\u2082" in msg), f"Message sans CO2/CO\u2082: {msg!r}"
     assert "CO2,," not in msg
@@ -84,6 +84,6 @@ def test_evaluate_name_has_no_mojibake():
     name = data.get("name") or ""
 
     for bad in FORBIDDEN_IN_NAME:
-        assert bad not in name, f"Mojibake {bad!r} trouvé dans name: {name!r}"
+        assert bad not in name, f"Mojibake {bad!r} trouvÃƒÂ© dans name: {name!r}"
 
     assert name.strip() != "", f"Nom vide inattendu: {name!r}"
