@@ -21,14 +21,14 @@ FORBIDDEN_IN_MESSAGE = [
     "\u201A",        # single low-9 quotation mark (often shows as ",,")
     "CO2,,",
     "CO,,",
-    "CO\u00E2",      # "COÃƒÂ¢"
-    "\u00C3",        # "ÃƒÆ’"
-    "\u00F0\u0178",  # "ÃƒÂ°Ã…Â¸" (mojibake emoji prefix)
+    "CO\u00E2",      # "COâ"
+    "\u00C3",        # "Ã"
+    "\u00F0\u0178",  # "ðŸ" (mojibake emoji prefix)
 ]
 
 FORBIDDEN_IN_NAME = [
     "\uFFFD",
-    "R\u00C3",       # "RÃƒÆ’"
+    "R\u00C3",       # "RÃ"
     "CO\u00E2",
     "\u00F0\u0178",
 ]

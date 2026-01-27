@@ -1,5 +1,4 @@
-﻿
-from fastapi import APIRouter, Depends, HTTPException
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -104,7 +103,7 @@ def activate_challenge(
 ):
     """
     Idempotence + nettoyage :
-    - Si une instance ACTIVE/en_cours existe déjà pour (user_id, challenge_id) :
+    - Si une instance ACTIVE/en_cours existe déjà  pour (user_id, challenge_id) :
         * on conserve la plus récente
         * on SUPPRIME les doublons (DELETE) pour rester compatible avec chk_challenge_instances_status
         * on ne recrée pas
@@ -192,7 +191,7 @@ def activate_challenge(
             ).mappings().first()
 
             if row is None:
-                raise HTTPException(status_code=404, detail="Instance introuvable après nettoyage.")
+                raise HTTPException(status_code=404, detail="Instance introuvable aprés nettoyage.")
 
             return ChallengeInstanceRead(**row)
 
@@ -424,7 +423,7 @@ def evaluate_challenge(
     periode_ref_fin = start_date
     periode_ref_debut = start_date - timedelta(days=30)
 
-    # Période actuelle: pendant le défi (limitée à now ou end_date)
+    # Période actuelle: pendant le défi (limitée à  now ou end_date)
     periode_actuelle_debut = start_date
     periode_actuelle_fin = end_date if now > end_date else now
 
@@ -507,7 +506,7 @@ def evaluate_challenge(
             progress_percent = None
             message = (
                 "Pas encore assez d'historique CO2 pour évaluer ce défi. "
-                "Continue à scanner des produits."
+                "Continue à  scanner des produits."
             )
         else:
             # Défi terminé sans historique exploitable
@@ -522,7 +521,7 @@ def evaluate_challenge(
         # Il y a une référence, on peut calculer la réduction
         reduction = 1.0 - (current_value / reference_value) if reference_value > 0 else 0.0
 
-        # Progression par rapport à l'objectif (target_value = 0.10 pour 10%)
+        # Progression par rapport à  l'objectif (target_value = 0.10 pour 10%)
         if target_value > 0:
             progress_percent = (reduction / target_value) * 100.0
         else:
@@ -560,7 +559,7 @@ def evaluate_challenge(
                     "Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise à jour de l'instance dans la base (tolérant au schéma prod)
+    # 5) Mise à  jour de l'instance dans la base (tolérant au schéma prod)
     full_update_sql = text(
         """
         UPDATE public.challenge_instances
