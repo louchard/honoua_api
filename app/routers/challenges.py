@@ -156,7 +156,7 @@ def activate_challenge(
             FROM public.challenge_instances ci
             WHERE ci.user_id::text = :user_id
               AND ci.challenge_id = :challenge_id
-              AND UPPER(ci.status) = 'ACTIVE'
+              AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.created_at DESC, ci.id DESC
             FOR UPDATE
             """
@@ -299,7 +299,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) = 'ACTIVE'
+          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
@@ -326,7 +326,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) = 'ACTIVE'
+          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
@@ -353,7 +353,7 @@ def get_active_challenges(
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text = :user_id
-          AND UPPER(ci.status) = 'ACTIVE'
+          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
@@ -374,7 +374,7 @@ def get_active_challenges(
         data = dict(r)
 
                 # CH-009: map DB status to API status
-        data["status"] = to_api_status(data.get("status") or "")
+        data["status"] = to_api_status(to_db_status(data.get("status") or ""))
 
         # Ensure keys exist for Pydantic even if query variant didn't include them
         if "message" not in data:
