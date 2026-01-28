@@ -1,4 +1,4 @@
-
+﻿
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -275,8 +275,63 @@ def get_active_challenges(
     - Si l'une des deux tables n'existe pas ?' renvoie [] sans planter.
     """
 
-# SELECT complet (si le schéma prod contient reference_value/current_value/progress_percent/last_evaluated_at)
-    sql = text("""
+# Prefer real persisted fields; fall back if schema differs.
+    sql_full = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            ci.reference_value::numeric AS reference_value,
+            ci.current_value::numeric   AS current_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            ci.progress_percent::numeric AS progress_percent,
+            ci.last_evaluated_at         AS last_evaluated_at,
+            ci.message                   AS message,
+            ci.created_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND UPPER(ci.status) = 'ACTIVE'
+        ORDER BY ci.created_at DESC
+    """)
+
+    # If message column doesn't exist, try without it (keep other fields).
+    sql_no_message = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.title, c.code) AS name,
+            c.description,
+            COALESCE(c.metric, 'CO2') AS metric,
+            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
+            COALESCE(c.period_type, 'DAYS') AS period_type,
+            ci.status,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
+            ci.reference_value::numeric AS reference_value,
+            ci.current_value::numeric   AS current_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            ci.progress_percent::numeric AS progress_percent,
+            ci.last_evaluated_at         AS last_evaluated_at,
+            ci.created_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text = :user_id
+          AND UPPER(ci.status) = 'ACTIVE'
+        ORDER BY ci.created_at DESC
+    """)
+
+    # Last resort: legacy shape (keeps endpoint alive)
+    sql_fallback = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -303,14 +358,29 @@ def get_active_challenges(
     """)
 
     try:
-        rows = db.execute(sql, {"user_id": str(user_id)}).mappings().all()
-    except Exception as e:
-        print("[A54][WARN] /challenges/active SQL KO -> retour []. Détail :", e)
-        return []
+        rows = db.execute(sql_full, {"user_id": str(user_id)}).mappings().all()
+    except (ProgrammingError, OperationalError) as e1:
+        try:
+            rows = db.execute(sql_no_message, {"user_id": str(user_id)}).mappings().all()
+        except Exception as e2:
+            try:
+                rows = db.execute(sql_fallback, {"user_id": str(user_id)}).mappings().all()
+            except Exception as e3:
+                print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
+                return []
 
     results = []
     for r in rows:
         data = dict(r)
+
+                # CH-009: map DB status to API status
+        data["status"] = to_api_status(data.get("status") or "")
+
+        # Ensure keys exist for Pydantic even if query variant didn't include them
+        if "message" not in data:
+            data["message"] = None
+        if data.get("message"):
+            data["message"] = repair_mojibake(data["message"])
 
         # Sécuriser les champs string (évite crash Pydantic si NULL)
         data["metric"] = data.get("metric") or "CO2"
@@ -559,9 +629,24 @@ def evaluate_challenge(
                     "Tu peux retenter un nouveau défi."
                 )
 
-    # 5) Mise à  jour de l'instance dans la base (tolérant au schéma prod)
-    full_update_sql = text(
-        """
+    # Store cleaned message (and return it too)
+    message = repair_mojibake(message)
+
+    full_update_sql = text("""
+        UPDATE public.challenge_instances
+        SET
+            reference_value = :reference_value,
+            current_value = :current_value,
+            target_value = :target_value,
+            progress_percent = :progress_percent,
+            status = :status,
+            last_evaluated_at = :last_evaluated_at,
+            message = :message,
+            updated_at = NOW()
+        WHERE id = :instance_id
+    """)
+
+    no_message_update_sql = text("""
         UPDATE public.challenge_instances
         SET
             reference_value = :reference_value,
@@ -572,49 +657,49 @@ def evaluate_challenge(
             last_evaluated_at = :last_evaluated_at,
             updated_at = NOW()
         WHERE id = :instance_id
-        """
-    )
+    """)
 
-    fallback_update_sql = text(
-        """
+    fallback_update_sql = text("""
         UPDATE public.challenge_instances
         SET
             status = :status,
             updated_at = NOW()
         WHERE id = :instance_id
-        """
-    )
+    """)
+
+    params_full = {
+        "reference_value": reference_value,
+        "current_value": current_value,
+        "target_value": target_value,
+        "progress_percent": progress_percent,
+        "status": db_status,
+        "last_evaluated_at": now,   # datetime, not iso string
+        "message": message,
+        "instance_id": instance_id,
+    }
 
     try:
-        db.execute(
-            full_update_sql,
-            {
-                "reference_value": reference_value,
-                "current_value": current_value,
-                "target_value": target_value,
-                "progress_percent": progress_percent,
-                "status": db_status,
-                "last_evaluated_at": now.isoformat(),
-                "instance_id": instance_id,
-            },
-        )
+        db.execute(full_update_sql, params_full)
         db.commit()
-
     except (ProgrammingError, OperationalError) as e:
         db.rollback()
-        print("[A54][WARN] UPDATE complet impossible (schéma prod différent ?) -> fallback. Détail :", e)
+        print("[A54][WARN] UPDATE complet (avec message) impossible -> fallback sans message. Détail :", e)
 
         try:
-            db.execute(
-                fallback_update_sql,
-                {"status": db_status, "instance_id": instance_id},
-            )
+            params_no_msg = dict(params_full)
+            params_no_msg.pop("message", None)
+            db.execute(no_message_update_sql, params_no_msg)
             db.commit()
         except Exception as e2:
             db.rollback()
-            print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e2)
+            print("[A54][WARN] UPDATE complet (sans message) impossible -> fallback status only. Détail :", e2)
 
-    message = repair_mojibake(message)
+            try:
+                db.execute(fallback_update_sql, {"status": db_status, "instance_id": instance_id})
+                db.commit()
+            except Exception as e3:
+                db.rollback()
+                print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e3)
 
     # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
