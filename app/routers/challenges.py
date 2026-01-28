@@ -497,15 +497,14 @@ def evaluate_challenge(
     periode_actuelle_debut = start_date
     periode_actuelle_fin = end_date if now > end_date else now
 
-    # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # NOTE : adapte "cart_history", "date" et "co2_total" aux noms de ta base si nécessaire.
-       # 3) Calcul des valeurs CO2 depuis l'historique des paniers
-    # On utilise la table réelle: co2_cart_history
+    # 3) Calcul des valeurs CO2 depuis l'historique des paniers (co2_cart_history)
     # - total_co2_g : CO2 en grammes
     # - created_at  : date de création de l'agrégat
     ref_sql = text(
         """
-        SELECT SUM(total_co2_g) AS total_co2_g
+        SELECT
+            SUM(total_co2_g) AS total_co2_g,
+            COUNT(DISTINCT DATE(created_at)) AS days_count
         FROM co2_cart_history
         WHERE user_id = :user_id
           AND created_at >= :start
@@ -515,7 +514,9 @@ def evaluate_challenge(
 
     cur_sql = text(
         """
-        SELECT SUM(total_co2_g) AS total_co2_g
+        SELECT
+            SUM(total_co2_g) AS total_co2_g,
+            COUNT(DISTINCT DATE(created_at)) AS days_count
         FROM co2_cart_history
         WHERE user_id = :user_id
           AND created_at >= :start
@@ -523,37 +524,40 @@ def evaluate_challenge(
         """
     )
 
-    # NOTE : user_id est TEXT dans co2_cart_history, on convertit donc en str
+    # NOTE: user_id est TEXT dans co2_cart_history -> str(user_id)
     ref_row = db.execute(
         ref_sql,
         {
             "user_id": str(user_id),
-            "start": periode_ref_debut.isoformat(),
-            "end": periode_ref_fin.isoformat(),
+            "start": periode_ref_debut,
+            "end": periode_ref_fin,
         },
-    ).mappings().first()
+    ).mappings().first() or {}
 
     cur_row = db.execute(
         cur_sql,
         {
             "user_id": str(user_id),
-            "start": periode_actuelle_debut.isoformat(),
-            "end": periode_actuelle_fin.isoformat(),
+            "start": periode_actuelle_debut,
+            "end": periode_actuelle_fin,
         },
-    ).mappings().first()
+    ).mappings().first() or {}
 
     # Conversion en kg CO2 pour le défi
-    if ref_row["total_co2_g"] is not None:
-        reference_value = float(ref_row["total_co2_g"]) / 1000.0
-    else:
-        reference_value = None
+    reference_value = float(ref_row["total_co2_g"]) / 1000.0 if ref_row.get("total_co2_g") is not None else None
+    current_value = float(cur_row["total_co2_g"]) / 1000.0 if cur_row.get("total_co2_g") is not None else 0.0
 
-    if cur_row["total_co2_g"] is not None:
-        current_value = float(cur_row["total_co2_g"]) / 1000.0
-    else:
-        current_value = 0.0
+    # Seuils d'historique
+    ref_days = int(ref_row.get("days_count") or 0)
+    cur_days = int(cur_row.get("days_count") or 0)
 
-        # target_value est stocké en "pourcentage" pour le défi (ex: 10.0 pour 10%)
+    MIN_REF_DAYS = 7
+    MIN_CUR_DAYS = 1
+
+    has_ref = (reference_value is not None) and (reference_value > 0) and (ref_days >= MIN_REF_DAYS)
+    has_cur = (cur_days >= MIN_CUR_DAYS)
+
+    # target_value est stocké en "pourcentage" pour le défi (ex: 10.0 pour 10%)
     target_value = float(row["target_value"]) if row.get("target_value") is not None else 10.0
 
     # Valeur utilisable pour les calculs (fraction: 0.10 pour 10%)
@@ -568,138 +572,132 @@ def evaluate_challenge(
     api_status = to_api_status(db_status)
     message = ""
 
-    if reference_value is None or reference_value <= 0:
-        # Pas assez d'historique pour calculer une réduction
+    # Cas: pas encore de donnees pendant le defi
+    if not has_cur:
         if now < end_date:
             db_status = DB_STATUS_ACTIVE
-            api_status = "en_cours"
-            progress_percent = None
-            message = (
-                "Pas encore assez d'historique CO2 pour évaluer ce défi. "
-                "Continue à  scanner des produits."
-            )
         else:
-            # Défi terminé sans historique exploitable
             db_status = DB_STATUS_FAILED
-            api_status = "expire"
-            progress_percent = None
-            message = (
-                "Le défi est terminé mais il n'y avait pas assez d'historique CO2 "
-                "pour calculer une réduction."
-            )
+        api_status = to_api_status(db_status)
+        progress_percent = None
+        message = "Pas encore de donnees CO2 sur la periode du defi. Commence a scanner des produits."
+
+# 5) Cas: pas assez d'historique AVANT le debut (reference)
+    elif not has_ref:
+        if now < end_date:
+            db_status = DB_STATUS_ACTIVE
+        else:
+            db_status = DB_STATUS_FAILED
+        api_status = to_api_status(db_status)
+        progress_percent = None
+        message = "Pas assez d'historique CO2 avant le debut du defi (min 7 jours). Continue a scanner."
+
+# 6) Cas nominal: on calcule reduction + progression
     else:
-        # Il y a une référence, on peut calculer la réduction
         reduction = 1.0 - (current_value / reference_value) if reference_value > 0 else 0.0
 
-        # Progression par rapport à  l'objectif (target_value = 0.10 pour 10%)
-        if target_value > 0:
-            progress_percent = (reduction / target_value) * 100.0
+        if target_value_pct > 0:
+            progress_percent = (reduction / target_value_pct) * 100.0
         else:
             progress_percent = None
 
-        # Borne affichage 0 à 100
         if progress_percent is not None:
             if progress_percent < 0:
                 progress_percent = 0.0
             if progress_percent > 100:
                 progress_percent = 100.0
 
-        # Détermination du statut
-        if reduction >= target_value:
+        if reduction >= target_value_pct:
             db_status = DB_STATUS_SUCCESS
-            api_status = "reussi"
-            if now < end_date:
-                message = "Bravo ! Tu as déjà atteint ton objectif de réduction de CO2."
-            else:
-                message = "Bravo ! Tu as réussi ton défi de réduction de CO2 sur 30 jours."
+            api_status = to_api_status(db_status)
+            message = "Bravo ! Objectif deja atteint." if now < end_date else "Bravo ! Defi reussi sur 30 jours."
         else:
+            # Pas encore atteint
+            db_status = DB_STATUS_ACTIVE if now < end_date else DB_STATUS_FAILED
+            api_status = to_api_status(db_status)
+
             if now < end_date:
-                db_status = DB_STATUS_ACTIVE
-                api_status = "en_cours"
                 message = (
-                    f"Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
-                    f"objectif : {target_value * 100:.0f} %. Continue !"
+                    f"Reduction actuelle: {reduction * 100:.1f} %, "
+                    f"objectif: {target_value_pct * 100:.0f} %. Continue !"
                 )
             else:
-                db_status = DB_STATUS_FAILED
-                api_status = "echoue"
                 message = (
-                    f"Le défi est terminé. Tu as réduit ton CO2 de {reduction * 100:.1f} %, "
-                    f"mais l'objectif était {target_value * 100:.0f} %. "
-                    "Tu peux retenter un nouveau défi."
+                    f"Defi termine. Reduction: {reduction * 100:.1f} %, "
+                    f"objectif: {target_value_pct * 100:.0f} %."
                 )
 
-    # Store cleaned message (and return it too)
-    message = repair_mojibake(message)
+        # Store cleaned message (and return it too)
+        message = repair_mojibake(message)
 
-    full_update_sql = text("""
-        UPDATE public.challenge_instances
-        SET
-            reference_value = :reference_value,
-            current_value = :current_value,
-            target_value = :target_value,
-            progress_percent = :progress_percent,
-            status = :status,
-            last_evaluated_at = :last_evaluated_at,
-            message = :message,
-            updated_at = NOW()
-        WHERE id = :instance_id
-    """)
+        full_update_sql = text("""
+            UPDATE public.challenge_instances
+            SET
+                reference_value = :reference_value,
+                current_value = :current_value,
+                target_value = :target_value,
+                progress_percent = :progress_percent,
+                status = :status,
+                last_evaluated_at = :last_evaluated_at,
+                message = :message,
+                updated_at = NOW()
+            WHERE id = :instance_id
+        """)
 
-    no_message_update_sql = text("""
-        UPDATE public.challenge_instances
-        SET
-            reference_value = :reference_value,
-            current_value = :current_value,
-            target_value = :target_value,
-            progress_percent = :progress_percent,
-            status = :status,
-            last_evaluated_at = :last_evaluated_at,
-            updated_at = NOW()
-        WHERE id = :instance_id
-    """)
+        no_message_update_sql = text("""
+            UPDATE public.challenge_instances
+            SET
+                reference_value = :reference_value,
+                current_value = :current_value,
+                target_value = :target_value,
+                progress_percent = :progress_percent,
+                status = :status,
+                last_evaluated_at = :last_evaluated_at,
+                updated_at = NOW()
+            WHERE id = :instance_id
+        """)
 
-    fallback_update_sql = text("""
-        UPDATE public.challenge_instances
-        SET
-            status = :status,
-            updated_at = NOW()
-        WHERE id = :instance_id
-    """)
+        fallback_update_sql = text("""
+            UPDATE public.challenge_instances
+            SET
+                status = :status,
+                updated_at = NOW()
+            WHERE id = :instance_id
+        """)
 
-    params_full = {
-        "reference_value": reference_value,
-        "current_value": current_value,
-        "target_value": target_value,
-        "progress_percent": progress_percent,
-        "status": db_status,
-        "last_evaluated_at": now,   # datetime, not iso string
-        "message": message,
-        "instance_id": instance_id,
-    }
-
-    try:
-        db.execute(full_update_sql, params_full)
-        db.commit()
-    except (ProgrammingError, OperationalError) as e:
-        db.rollback()
-        print("[A54][WARN] UPDATE complet (avec message) impossible -> fallback sans message. Détail :", e)
+        params_full = {
+            "reference_value": reference_value,
+            "current_value": current_value,
+            "target_value": target_value,
+            "progress_percent": progress_percent,
+            "status": db_status,
+            "last_evaluated_at": now,   # datetime, not iso string
+            "message": message,
+            "instance_id": instance_id,
+        }
 
         try:
-            params_no_msg = dict(params_full)
-            params_no_msg.pop("message", None)
-            db.execute(no_message_update_sql, params_no_msg)
+            db.execute(full_update_sql, params_full)
             db.commit()
-        except Exception as e2:
+        except (ProgrammingError, OperationalError) as e:
             db.rollback()
-            print("[A54][WARN] UPDATE complet (sans message) impossible -> fallback status only. Détail :", e2)
+            print("[A54][WARN] UPDATE complet (avec message) impossible -> fallback sans message. Détail :", e)
 
             try:
-                db.execute(fallback_update_sql, {"status": db_status, "instance_id": instance_id})
+                params_no_msg = dict(params_full)
+                params_no_msg.pop("message", None)
+                db.execute(no_message_update_sql, params_no_msg)
                 db.commit()
-            except Exception as e3:
+            except Exception as e2:
                 db.rollback()
-                print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e3)
+                print("[A54][WARN] UPDATE complet (sans message) impossible -> fallback status only. Détail :", e2)
+
+                try:
+                    db.execute(fallback_update_sql, {"status": db_status, "instance_id": instance_id})
+                    db.commit()
+                except Exception as e3:
+                    db.rollback()
+                    print("[A54][WARN] UPDATE fallback impossible -> on renvoie quand même la réponse. Détail :", e3)
 
     # 6) Construire la réponse Pydantic
     return ChallengeEvaluateResponse(
