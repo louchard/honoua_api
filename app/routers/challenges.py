@@ -1,5 +1,5 @@
 ﻿
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
@@ -103,13 +103,16 @@ def activate_challenge(
 ):
     """
     Idempotence + nettoyage :
-    - Si une instance ACTIVE/en_cours existe déjà  pour (user_id, challenge_id) :
+    - Si une instance ACTIVE/en_cours existe déjà  pour (user_id, challenge_id) :
         * on conserve la plus récente
         * on SUPPRIME les doublons (DELETE) pour rester compatible avec chk_challenge_instances_status
         * on ne recrée pas
     - Sinon : on crée une nouvelle instance.
     """
     user_id_str = str(user_id)
+    user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
+    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+
     challenge_id = int(payload.challenge_id)
     now = datetime.utcnow()
     today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -154,7 +157,7 @@ def activate_challenge(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
-            WHERE ci.user_id::text = :user_id
+            WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.created_at DESC, ci.id DESC
@@ -264,18 +267,28 @@ def activate_challenge(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
 )
+@router.get(
+    "/users/{user_id}/challenges/active",
+    response_model=list[ChallengeInstanceRead],
+)
 def get_active_challenges(
     user_id: int,
+    response: Response = None,
     db: Session = Depends(get_db),
 ):
     """
-    Retourne la liste des défis actifs pour un utilisateur.
-    Version robuste :
-    - Si les tables 'challenge_instances' et 'challenges' existent ?' OK.
-    - Si l'une des deux tables n'existe pas ?' renvoie [] sans planter.
+    Return active challenges for a user.
+    Robust against minor schema differences (message column may not exist).
     """
+    # Debug headers to confirm deployed version + avoid any proxy/CDN caching.
+    if response is not None:
+        response.headers["X-Honoua-Active-Version"] = "A54.20"
+        response.headers["Cache-Control"] = "no-store"
 
-# Prefer real persisted fields; fall back if schema differs.
+    user_id_str = str(user_id)
+    user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
+    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+
     sql_full = text("""
         SELECT
             ci.id AS instance_id,
@@ -298,12 +311,11 @@ def get_active_challenges(
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text = :user_id
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
-    # If message column doesn't exist, try without it (keep other fields).
     sql_no_message = text("""
         SELECT
             ci.id AS instance_id,
@@ -325,12 +337,11 @@ def get_active_challenges(
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text = :user_id
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
-    # Last resort: legacy shape (keeps endpoint alive)
     sql_fallback = text("""
         SELECT
             ci.id AS instance_id,
@@ -348,50 +359,89 @@ def get_active_challenges(
             NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL::numeric   AS progress_percent,
-            ci.created_at,
-            NULL::timestamp AS last_evaluated_at
+            NULL::timestamp AS last_evaluated_at,
+            ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text = :user_id
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.created_at DESC
     """)
 
+    rows = []
+    query_used = "full"
     try:
-        rows = db.execute(sql_full, {"user_id": str(user_id)}).mappings().all()
+        rows = db.execute(sql_full, params).mappings().all()
     except (ProgrammingError, OperationalError) as e1:
+        query_used = "no_message"
         try:
-            rows = db.execute(sql_no_message, {"user_id": str(user_id)}).mappings().all()
+            rows = db.execute(sql_no_message, params).mappings().all()
         except Exception as e2:
+            query_used = "fallback"
             try:
-                rows = db.execute(sql_fallback, {"user_id": str(user_id)}).mappings().all()
+                rows = db.execute(sql_fallback, params).mappings().all()
             except Exception as e3:
+                query_used = "error"
                 print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
+                if response is not None:
+                    response.headers["X-Honoua-Active-Query"] = query_used
+                    response.headers["X-Honoua-Active-Rows"] = "0"
                 return []
+    if response is not None:
+        response.headers["X-Honoua-Active-Query"] = query_used
+        response.headers["X-Honoua-Active-Rows"] = str(len(rows))
+        
+    if not rows:
+        try:
+            n_all = db.execute(
+                text("""
+                    SELECT COUNT(*) AS n
+                    FROM public.challenge_instances ci
+                    WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+                """),
+                params,
+            ).scalar() or 0
+
+            n_not_done = db.execute(
+                text("""
+                    SELECT COUNT(*) AS n
+                    FROM public.challenge_instances ci
+                    WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+                      AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
+                """),
+                params,
+            ).scalar() or 0
+
+            if response is not None:
+                response.headers["X-Honoua-Active-Count-All"] = str(n_all)
+                response.headers["X-Honoua-Active-Count-NotDone"] = str(n_not_done)
+        except Exception:
+            pass    
+
+
 
     results = []
     for r in rows:
         data = dict(r)
 
-                # CH-009: map DB status to API status
+        # Map DB status to API status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
 
-        # Ensure keys exist for Pydantic even if query variant didn't include them
+        # Ensure optional fields exist
         if "message" not in data:
             data["message"] = None
         if data.get("message"):
             data["message"] = repair_mojibake(data["message"])
 
-        # Sécuriser les champs string (évite crash Pydantic si NULL)
         data["metric"] = data.get("metric") or "CO2"
         data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
         data["period_type"] = data.get("period_type") or "DAYS"
 
-        try:
-            results.append(ChallengeInstanceRead(**data))
-        except Exception as e:
-            print("[A54][WARN] Row invalide dans /challenges/active (skip). Détail :", e)
-            continue
+        # If fallback variant did not include last_evaluated_at
+        if "last_evaluated_at" not in data:
+            data["last_evaluated_at"] = None
+
+        results.append(ChallengeInstanceRead(**data))
 
     return results
 
@@ -493,7 +543,7 @@ def evaluate_challenge(
     periode_ref_fin = start_date
     periode_ref_debut = start_date - timedelta(days=30)
 
-    # Période actuelle: pendant le défi (limitée à  now ou end_date)
+    # Période actuelle: pendant le défi (limitée à  now ou end_date)
     periode_actuelle_debut = start_date
     periode_actuelle_fin = end_date if now > end_date else now
 
