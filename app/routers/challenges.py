@@ -1,4 +1,4 @@
-﻿
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -131,17 +131,17 @@ def activate_challenge(
                 ci.id AS instance_id,
                 ci.challenge_id,
                 c.code,
-                COALESCE(c.name, c.title, c.code) AS name,
+                COALESCE(c.name, c.code) AS name,
                 c.description,
-                COALESCE(c.metric, 'CO2') AS metric,
-                COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-                COALESCE(c.period_type, 'DAYS') AS period_type,
+                'CO2' AS metric,
+                'REDUCTION_PCT' AS logic_type,
+                'DAYS' AS period_type,
                 ci.status,
                 ci.period_start AS start_date,
                 ci.period_end   AS end_date,
                 NULL::numeric AS reference_value,
                 NULL::numeric AS current_value,
-                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
                 NULL::numeric AS progress_percent,
                 NULL::timestamp AS last_evaluated_at,
                 ci.created_at
@@ -166,8 +166,8 @@ def activate_challenge(
         )
 
         existing_rows = db.execute(
-            existing_ids_sql,
-            {"user_id": user_id_str, "challenge_id": challenge_id},
+        existing_ids_sql,
+        dict(params, challenge_id=challenge_id),
         ).mappings().all()
 
         # 1bis) Si existe : garder la plus récente + supprimer les doublons
@@ -294,17 +294,17 @@ def get_active_challenges(
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
+            COALESCE(c.name, c.code) AS name,
+            NULL::text AS description,
+            NULL::text AS metric,
+            NULL::text AS logic_type,
+            NULL::text AS period_type,
             ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
+            NULL::timestamp AS start_date,
+            NULL::timestamp AS end_date,
             ci.reference_value::numeric AS reference_value,
             ci.current_value::numeric   AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            ci.target_value::numeric    AS target_value,
             ci.progress_percent::numeric AS progress_percent,
             ci.last_evaluated_at         AS last_evaluated_at,
             ci.message                   AS message,
@@ -321,17 +321,17 @@ def get_active_challenges(
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
+            COALESCE(c.name, c.code) AS name,
+            NULL::text AS description,
+            NULL::text AS metric,
+            NULL::text AS logic_type,
+            NULL::text AS period_type,
             ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
+            NULL::timestamp AS start_date,
+            NULL::timestamp AS end_date,
             ci.reference_value::numeric AS reference_value,
             ci.current_value::numeric   AS current_value,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            ci.target_value::numeric    AS target_value,
             ci.progress_percent::numeric AS progress_percent,
             ci.last_evaluated_at         AS last_evaluated_at,
             ci.created_at
@@ -347,17 +347,17 @@ def get_active_challenges(
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            c.description,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
+            COALESCE(c.name, c.code) AS name,
+            NULL::text AS description,
+            NULL::text AS metric,
+            NULL::text AS logic_type,
+            NULL::text AS period_type,
             ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
+            NULL::timestamp AS start_date,
+            NULL::timestamp AS end_date,
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
-            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS target_value,
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             ci.created_at
@@ -386,7 +386,15 @@ def get_active_challenges(
                 if response is not None:
                     response.headers["X-Honoua-Active-Query"] = query_used
                     response.headers["X-Honoua-Active-Rows"] = "0"
-                return []
+        err1 = str(e1).encode("ascii", "backslashreplace").decode("ascii")[:180]
+        err2 = str(e2).encode("ascii", "backslashreplace").decode("ascii")[:180]
+        err3 = str(e3).encode("ascii", "backslashreplace").decode("ascii")[:180]
+
+    if response is not None:
+        response.headers["X-Honoua-Active-Err1"] = err1
+        response.headers["X-Honoua-Active-Err2"] = err2
+        response.headers["X-Honoua-Active-Err3"] = err3
+    return []
     if response is not None:
         response.headers["X-Honoua-Active-Query"] = query_used
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
@@ -477,11 +485,11 @@ def evaluate_challenge(
             ci.created_at,
             ci.updated_at,
             c.code,
-            COALESCE(c.name, c.title, c.code) AS name,
-            COALESCE(c.metric, 'CO2') AS metric,
-            COALESCE(c.logic_type, 'REDUCTION_PCT') AS logic_type,
-            COALESCE(c.period_type, 'DAYS') AS period_type,
-            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
+            COALESCE(c.name, c.code) AS name,
+            'CO2' AS metric,
+            'REDUCTION_PCT' AS logic_type,
+            'DAYS' AS period_type,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.id = :instance_id
