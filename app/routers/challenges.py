@@ -202,7 +202,7 @@ def activate_challenge(
             WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-            ORDER BY ci.created_at DESC, ci.id DESC
+            ORDER BY ci.id DESC
             LIMIT 20
             FOR UPDATE
             """
@@ -349,7 +349,7 @@ def get_active_challenges(
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.created_at DESC, ci.id DESC
+        ORDER BY ci.id DESC
         LIMIT 20
     """)
 
@@ -376,7 +376,7 @@ def get_active_challenges(
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.created_at DESC, ci.id DESC
+        ORDER BY ci.id DESC
         LIMIT 20
     """)
 
@@ -403,8 +403,9 @@ def get_active_challenges(
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.created_at DESC, ci.id DESC
+        ORDER BY ci.id DESC
         LIMIT 20
+        
     """)
 
     rows = []
@@ -442,34 +443,10 @@ def get_active_challenges(
         response.headers["X-Honoua-Active-Query"] = query_used
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
 
-    if not rows:
-        try:
-            n_all = db.execute(
-                text("""
-                    SELECT COUNT(*) AS n
-                    FROM public.challenge_instances ci
-                    WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
-                """),
-                params,
-            ).scalar() or 0
+# Skip COUNT debug queries (can be slow on large tables / cause gateway timeout).
 
-            n_not_done = db.execute(
-                text("""
-                    SELECT COUNT(*) AS n
-                    FROM public.challenge_instances ci
-                    WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
-                      AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-                """),
-                params,
-            ).scalar() or 0
 
-            if response is not None:
-                response.headers["X-Honoua-Active-Count-All"] = str(n_all)
-                response.headers["X-Honoua-Active-Count-NotDone"] = str(n_not_done)
-        except Exception:
-            pass
-
-        results = []
+    results = []
 
     for r in rows:
         data = dict(r)
