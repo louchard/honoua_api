@@ -86,8 +86,30 @@ def list_challenges(db: Session = Depends(get_db)):
 
         return [dict(r) for r in rows]
 
-    except (OperationalError, ProgrammingError):
-        return []
+    except (OperationalError, ProgrammingError) as e:
+        # Fallback schema-safe: only columns very likely to exist.
+        print("[A54][WARN] /challenges list schema mismatch:", e)
+
+        rows = db.execute(
+            text("""
+                SELECT
+                    id,
+                    code,
+                    COALESCE(name, code) AS name,
+                    'CO2' AS metric,
+                    'REDUCTION_PCT' AS logic_type,
+                    'DAYS' AS period_type,
+                    0::float AS default_target_value,
+                    'CART' AS scope_type,
+                    TRUE AS active
+                FROM public.challenges
+                ORDER BY id ASC
+            """)
+        ).mappings().all()
+
+        return [dict(r) for r in rows]
+
+  
 
 
 # ---------- 2) Activer un défi pour un utilisateur ---------- #
@@ -267,10 +289,6 @@ def activate_challenge(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
 )
-@router.get(
-    "/users/{user_id}/challenges/active",
-    response_model=list[ChallengeInstanceRead],
-)
 def get_active_challenges(
     user_id: int,
     response: Response = None,
@@ -383,22 +401,26 @@ def get_active_challenges(
             except Exception as e3:
                 query_used = "error"
                 print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
+
+                err1 = str(e1).encode("ascii", "backslashreplace").decode("ascii")[:180]
+                err2 = str(e2).encode("ascii", "backslashreplace").decode("ascii")[:180]
+                err3 = str(e3).encode("ascii", "backslashreplace").decode("ascii")[:180]
+
                 if response is not None:
                     response.headers["X-Honoua-Active-Query"] = query_used
                     response.headers["X-Honoua-Active-Rows"] = "0"
-        err1 = str(e1).encode("ascii", "backslashreplace").decode("ascii")[:180]
-        err2 = str(e2).encode("ascii", "backslashreplace").decode("ascii")[:180]
-        err3 = str(e3).encode("ascii", "backslashreplace").decode("ascii")[:180]
+                    response.headers["X-Honoua-Active-Err1"] = err1
+                    response.headers["X-Honoua-Active-Err2"] = err2
+                    response.headers["X-Honoua-Active-Err3"] = err3
 
-    if response is not None:
-        response.headers["X-Honoua-Active-Err1"] = err1
-        response.headers["X-Honoua-Active-Err2"] = err2
-        response.headers["X-Honoua-Active-Err3"] = err3
-    return []
+                return []
+                    
+
+
     if response is not None:
         response.headers["X-Honoua-Active-Query"] = query_used
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
-        
+
     if not rows:
         try:
             n_all = db.execute(
@@ -424,11 +446,10 @@ def get_active_challenges(
                 response.headers["X-Honoua-Active-Count-All"] = str(n_all)
                 response.headers["X-Honoua-Active-Count-NotDone"] = str(n_not_done)
         except Exception:
-            pass    
+            pass
 
+        results = []
 
-
-    results = []
     for r in rows:
         data = dict(r)
 
@@ -489,7 +510,7 @@ def evaluate_challenge(
             'CO2' AS metric,
             'REDUCTION_PCT' AS logic_type,
             'DAYS' AS period_type,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.id = :instance_id
