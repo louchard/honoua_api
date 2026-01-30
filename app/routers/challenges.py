@@ -326,7 +326,7 @@ def get_active_challenges(
             NULL::timestamp AS end_date,
             ci.reference_value::numeric AS reference_value,
             ci.current_value::numeric   AS current_value,
-            ci.target_value::numeric    AS target_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             ci.progress_percent::numeric AS progress_percent,
             ci.last_evaluated_at         AS last_evaluated_at,
             ci.message                   AS message,
@@ -353,7 +353,7 @@ def get_active_challenges(
             NULL::timestamp AS end_date,
             ci.reference_value::numeric AS reference_value,
             ci.current_value::numeric   AS current_value,
-            ci.target_value::numeric    AS target_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             ci.progress_percent::numeric AS progress_percent,
             ci.last_evaluated_at         AS last_evaluated_at,
             ci.created_at
@@ -514,7 +514,7 @@ def evaluate_challenge(
             'CO2' AS metric,
             'REDUCTION_PCT' AS logic_type,
             'DAYS' AS period_type,
-            COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.id = :instance_id
