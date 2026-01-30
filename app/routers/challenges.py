@@ -2,9 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import calendar
+
 from sqlalchemy import bindparam
 from sqlalchemy import text, bindparam
 from sqlalchemy.exc import OperationalError, ProgrammingError
+
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
+
+
 
 
 from app.schemas.challenges import (
@@ -63,6 +69,13 @@ def repair_mojibake(s: str) -> str:
 # ---------- 1) Lister les défis disponibles ---------- #
 @router.get("/challenges", response_model=list[ChallengeRead])
 def list_challenges(db: Session = Depends(get_db)):
+
+
+    """
+    Retourne la liste des défis disponibles (catalogue).
+    Robuste : en cas de mismatch de schéma (colonne/table), renvoie [] au lieu de 500.
+    """
+
     try:
         rows = db.execute(
             text("""
@@ -75,11 +88,17 @@ def list_challenges(db: Session = Depends(get_db)):
                     COALESCE(period_type, 'DAYS') AS period_type,
                     COALESCE(default_target_value, target_reduction_pct, 0)::float AS default_target_value,
                     COALESCE(scope_type, 'CART') AS scope_type,
+                    metric,
+                    logic_type,
+                    period_type,
+                    default_target_value,
+                    COALESCE(scope_type, score_type) AS scope_type,
                     COALESCE(active, is_active, TRUE) AS active
                 FROM public.challenges
                 WHERE COALESCE(active, is_active, TRUE) = TRUE
                 ORDER BY id ASC
             """)
+
 
         ).mappings().all()
 
@@ -108,7 +127,9 @@ def list_challenges(db: Session = Depends(get_db)):
 
         return [dict(r) for r in rows]
 
-  
+    except (OperationalError, ProgrammingError):
+        return []
+
 
 
 # ---------- 2) Activer un défi pour un utilisateur ---------- #
@@ -162,7 +183,7 @@ def activate_challenge(
                 ci.period_end   AS end_date,
                 NULL::numeric AS reference_value,
                 NULL::numeric AS current_value,
-                COALESCE(ci.target_value, c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+                COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
                 NULL::numeric AS progress_percent,
                 NULL::timestamp AS last_evaluated_at,
                 ci.created_at
@@ -232,8 +253,8 @@ def activate_challenge(
                 period_start,
                 period_end,
                 created_at,
-                updated_at,
-                target_value
+                updated_at
+                
             )
             VALUES (
                 :user_id,
@@ -242,11 +263,7 @@ def activate_challenge(
                 :start_date,
                 :end_date,
                 :now,
-                :now,
-                COALESCE(
-                    (SELECT default_target_value FROM public.challenges WHERE id = :challenge_id),
-                    0
-                )
+                :now
             )
             RETURNING id
             """
@@ -284,10 +301,7 @@ def activate_challenge(
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
-@router.get(
-    "/users/{user_id}/challenges/active",
-    response_model=list[ChallengeInstanceRead],
-)
+
 @router.get(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
@@ -717,7 +731,6 @@ def evaluate_challenge(
             SET
                 reference_value = :reference_value,
                 current_value = :current_value,
-                target_value = :target_value,
                 progress_percent = :progress_percent,
                 status = :status,
                 last_evaluated_at = :last_evaluated_at,
@@ -731,7 +744,6 @@ def evaluate_challenge(
             SET
                 reference_value = :reference_value,
                 current_value = :current_value,
-                target_value = :target_value,
                 progress_percent = :progress_percent,
                 status = :status,
                 last_evaluated_at = :last_evaluated_at,
@@ -750,7 +762,6 @@ def evaluate_challenge(
         params_full = {
             "reference_value": reference_value,
             "current_value": current_value,
-            "target_value": target_value,
             "progress_percent": progress_percent,
             "status": db_status,
             "last_evaluated_at": now,   # datetime, not iso string
