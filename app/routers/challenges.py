@@ -289,6 +289,10 @@ def activate_challenge(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
 )
+@router.get(
+    "/users/{user_id}/challenges/active",
+    response_model=list[ChallengeInstanceRead],
+)
 def get_active_challenges(
     user_id: int,
     response: Response = None,
