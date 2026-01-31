@@ -338,12 +338,12 @@ def get_active_challenges(
             ci.status,
             NULL::timestamp AS start_date,
             NULL::timestamp AS end_date,
-            ci.reference_value::numeric AS reference_value,
-            ci.current_value::numeric   AS current_value,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            ci.progress_percent::numeric AS progress_percent,
-            ci.last_evaluated_at         AS last_evaluated_at,
-            ci.message                   AS message,
+            NULL::numeric   AS progress_percent,
+            NULL::timestamp AS last_evaluated_at,
+            ci.message  AS message,
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
@@ -366,11 +366,11 @@ def get_active_challenges(
             ci.status,
             NULL::timestamp AS start_date,
             NULL::timestamp AS end_date,
-            ci.reference_value::numeric AS reference_value,
-            ci.current_value::numeric   AS current_value,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            ci.progress_percent::numeric AS progress_percent,
-            ci.last_evaluated_at         AS last_evaluated_at,
+            NULL::numeric   AS progress_percent,
+            NULL::timestamp AS last_evaluated_at,
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
