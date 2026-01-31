@@ -153,7 +153,7 @@ def activate_challenge(
     """
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
     challenge_id = int(payload.challenge_id)
     now = datetime.utcnow()
@@ -199,7 +199,7 @@ def activate_challenge(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
-            WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+            WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.id DESC
@@ -323,7 +323,7 @@ def get_active_challenges(
 
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
     sql_full = text("""
         SELECT
@@ -347,7 +347,7 @@ def get_active_challenges(
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
@@ -374,7 +374,7 @@ def get_active_challenges(
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
@@ -401,7 +401,7 @@ def get_active_challenges(
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
