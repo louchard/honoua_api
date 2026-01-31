@@ -424,7 +424,7 @@ def get_active_challenges(
             NULL::timestamp AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
             AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
