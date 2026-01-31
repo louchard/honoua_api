@@ -424,9 +424,18 @@ def get_active_challenges(
                 query_used = "error"
                 print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
 
-                err1 = str(e1).encode("ascii", "backslashreplace").decode("ascii")[:180]
-                err2 = str(e2).encode("ascii", "backslashreplace").decode("ascii")[:180]
-                err3 = str(e3).encode("ascii", "backslashreplace").decode("ascii")[:180]
+                def _safe_header(v) -> str:
+                    s = "" if v is None else str(v)
+                    # Interdit en headers : CR/LF et chars de contrôle
+                    s = s.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+                    s = s.encode("ascii", "backslashreplace").decode("ascii")
+                    s = "".join(ch if 32 <= ord(ch) <= 126 else " " for ch in s)
+                    s = " ".join(s.split())
+                    return s[:180]
+
+                err1 = _safe_header(e1)
+                err2 = _safe_header(e2)
+                err3 = _safe_header(e3)        
 
                 if response is not None:
                     response.headers["X-Honoua-Active-Query"] = query_used
