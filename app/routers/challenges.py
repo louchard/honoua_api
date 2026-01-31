@@ -407,21 +407,73 @@ def get_active_challenges(
         LIMIT 20
         
     """)
+    
+    sql_min = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.code) AS name,
+            ci.status,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS progress_percent,
+            NULL::timestamp AS last_evaluated_at,
+            NULL::text      AS message,
+            NULL::timestamp AS created_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
+            AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
+        ORDER BY ci.id DESC
+        LIMIT 20
+        """)
+
 
     rows = []
     query_used = "full"
     try:
         rows = db.execute(sql_full, params).mappings().all()
     except (ProgrammingError, OperationalError) as e1:
+        # Important: si Postgres a leve une erreur, la transaction est "aborted" -> rollback obligatoire
+        try:
+            rb = getattr(db, "rollback", None)
+            if callable(rb):
+                rb()
+        except Exception:
+            pass
+
         query_used = "no_message"
         try:
             rows = db.execute(sql_no_message, params).mappings().all()
         except Exception as e2:
+            # Important: reset transaction avant de tenter le fallback
+            try:
+                rb = getattr(db, "rollback", None)
+                if callable(rb):
+                    rb()
+            except Exception:
+                pass
+
             query_used = "fallback"
             try:
                 rows = db.execute(sql_fallback, params).mappings().all()
             except Exception as e3:
-                query_used = "error"
+                # reset transaction avant tentative minimale
+                try:
+                    rb = getattr(db, "rollback", None)
+                    if callable(rb):
+                        rb()
+                except Exception:
+                    pass
+
+                query_used = "min"
+                try:
+                    rows = db.execute(sql_min, params).mappings().all()
+                except Exception as e4:
+                    query_used = "error"
+
                 print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
 
                 def _safe_header(v) -> str:
