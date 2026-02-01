@@ -179,8 +179,8 @@ def activate_challenge(
                 'REDUCTION_PCT' AS logic_type,
                 'DAYS' AS period_type,
                 ci.status,
-                ci.period_start AS start_date,
-                ci.period_end   AS end_date,
+                NULL::timestamp AS start_date,
+                NULL::timestamp AS end_date,
                 NULL::numeric AS reference_value,
                 NULL::numeric AS current_value,
                 COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
@@ -299,7 +299,6 @@ def activate_challenge(
 
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
-
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 @router.get(
     "/users/{user_id}/challenges/active",
@@ -321,58 +320,44 @@ def get_active_challenges(
 
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
+    # ⚠️ Ne référence aucune colonne optionnelle dans challenge_instances
     sql_min = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
             COALESCE(c.name, c.code) AS name,
+
             NULL::text AS description,
             'CO2'::text AS metric,
             'REDUCTION_PCT'::text AS logic_type,
             'DAYS'::text AS period_type,
+
             ci.status,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
+
+            -- ⚠️ prod-safe : pas de ci.period_start / ci.period_end
+            NULL::timestamp AS start_date,
+            NULL::timestamp AS end_date,
+
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
+
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
+
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
     """)
-    
-    sql_min = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.code) AS name,
-            ci.status,
-            NULL::numeric   AS reference_value,
-            NULL::numeric   AS current_value,
-            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            NULL::numeric   AS progress_percent,
-            NULL::timestamp AS last_evaluated_at,
-            NULL::text      AS message,
-            NULL::timestamp AS created_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
-            AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.id DESC
-        LIMIT 20
-        """)
-
 
     try:
         rows = db.execute(sql_min, params).mappings().all()
@@ -385,19 +370,11 @@ def get_active_challenges(
         except Exception:
             pass
 
-        err1 = (
-            str(e)
-            .encode("ascii", "backslashreplace")
-            .decode("ascii")
-            .replace("\n", " ")
-            .replace("\r", " ")
-        )[:180]
+        print("[A54][WARN] /challenges/active SQL KO -> return []. Detail:", e)
 
         if response is not None:
             response.headers["X-Honoua-Active-Query"] = "min"
             response.headers["X-Honoua-Active-Rows"] = "0"
-            response.headers["X-Honoua-Active-Err1"] = err1
-
         return []
 
     if response is not None:
@@ -407,14 +384,8 @@ def get_active_challenges(
     results = []
     for r in rows:
         data = dict(r)
-
-        # Normalisation du status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
-
         results.append(ChallengeInstanceRead(**data))
-
-    return results
-
 
 
 
@@ -444,8 +415,8 @@ def evaluate_challenge(
             ci.id AS instance_id,
             ci.challenge_id,
             ci.user_id,
-            ci.period_start AS start_date,
-            ci.period_end   AS end_date,
+            NULL::timestamp AS start_date,
+            NULL::timestamp AS end_date,
             ci.status,
             ci.created_at,
             ci.updated_at,
