@@ -179,14 +179,15 @@ def activate_challenge(
                 'REDUCTION_PCT' AS logic_type,
                 'DAYS' AS period_type,
                 ci.status,
-                NULL::timestamp AS start_date,
-                NULL::timestamp AS end_date,
-                NULL::numeric AS reference_value,
-                NULL::numeric AS current_value,
+                COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
+                COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
+                NULL::numeric   AS reference_value,
+                NULL::numeric   AS current_value,
                 COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-                NULL::numeric AS progress_percent,
+                NULL::numeric   AS progress_percent,
                 NULL::timestamp AS last_evaluated_at,
-                ci.created_at
+                NULL::text      AS message,
+                COALESCE(ci.created_at, NOW()) AS created_at
             FROM public.challenge_instances ci
             JOIN public.challenges c ON c.id = ci.challenge_id
             WHERE ci.id = :instance_id
@@ -338,8 +339,8 @@ def get_active_challenges(
             ci.status,
 
             -- ⚠️ prod-safe : pas de ci.period_start / ci.period_end
-            NULL::timestamp AS start_date,
-            NULL::timestamp AS end_date,
+            COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
+            COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
 
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
@@ -350,7 +351,7 @@ def get_active_challenges(
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
 
-            ci.created_at
+            COALESCE(ci.created_at, NOW()) AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
@@ -375,6 +376,7 @@ def get_active_challenges(
         if response is not None:
             response.headers["X-Honoua-Active-Query"] = "min"
             response.headers["X-Honoua-Active-Rows"] = "0"
+            response.headers["X-Honoua-Active-Err1"] = err1
         return []
 
     if response is not None:
@@ -386,6 +388,7 @@ def get_active_challenges(
         data = dict(r)
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
         results.append(ChallengeInstanceRead(**data))
+
 
 
 
@@ -415,10 +418,10 @@ def evaluate_challenge(
             ci.id AS instance_id,
             ci.challenge_id,
             ci.user_id,
-            NULL::timestamp AS start_date,
-            NULL::timestamp AS end_date,
+            COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
+            COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
             ci.status,
-            ci.created_at,
+            COALESCE(ci.created_at, NOW()) AS created_at
             ci.updated_at,
             c.code,
             COALESCE(c.name, c.code) AS name,
