@@ -301,8 +301,6 @@ def activate_challenge(
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
-
-
 @router.get(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
@@ -313,37 +311,37 @@ def get_active_challenges(
     db: Session = Depends(get_db),
 ):
     """
-    Return active challenges for a user.
-    Robust against minor schema differences (message column may not exist).
+    Return active challenges for a user (prod-safe).
+    - No dependency on optional columns (message, reference_value, current_value...)
+    - Avoid text=int comparison on user_id
     """
-    # Debug headers to confirm deployed version + avoid any proxy/CDN caching.
     if response is not None:
-        response.headers["X-Honoua-Active-Version"] = "A54.20"
+        response.headers["X-Honoua-Active-Version"] = "A54.21"
         response.headers["Cache-Control"] = "no-store"
 
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
-    sql_full = text("""
+    sql_min = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
             COALESCE(c.name, c.code) AS name,
             NULL::text AS description,
-            NULL::text AS metric,
-            NULL::text AS logic_type,
-            NULL::text AS period_type,
+            'CO2'::text AS metric,
+            'REDUCTION_PCT'::text AS logic_type,
+            'DAYS'::text AS period_type,
             ci.status,
-            NULL::timestamp AS start_date,
-            NULL::timestamp AS end_date,
+            ci.period_start AS start_date,
+            ci.period_end   AS end_date,
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
-            ci.message  AS message,
+            NULL::text      AS message,
             ci.created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
@@ -351,61 +349,6 @@ def get_active_challenges(
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT 20
-    """)
-
-    sql_no_message = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.code) AS name,
-            NULL::text AS description,
-            NULL::text AS metric,
-            NULL::text AS logic_type,
-            NULL::text AS period_type,
-            ci.status,
-            NULL::timestamp AS start_date,
-            NULL::timestamp AS end_date,
-            NULL::numeric   AS reference_value,
-            NULL::numeric   AS current_value,
-            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-            NULL::numeric   AS progress_percent,
-            NULL::timestamp AS last_evaluated_at,
-            ci.created_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
-          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.id DESC
-        LIMIT 20
-    """)
-
-    sql_fallback = text("""
-        SELECT
-            ci.id AS instance_id,
-            ci.challenge_id,
-            c.code,
-            COALESCE(c.name, c.code) AS name,
-            NULL::text AS description,
-            NULL::text AS metric,
-            NULL::text AS logic_type,
-            NULL::text AS period_type,
-            ci.status,
-            NULL::timestamp AS start_date,
-            NULL::timestamp AS end_date,
-            NULL::numeric   AS reference_value,
-            NULL::numeric   AS current_value,
-            NULL::numeric   AS target_value,
-            NULL::numeric   AS progress_percent,
-            NULL::timestamp AS last_evaluated_at,
-            ci.created_at
-        FROM public.challenge_instances ci
-        JOIN public.challenges c ON c.id = ci.challenge_id
-        WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
-          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
-        ORDER BY ci.id DESC
-        LIMIT 20
-        
     """)
     
     sql_min = text("""
@@ -431,12 +374,10 @@ def get_active_challenges(
         """)
 
 
-    rows = []
-    query_used = "full"
     try:
-        rows = db.execute(sql_full, params).mappings().all()
-    except (ProgrammingError, OperationalError) as e1:
-        # Important: si Postgres a leve une erreur, la transaction est "aborted" -> rollback obligatoire
+        rows = db.execute(sql_min, params).mappings().all()
+    except Exception as e:
+        # Important: après une erreur SQL, la transaction peut être "aborted"
         try:
             rb = getattr(db, "rollback", None)
             if callable(rb):
@@ -444,94 +385,38 @@ def get_active_challenges(
         except Exception:
             pass
 
-        query_used = "no_message"
-        try:
-            rows = db.execute(sql_no_message, params).mappings().all()
-        except Exception as e2:
-            # Important: reset transaction avant de tenter le fallback
-            try:
-                rb = getattr(db, "rollback", None)
-                if callable(rb):
-                    rb()
-            except Exception:
-                pass
+        err1 = (
+            str(e)
+            .encode("ascii", "backslashreplace")
+            .decode("ascii")
+            .replace("\n", " ")
+            .replace("\r", " ")
+        )[:180]
 
-            query_used = "fallback"
-            try:
-                rows = db.execute(sql_fallback, params).mappings().all()
-            except Exception as e3:
-                # reset transaction avant tentative minimale
-                try:
-                    rb = getattr(db, "rollback", None)
-                    if callable(rb):
-                        rb()
-                except Exception:
-                    pass
+        if response is not None:
+            response.headers["X-Honoua-Active-Query"] = "min"
+            response.headers["X-Honoua-Active-Rows"] = "0"
+            response.headers["X-Honoua-Active-Err1"] = err1
 
-                query_used = "min"
-                try:
-                    rows = db.execute(sql_min, params).mappings().all()
-                except Exception as e4:
-                    query_used = "error"
-
-                print("[A54][WARN] /challenges/active SQL KO -> retour []. D1:", e1, "D2:", e2, "D3:", e3)
-
-                def _safe_header(v) -> str:
-                    s = "" if v is None else str(v)
-                    # Interdit en headers : CR/LF et chars de contrôle
-                    s = s.replace("\r", " ").replace("\n", " ").replace("\t", " ")
-                    s = s.encode("ascii", "backslashreplace").decode("ascii")
-                    s = "".join(ch if 32 <= ord(ch) <= 126 else " " for ch in s)
-                    s = " ".join(s.split())
-                    return s[:180]
-
-                err1 = _safe_header(e1)
-                err2 = _safe_header(e2)
-                err3 = _safe_header(e3)        
-
-                if response is not None:
-                    response.headers["X-Honoua-Active-Query"] = query_used
-                    response.headers["X-Honoua-Active-Rows"] = "0"
-                    response.headers["X-Honoua-Active-Err1"] = err1
-                    response.headers["X-Honoua-Active-Err2"] = err2
-                    response.headers["X-Honoua-Active-Err3"] = err3
-
-                return []
-                    
-
+        return []
 
     if response is not None:
-        response.headers["X-Honoua-Active-Query"] = query_used
+        response.headers["X-Honoua-Active-Query"] = "min"
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
 
-# Skip COUNT debug queries (can be slow on large tables / cause gateway timeout).
-
-
     results = []
-
     for r in rows:
         data = dict(r)
 
-        # Map DB status to API status
+        # Normalisation du status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
-
-        # Ensure optional fields exist
-        if "message" not in data:
-            data["message"] = None
-        if data.get("message"):
-            data["message"] = repair_mojibake(data["message"])
-
-        data["metric"] = data.get("metric") or "CO2"
-        data["logic_type"] = data.get("logic_type") or "REDUCTION_PCT"
-        data["period_type"] = data.get("period_type") or "DAYS"
-
-        # If fallback variant did not include last_evaluated_at
-        if "last_evaluated_at" not in data:
-            data["last_evaluated_at"] = None
 
         results.append(ChallengeInstanceRead(**data))
 
     return results
+
+
+
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
