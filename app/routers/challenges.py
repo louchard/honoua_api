@@ -371,25 +371,55 @@ def get_active_challenges(
         except Exception:
             pass
 
-        print("[A54][WARN] /challenges/active SQL KO -> return []. Detail:", e)
+        err1 = (
+            str(e)
+            .encode("ascii", "backslashreplace")
+            .decode("ascii")
+            .replace("\n", " ")
+            .replace("\r", " ")
+        )[:180]
+
+        print("[A54][WARN] /challenges/active SQL KO -> return []. Detail:", err1)
 
         if response is not None:
             response.headers["X-Honoua-Active-Query"] = "min"
             response.headers["X-Honoua-Active-Rows"] = "0"
             response.headers["X-Honoua-Active-Err1"] = err1
+
         return []
+
 
     if response is not None:
         response.headers["X-Honoua-Active-Query"] = "min"
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
 
     results = []
+
+    # Fallback datetime (Pydantic exige datetime non-null)
+    from datetime import datetime
+
+    now = datetime.utcnow()
+
     for r in rows:
         data = dict(r)
+
+        # Normalisation du status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
+
+        # ✅ Fix Pydantic: start_date/end_date ne doivent jamais être None
+        if data.get("start_date") is None:
+            data["start_date"] = data.get("created_at") or now
+        if data.get("end_date") is None:
+            data["end_date"] = data.get("created_at") or data.get("start_date") or now
+
+        # ✅ Fix Pydantic: created_at doit exister si ton schema l'exige
+        if data.get("created_at") is None:
+            data["created_at"] = data.get("start_date") or now
+
         results.append(ChallengeInstanceRead(**data))
 
     return results
+
 
 
 
