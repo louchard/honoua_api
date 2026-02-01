@@ -153,7 +153,7 @@ def activate_challenge(
     """
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
     challenge_id = int(payload.challenge_id)
     now = datetime.utcnow()
@@ -200,7 +200,7 @@ def activate_challenge(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
-            WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+            WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.id DESC
@@ -423,8 +423,10 @@ def get_active_challenges(
             return []
 
     if response is not None:
-        response.headers["X-Honoua-Active-Query"] = query_used
+        response.headers["X-Honoua-Active-Query"] = "min"
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
+        if err1:
+            response.headers["X-Honoua-Active-Err1"] = err1
 
     # Construction réponse Pydantic robuste
     from datetime import datetime, date, time
@@ -449,6 +451,7 @@ def get_active_challenges(
 
         # Normalisation du status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
+        results.append(ChallengeInstanceRead(**data))
 
         # Sécurise datetimes (Pydantic exige datetime non-null)
         data["created_at"] = _as_dt(data.get("created_at")) or now
@@ -474,7 +477,6 @@ def get_active_challenges(
         response.headers["X-Honoua-Active-Bad"] = str(bad)
         response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
 
-    return results
 
 
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
