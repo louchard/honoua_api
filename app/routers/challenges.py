@@ -300,7 +300,7 @@ def activate_challenge(
 
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
-# ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
+
 @router.get(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
@@ -312,46 +312,43 @@ def get_active_challenges(
 ):
     """
     Return active challenges for a user (prod-safe).
-    - No dependency on optional columns (message, reference_value, current_value...)
-    - Avoid text=int comparison on user_id
+    Objectifs:
+    - Ne jamais planter si certaines colonnes n'existent pas (message, period_start/period_end, etc.)
+    - Ne jamais renvoyer start_date/end_date = None (Pydantic attend des datetime non-null)
+    - Ne jamais laisser la transaction "aborted" avant un fallback (rollback obligatoire)
     """
     if response is not None:
-        response.headers["X-Honoua-Active-Version"] = "A54.21"
+        response.headers["X-Honoua-Active-Version"] = "A54.22"
         response.headers["Cache-Control"] = "no-store"
 
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
-    # ⚠️ Ne référence aucune colonne optionnelle dans challenge_instances
-    sql_min = text("""
+    # Variante 1: utilise period_start/period_end si présents
+    sql_period = text("""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
             COALESCE(c.name, c.code) AS name,
-
             NULL::text AS description,
             'CO2'::text AS metric,
             'REDUCTION_PCT'::text AS logic_type,
             'DAYS'::text AS period_type,
-
             ci.status,
 
-            -- ⚠️ prod-safe : pas de ci.period_start / ci.period_end
-            COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
-            COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
+            COALESCE(ci.period_start::timestamp, ci.created_at::timestamp, NOW())::timestamp AS start_date,
+            COALESCE(ci.period_end::timestamp,  ci.period_start::timestamp, ci.created_at::timestamp, NOW())::timestamp AS end_date,
 
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
-
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
-
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
 
-            COALESCE(ci.created_at, NOW()) AS created_at
+            COALESCE(ci.created_at::timestamp, NOW())::timestamp AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
@@ -360,10 +357,76 @@ def get_active_challenges(
         LIMIT 20
     """)
 
+    # Variante 2: fallback sans period_start/period_end (si colonnes absentes)
+    sql_min = text("""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            COALESCE(c.name, c.code) AS name,
+            NULL::text AS description,
+            'CO2'::text AS metric,
+            'REDUCTION_PCT'::text AS logic_type,
+            'DAYS'::text AS period_type,
+            ci.status,
+
+            COALESCE(ci.created_at::timestamp, NOW())::timestamp AS start_date,
+            COALESCE(ci.created_at::timestamp, NOW())::timestamp AS end_date,
+
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS progress_percent,
+            NULL::timestamp AS last_evaluated_at,
+            NULL::text      AS message,
+
+            COALESCE(ci.created_at::timestamp, NOW())::timestamp AS created_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
+        ORDER BY ci.id DESC
+        LIMIT 20
+    """)
+
+    rows = []
+    query_used = "period"
+    err1 = None
+
     try:
-        rows = db.execute(sql_min, params).mappings().all()
+        rows = db.execute(sql_period, params).mappings().all()
+
+    except (ProgrammingError, OperationalError):
+        # Important: après une erreur SQL, la transaction est "aborted" -> rollback obligatoire
+        try:
+            rb = getattr(db, "rollback", None)
+            if callable(rb):
+                rb()
+        except Exception:
+            pass
+
+        query_used = "min"
+        try:
+            rows = db.execute(sql_min, params).mappings().all()
+        except Exception as e2:
+            try:
+                rb = getattr(db, "rollback", None)
+                if callable(rb):
+                    rb()
+            except Exception:
+                pass
+
+            err1 = (
+                str(e2)
+                .encode("ascii", "backslashreplace")
+                .decode("ascii")
+                .replace("\n", " ")
+                .replace("\r", " ")
+            )[:180]
+            rows = []
+            query_used = "error"
+
     except Exception as e:
-        # Important: après une erreur SQL, la transaction peut être "aborted"
         try:
             rb = getattr(db, "rollback", None)
             if callable(rb):
@@ -378,32 +441,21 @@ def get_active_challenges(
             .replace("\n", " ")
             .replace("\r", " ")
         )[:180]
-
-        print("[A54][WARN] /challenges/active SQL KO -> return []. Detail:", err1)
-
-        if response is not None:
-            response.headers["X-Honoua-Active-Query"] = "min"
-            response.headers["X-Honoua-Active-Rows"] = "0"
-            response.headers["X-Honoua-Active-Err1"] = err1
-
-        return []
-
-        if response is not None:
-            response.headers["X-Honoua-Active-Query"] = "min"
-            response.headers["X-Honoua-Active-Rows"] = "0"
-            response.headers["X-Honoua-Active-Err1"] = err1
-        return []
+        rows = []
+        query_used = "error"
 
     if response is not None:
         response.headers["X-Honoua-Active-Query"] = "min"
         response.headers["X-Honoua-Active-Rows"] = str(len(rows))
+        if err1:
+            response.headers["X-Honoua-Active-Err1"] = err1
+
+    # Ne jamais faire planter l'endpoint si 1 item est invalide pour Pydantic
+    from pydantic import ValidationError
 
     results = []
-
-    # Fallback datetime (Pydantic exige datetime non-null)
-    from datetime import datetime
-
-    now = datetime.utcnow()
+    bad = 0
+    first_valerr = None
 
     for r in rows:
         data = dict(r)
@@ -412,17 +464,29 @@ def get_active_challenges(
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
         results.append(ChallengeInstanceRead(**data))
 
-        # ✅ Fix Pydantic: start_date/end_date ne doivent jamais être None
-        if data.get("start_date") is None:
-            data["start_date"] = data.get("created_at") or now
-        if data.get("end_date") is None:
-            data["end_date"] = data.get("created_at") or data.get("start_date") or now
+        # champ optionnel mais on force la présence
+        if "message" not in data:
+            data["message"] = None
 
-        # ✅ Fix Pydantic: created_at doit exister si ton schema l'exige
-        if data.get("created_at") is None:
-            data["created_at"] = data.get("start_date") or now
+        try:
+            results.append(ChallengeInstanceRead(**data))
+        except ValidationError as ve:
+            bad += 1
+            if first_valerr is None:
+                first_valerr = (
+                    str(ve)
+                    .encode("ascii", "backslashreplace")
+                    .decode("ascii")
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                )[:180]
+            continue
 
+    if response is not None and bad:
+        response.headers["X-Honoua-Active-Bad"] = str(bad)
+        response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
 
+    return results
 
 
 
