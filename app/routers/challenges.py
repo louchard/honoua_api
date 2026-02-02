@@ -298,7 +298,6 @@ def activate_challenge(
         db.rollback()
         raise
 
-
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
 @router.get(
     "/users/{user_id}/challenges/active",
@@ -310,50 +309,55 @@ def get_active_challenges(
     db: Session = Depends(get_db),
 ):
     """
-    Return active challenges for a user (prod-safe).
-    - Tolérant aux différences de schéma (colonnes optionnelles absentes)
-    - Évite les comparaisons text=int sur user_id
-    - Évite les 500 : on fallback + on skip les rows invalides
+    PROD-SAFE:
+    - Ne dépend d'aucune colonne optionnelle côté prod (message, reference_value, current_value, target_value côté ci...)
+    - Évite la comparaison text=int sur user_id
+    - Rollback obligatoire après erreur SQL (sinon transaction "aborted")
+    - Garantit start_date/end_date/created_at non-null pour Pydantic
+    - Si un item reste invalide, on le skip au lieu de faire planter l'endpoint
     """
-    from datetime import datetime, date, time
-    from pydantic import ValidationError
-    from sqlalchemy import text
-
     if response is not None:
         response.headers["X-Honoua-Active-Version"] = "A54.23"
         response.headers["Cache-Control"] = "no-store"
 
-    # On compare TOUJOURS en text (compatible si ci.user_id est int OU text)
+    from datetime import datetime, date, time
+    from pydantic import ValidationError
+    from sqlalchemy.exc import ProgrammingError, OperationalError
+
+    def _as_dt(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, date):
+            return datetime.combine(v, time.min)
+        return v
+
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
-    # 1) Query "primary" (si period_start/period_end existent)
-    sql_primary = text("""
-        SELECT DISTINCT ON (ci.id)
+    # Requête "standard" (si period_start/period_end existent)
+    sql_min = text("""
+        SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
             COALESCE(c.name, c.code) AS name,
-
             NULL::text AS description,
             'CO2'::text AS metric,
             'REDUCTION_PCT'::text AS logic_type,
             'DAYS'::text AS period_type,
-
             ci.status,
-
-            COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
-            COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
-
+            ci.period_start::timestamp AS start_date,
+            ci.period_end::timestamp   AS end_date,
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
-
-            COALESCE(ci.created_at, NOW()) AS created_at
+            ci.created_at::timestamp AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
@@ -362,9 +366,9 @@ def get_active_challenges(
         LIMIT 20
     """)
 
-    # 2) Fallback si period_start/period_end n'existent pas
-    sql_fallback = text("""
-        SELECT DISTINCT ON (ci.id)
+    # Fallback si period_start/period_end (ou created_at) n'existent pas en prod
+    sql_min_fallback = text("""
+        SELECT
             ci.id AS instance_id,
             ci.challenge_id,
             c.code,
@@ -374,7 +378,6 @@ def get_active_challenges(
             'CO2'::text AS metric,
             'REDUCTION_PCT'::text AS logic_type,
             'DAYS'::text AS period_type,
-
             ci.status,
 
             COALESCE(ci.created_at, NOW()) AS start_date,
@@ -386,8 +389,7 @@ def get_active_challenges(
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
-
-            COALESCE(ci.created_at, NOW()) AS created_at
+            NULL::timestamp AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
@@ -396,7 +398,11 @@ def get_active_challenges(
         LIMIT 20
     """)
 
-    def _rollback_safely():
+    query_used = "min"
+    try:
+        rows = db.execute(sql_min, params).mappings().all()
+    except (ProgrammingError, OperationalError, Exception) as e:
+        # rollback obligatoire
         try:
             rb = getattr(db, "rollback", None)
             if callable(rb):
@@ -404,27 +410,32 @@ def get_active_challenges(
         except Exception:
             pass
 
-    def _sanitize_header(v: str, limit: int = 180) -> str:
-        s = str(v).encode("ascii", "backslashreplace").decode("ascii")
-        s = s.replace("\n", " ").replace("\r", " ").replace("\t", " ")
-        return s[:limit]
-
-    # Exécution tolérante
-    query_used = "primary"
-    try:
-        rows = db.execute(sql_primary, params).mappings().all()
-    except Exception as e1:
-        _rollback_safely()
-        query_used = "fallback"
+        # 2e tentative avec fallback
+        query_used = "min_fallback"
         try:
-            rows = db.execute(sql_fallback, params).mappings().all()
+            rows = db.execute(sql_min_fallback, params).mappings().all()
         except Exception as e2:
-            _rollback_safely()
-            rows = []
-            query_used = "error"
+            try:
+                rb = getattr(db, "rollback", None)
+                if callable(rb):
+                    rb()
+            except Exception:
+                pass
+
+            err = (
+                str(e2)
+                .encode("ascii", "backslashreplace")
+                .decode("ascii")
+                .replace("\n", " ")
+                .replace("\r", " ")
+            )[:180]
+
             if response is not None:
-                response.headers["X-Honoua-Active-Err1"] = _sanitize_header(e1)
-                response.headers["X-Honoua-Active-Err2"] = _sanitize_header(e2)
+                response.headers["X-Honoua-Active-Query"] = "error"
+                response.headers["X-Honoua-Active-Rows"] = "0"
+                response.headers["X-Honoua-Active-Err1"] = err
+
+            return []
 
     if response is not None:
         response.headers["X-Honoua-Active-Query"] = "min"
@@ -448,15 +459,7 @@ def get_active_challenges(
     # Construction réponse (anti-500 Pydantic)
     now = datetime.utcnow()
 
-    def _as_dt(v):
-        if v is None:
-            return None
-        if isinstance(v, datetime):
-            return v
-        if isinstance(v, date):
-            return datetime.combine(v, time.min)
-        return v
-
+    now = datetime.utcnow()
     results = []
     bad = 0
     first_valerr = None
@@ -464,7 +467,7 @@ def get_active_challenges(
     for r in rows:
         data = dict(r)
 
-        # Normalisation status
+        # Normalisation du status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
         results.append(ChallengeInstanceRead(**data))
 
@@ -473,7 +476,12 @@ def get_active_challenges(
         data["start_date"] = _as_dt(data.get("start_date")) or data["created_at"]
         data["end_date"]   = _as_dt(data.get("end_date"))   or data["start_date"]
 
-        # message optionnel
+        # Garantir timestamps non null (Pydantic)
+        data["created_at"] = _as_dt(data.get("created_at")) or now
+        data["start_date"] = _as_dt(data.get("start_date")) or data["created_at"]
+        data["end_date"]   = _as_dt(data.get("end_date"))   or data["start_date"]
+
+        # Champ optionnel mais on force la présence
         if "message" not in data:
             data["message"] = None
 
@@ -482,7 +490,13 @@ def get_active_challenges(
         except ValidationError as ve:
             bad += 1
             if first_valerr is None:
-                first_valerr = _sanitize_header(ve)
+                first_valerr = (
+                    str(ve)
+                    .encode("ascii", "backslashreplace")
+                    .decode("ascii")
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                )[:180]
             continue
 
     if response is not None and bad:
@@ -491,8 +505,8 @@ def get_active_challenges(
 
 
 
-
 # ---------- 4) Réévaluer un défi pour un utilisateur ---------- #
+
 
 @router.post(
     "/users/{user_id}/challenges/{instance_id}/evaluate",
