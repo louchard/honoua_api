@@ -299,41 +299,57 @@ def activate_challenge(
         raise
 
 # ---------- 3) Lister les défis actifs d'un utilisateur ---------- #
+
 @router.get(
     "/users/{user_id}/challenges/active",
     response_model=list[ChallengeInstanceRead],
 )
+
 def get_active_challenges(
     user_id: int,
     response: Response = None,
     db: Session = Depends(get_db),
 ):
     """
-    Endpoint prod-safe:
-    - ne dépend d'AUCUNE colonne optionnelle de public.challenge_instances
-      (ci.target_value, ci.reference_value, ci.current_value, ci.message, ci.progress_percent, ci.last_evaluated_at...)
-    - évite tout text=int sur user_id (comparaison uniquement en texte)
-    - start_date/end_date/created_at toujours non-nuls (évite ValidationError Pydantic)
-    - rollback systématique après erreur SQL (évite "current transaction is aborted")
-    - aucun chemin avec NameError
+    GET /users/{user_id}/challenges/active
+    Objectifs prod-safe :
+    - aucune dépendance aux colonnes optionnelles (ci.target_value, ci.reference_value, ci.current_value, ci.message...)
+    - pas de comparaison text=int (user_id)
+    - dates toujours non-null (COALESCE)
+    - rollback sur erreur SQL
+    - jamais de NameError
+    - jamais de 500 : on retourne [] en cas de souci
     """
-
     VERSION = "A54.24"
     LIMIT = 20
 
-    # Headers debug (sans cache)
-    if response is not None:
-        response.headers["X-Honoua-Active-Version"] = VERSION
-        response.headers["Cache-Control"] = "no-store"
+    # Permet d'appeler la fonction directement en tests sans Response injectée
+    if response is None:
+        response = Response()
+
+    def _ascii_180(err: Exception) -> str:
+        try:
+            s = str(err)
+        except Exception:
+            s = repr(err)
+        return (
+            s.encode("ascii", "backslashreplace")
+             .decode("ascii")
+             .replace("\n", " ")
+             .replace("\r", " ")
+        )[:180]
+
+    # Headers d'observabilité (prod)
+    response.headers["X-Honoua-Active-Version"] = VERSION
+    response.headers["Cache-Control"] = "no-store"
 
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
-    # Normalise maintenant en "timestamp sans timezone" (naïf UTC) pour limiter les surprises Pydantic
-    # now_utc_ts = NOW() AT TIME ZONE 'UTC' -> timestamp (sans tz)
-    sql_min = text(
-        f"""
+    # SQL "min" : uniquement des colonnes supposées exister (ci.id/ci.challenge_id/ci.status/ci.period_*/ci.created_at + c.code)
+    # + on renvoie NULL::... pour champs optionnels afin de satisfaire le response_model
+    sql_min = text(f"""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -359,13 +375,10 @@ def get_active_challenges(
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT {LIMIT}
-        """
-    )
+    """)
 
-    # Fallback ultra-minimal si le schéma challenges diffère (colonnes non présentes côté prod)
-    # -> on ne référence plus c.name / c.default_target_value / c.target_reduction_pct
-    sql_min_fallback = text(
-        f"""
+    # Fallback schema-safe si public.challenges diffère en prod (pas de name / default_target_value / target_reduction_pct)
+    sql_min_fallback = text(f"""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -391,116 +404,90 @@ def get_active_challenges(
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
         LIMIT {LIMIT}
-        """
-    )
+    """)
 
-    def _ascii_180(x: Exception) -> str:
-        return (
-            str(x)
-            .encode("ascii", "backslashreplace")
-            .decode("ascii")
-            .replace("\n", " ")
-            .replace("\r", " ")
-        )[:180]
-
-    rows = []
+    err1 = ""
     query_used = "min"
-    err1 = ""  # toujours défini -> jamais de NameError
 
-    # 1) Exécution SQL principale, puis fallback si mismatch schéma
     try:
-        rows = db.execute(sql_min, params).mappings().all()
-        query_used = "min"
-    except (ProgrammingError, OperationalError) as e:
-        # rollback obligatoire après exception SQL (transaction possiblement abort)
+        # 1) SQL : min puis fallback en cas d'écart de schéma
         try:
-            db.rollback()
-        except Exception:
-            pass
-
-        err1 = _ascii_180(e)
-        query_used = "fallback"
-        try:
-            rows = db.execute(sql_min_fallback, params).mappings().all()
-        except Exception as e2:
+            rows = db.execute(sql_min, params).mappings().all()
+            query_used = "min"
+        except (ProgrammingError, OperationalError) as e:
             try:
                 db.rollback()
             except Exception:
                 pass
-
-            # On reste prod-safe: on renvoie [] au lieu de 500
-            err2 = _ascii_180(e2)
-            if response is not None:
-                response.headers["X-Honoua-Active-Query"] = query_used
-                response.headers["X-Honoua-Active-Rows"] = "0"
-                response.headers["X-Honoua-Active-Resources"] = f"sql={query_used};rows=0;bad=0;limit={LIMIT};err=sql"
-                response.headers["X-Honoua-Active-Err1"] = err1
-                response.headers["X-Honoua-Active-Err2"] = err2
-            print("[A54][WARN] /challenges/active SQL KO (fallback failed):", err1, "|", err2)
+            err1 = _ascii_180(e)
+            query_used = "fallback"
+            rows = db.execute(sql_min_fallback, params).mappings().all()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            err1 = _ascii_180(e)
+            response.headers["X-Honoua-Active-Resources"] = f"sql=exception;rows=0;bad=0;limit={LIMIT};err=sql"
+            response.headers["X-Honoua-Active-Err1"] = err1
             return []
+
+        # 2) Build Pydantic : ignorer les lignes invalides (jamais 500)
+        from pydantic import ValidationError
+
+        results: list[ChallengeInstanceRead] = []
+        seen_ids: set[int] = set()
+        bad = 0
+        first_valerr = ""
+
+        for r in rows:
+            data = dict(r)
+
+            iid = data.get("instance_id")
+            if iid is not None:
+                if iid in seen_ids:
+                    continue
+                seen_ids.add(iid)
+
+            try:
+                data["status"] = to_api_status(to_db_status(data.get("status") or ""))
+                data.setdefault("message", None)
+                results.append(ChallengeInstanceRead(**data))
+            except ValidationError as ve:
+                bad += 1
+                if not first_valerr:
+                    first_valerr = _ascii_180(ve)
+                continue
+            except Exception as e:
+                bad += 1
+                if not first_valerr:
+                    first_valerr = _ascii_180(e)
+                continue
+
+        # 3) Headers observabilité
+        response.headers["X-Honoua-Active-Query"] = query_used
+        response.headers["X-Honoua-Active-Rows"] = str(len(results))
+        response.headers["X-Honoua-Active-Resources"] = f"sql={query_used};rows={len(results)};bad={bad};limit={LIMIT}"
+        if err1:
+            response.headers["X-Honoua-Active-Err1"] = err1
+        if bad:
+            response.headers["X-Honoua-Active-Bad"] = str(bad)
+            response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
+
+        return results
+
     except Exception as e:
+        # Catch-all absolu : jamais de 500
         try:
             db.rollback()
         except Exception:
             pass
-
         err1 = _ascii_180(e)
-        if response is not None:
-            response.headers["X-Honoua-Active-Query"] = "exception"
-            response.headers["X-Honoua-Active-Rows"] = "0"
-            response.headers["X-Honoua-Active-Resources"] = f"sql=exception;rows=0;bad=0;limit={LIMIT};err=sql"
-            response.headers["X-Honoua-Active-Err1"] = err1
-        print("[A54][WARN] /challenges/active SQL KO (exception):", err1)
+        response.headers["X-Honoua-Active-Query"] = "catchall"
+        response.headers["X-Honoua-Active-Rows"] = "0"
+        response.headers["X-Honoua-Active-Resources"] = f"sql=catchall;rows=0;bad=0;limit={LIMIT};err=python"
+        response.headers["X-Honoua-Active-Err1"] = err1
         return []
-
-    # 2) Construction réponse Pydantic, en ignorant les lignes invalides
-    from pydantic import ValidationError
-
-    results: list[ChallengeInstanceRead] = []
-    seen_ids: set[int] = set()
-    bad = 0
-    first_valerr = ""
-
-    for r in rows:
-        data = dict(r)
-
-        iid = data.get("instance_id")
-        if iid is not None:
-            if iid in seen_ids:
-                continue
-            seen_ids.add(iid)
-
-        # Normalisation status (DB -> API FR)
-        data["status"] = to_api_status(to_db_status(data.get("status") or ""))
-
-        # Sécuriser les champs optionnels pour le modèle (même si SQL les fournit déjà)
-        data.setdefault("message", None)
-        data.setdefault("reference_value", None)
-        data.setdefault("current_value", None)
-        data.setdefault("target_value", None)
-        data.setdefault("progress_percent", None)
-        data.setdefault("last_evaluated_at", None)
-
-        try:
-            results.append(ChallengeInstanceRead(**data))
-        except ValidationError as ve:
-            bad += 1
-            if not first_valerr:
-                first_valerr = _ascii_180(ve)
-            continue
-
-    # 3) Headers observabilité
-    if response is not None:
-        response.headers["X-Honoua-Active-Query"] = query_used
-        response.headers["X-Honoua-Active-Rows"] = str(len(results))
-        response.headers["X-Honoua-Active-Resources"] = f"sql={query_used};rows={len(results)};bad={bad};limit={LIMIT}"
-        if bad:
-            response.headers["X-Honoua-Active-Bad"] = str(bad)
-            response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
-        if err1:
-            response.headers["X-Honoua-Active-Err1"] = err1
-
-    return results
 
 
 
@@ -511,11 +498,15 @@ def get_active_challenges(
     "/users/{user_id}/challenges/{instance_id}/evaluate",
     response_model=ChallengeEvaluateResponse,
 )
+
 def evaluate_challenge(
     user_id: int,
     instance_id: int,
+    response: Response = None,
     db: Session = Depends(get_db),
 ):
+
+
     """
     Réévalue un défi (recalcule la progression et le statut) pour un utilisateur.
     Version A54.19 : prise en charge du défi CO2 30 jours (CO2_30D_MINUS_10).
