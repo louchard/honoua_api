@@ -153,7 +153,7 @@ def activate_challenge(
     """
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
     challenge_id = int(payload.challenge_id)
     now = datetime.utcnow()
@@ -200,7 +200,7 @@ def activate_challenge(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
-            WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+            WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.id DESC
@@ -318,6 +318,19 @@ def get_active_challenges(
         response.headers["X-Honoua-Active-Version"] = "A54.23"
         response.headers["Cache-Control"] = "no-store"
 
+    from datetime import datetime, date, time
+    from pydantic import ValidationError
+    from sqlalchemy.exc import ProgrammingError, OperationalError
+
+    def _as_dt(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, date):
+            return datetime.combine(v, time.min)
+        return v
+
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
@@ -346,6 +359,8 @@ def get_active_challenges(
             COALESCE(ci.created_at, NOW()) AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
+
+        -- On compare TOUJOURS en texte pour éviter text=int
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
@@ -401,6 +416,12 @@ def get_active_challenges(
 
         # Normalisation status
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
+        results.append(ChallengeInstanceRead(**data))
+
+        # Champs requis datetime: jamais None
+        data["created_at"] = _as_dt(data.get("created_at")) or now
+        data["start_date"] = _as_dt(data.get("start_date")) or data["created_at"]
+        data["end_date"]   = _as_dt(data.get("end_date"))   or data["start_date"]
 
         # Sécuriser présence de champs optionnels
         if "message" not in data:
@@ -427,7 +448,6 @@ def get_active_challenges(
             response.headers["X-Honoua-Active-Bad"] = str(bad)
             response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
 
-    return results
 
 
 
