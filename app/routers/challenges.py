@@ -309,13 +309,21 @@ def get_active_challenges(
     db: Session = Depends(get_db),
 ):
     """
-    Return active challenges for a user (prod-safe).
-    - No dependency on optional columns in challenge_instances (message, reference_value, current_value...)
-    - Avoid text=int comparison on user_id
-    - Avoid Pydantic datetime errors if period_start/period_end are NULL
+    Endpoint prod-safe:
+    - ne dépend d'AUCUNE colonne optionnelle de public.challenge_instances
+      (ci.target_value, ci.reference_value, ci.current_value, ci.message, ci.progress_percent, ci.last_evaluated_at...)
+    - évite tout text=int sur user_id (comparaison uniquement en texte)
+    - start_date/end_date/created_at toujours non-nuls (évite ValidationError Pydantic)
+    - rollback systématique après erreur SQL (évite "current transaction is aborted")
+    - aucun chemin avec NameError
     """
+
+    VERSION = "A54.24"
+    LIMIT = 20
+
+    # Headers debug (sans cache)
     if response is not None:
-        response.headers["X-Honoua-Active-Version"] = "A54.23"
+        response.headers["X-Honoua-Active-Version"] = VERSION
         response.headers["Cache-Control"] = "no-store"
 
     from datetime import datetime, date, time
@@ -335,9 +343,10 @@ def get_active_challenges(
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
-    # IMPORTANT: on ne lit AUCUNE colonne optionnelle de ci (message/reference_value/current_value/target_value/progress...)
-    # On force aussi start_date/end_date/created_at à être non-nuls via COALESCE => évite les 500 Pydantic.
-    sql_min = text("""
+    # Normalise maintenant en "timestamp sans timezone" (naïf UTC) pour limiter les surprises Pydantic
+    # now_utc_ts = NOW() AT TIME ZONE 'UTC' -> timestamp (sans tz)
+    sql_min = text(
+        f"""
         SELECT
             ci.id AS instance_id,
             ci.challenge_id,
@@ -348,15 +357,47 @@ def get_active_challenges(
             'REDUCTION_PCT'::text AS logic_type,
             'DAYS'::text AS period_type,
             ci.status,
-            COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
-            COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
+            COALESCE(ci.period_start, ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS start_date,
+            COALESCE(ci.period_end,   ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS end_date,
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
             COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
-            COALESCE(ci.created_at, NOW()) AS created_at
+            COALESCE(ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS created_at
+        FROM public.challenge_instances ci
+        JOIN public.challenges c ON c.id = ci.challenge_id
+        WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+          AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
+        ORDER BY ci.id DESC
+        LIMIT {LIMIT}
+        """
+    )
+
+    # Fallback ultra-minimal si le schéma challenges diffère (colonnes non présentes côté prod)
+    # -> on ne référence plus c.name / c.default_target_value / c.target_reduction_pct
+    sql_min_fallback = text(
+        f"""
+        SELECT
+            ci.id AS instance_id,
+            ci.challenge_id,
+            c.code,
+            c.code AS name,
+            NULL::text AS description,
+            'CO2'::text AS metric,
+            'REDUCTION_PCT'::text AS logic_type,
+            'DAYS'::text AS period_type,
+            ci.status,
+            COALESCE(ci.period_start, ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS start_date,
+            COALESCE(ci.period_end,   ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS end_date,
+            NULL::numeric   AS reference_value,
+            NULL::numeric   AS current_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
+            NULL::numeric   AS progress_percent,
+            NULL::timestamp AS last_evaluated_at,
+            NULL::text      AS message,
+            COALESCE(ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
 
@@ -364,90 +405,115 @@ def get_active_challenges(
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
-        LIMIT 20
-    """)
+        LIMIT {LIMIT}
+        """
+    )
 
-    err1 = ""  # toujours défini => jamais de NameError même si on loggue err1
-    try:
-        rows = db.execute(sql_min, params).mappings().all()
-    except Exception as e:
-        # Après une erreur SQL, la transaction peut être "aborted" => rollback obligatoire
-        try:
-            rb = getattr(db, "rollback", None)
-            if callable(rb):
-                rb()
-        except Exception:
-            pass
-
-        err1 = (
-            str(e)
+    def _ascii_180(x: Exception) -> str:
+        return (
+            str(x)
             .encode("ascii", "backslashreplace")
             .decode("ascii")
             .replace("\n", " ")
             .replace("\r", " ")
         )[:180]
 
-        print("[A54][WARN] /challenges/active SQL KO -> return []. Detail:", err1)
+    rows = []
+    query_used = "min"
+    err1 = ""  # toujours défini -> jamais de NameError
 
+    # 1) Exécution SQL principale, puis fallback si mismatch schéma
+    try:
+        rows = db.execute(sql_min, params).mappings().all()
+        query_used = "min"
+    except (ProgrammingError, OperationalError) as e:
+        # rollback obligatoire après exception SQL (transaction possiblement abort)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+        err1 = _ascii_180(e)
+        query_used = "fallback"
+        try:
+            rows = db.execute(sql_min_fallback, params).mappings().all()
+        except Exception as e2:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+            # On reste prod-safe: on renvoie [] au lieu de 500
+            err2 = _ascii_180(e2)
+            if response is not None:
+                response.headers["X-Honoua-Active-Query"] = query_used
+                response.headers["X-Honoua-Active-Rows"] = "0"
+                response.headers["X-Honoua-Active-Resources"] = f"sql={query_used};rows=0;bad=0;limit={LIMIT};err=sql"
+                response.headers["X-Honoua-Active-Err1"] = err1
+                response.headers["X-Honoua-Active-Err2"] = err2
+            print("[A54][WARN] /challenges/active SQL KO (fallback failed):", err1, "|", err2)
+            return []
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+        err1 = _ascii_180(e)
         if response is not None:
-            response.headers["X-Honoua-Active-Query"] = "min"
+            response.headers["X-Honoua-Active-Query"] = "exception"
             response.headers["X-Honoua-Active-Rows"] = "0"
+            response.headers["X-Honoua-Active-Resources"] = f"sql=exception;rows=0;bad=0;limit={LIMIT};err=sql"
             response.headers["X-Honoua-Active-Err1"] = err1
-
+        print("[A54][WARN] /challenges/active SQL KO (exception):", err1)
         return []
 
-    # Construire la réponse sans faire planter l’endpoint si une ligne est invalide
+    # 2) Construction réponse Pydantic, en ignorant les lignes invalides
     from pydantic import ValidationError
 
     results: list[ChallengeInstanceRead] = []
     seen_ids: set[int] = set()
     bad = 0
-    first_valerr = None
+    first_valerr = ""
 
     for r in rows:
         data = dict(r)
 
-        # Anti-doublon (utile si un bug amont te renvoie 2x la même ligne)
         iid = data.get("instance_id")
         if iid is not None:
             if iid in seen_ids:
                 continue
             seen_ids.add(iid)
 
-        # Normalisation status
+        # Normalisation status (DB -> API FR)
         data["status"] = to_api_status(to_db_status(data.get("status") or ""))
-        results.append(ChallengeInstanceRead(**data))
 
-        # Champs requis datetime: jamais None
-        data["created_at"] = _as_dt(data.get("created_at")) or now
-        data["start_date"] = _as_dt(data.get("start_date")) or data["created_at"]
-        data["end_date"]   = _as_dt(data.get("end_date"))   or data["start_date"]
-
-        # Sécuriser présence de champs optionnels
-        if "message" not in data:
-            data["message"] = None
+        # Sécuriser les champs optionnels pour le modèle (même si SQL les fournit déjà)
+        data.setdefault("message", None)
+        data.setdefault("reference_value", None)
+        data.setdefault("current_value", None)
+        data.setdefault("target_value", None)
+        data.setdefault("progress_percent", None)
+        data.setdefault("last_evaluated_at", None)
 
         try:
             results.append(ChallengeInstanceRead(**data))
         except ValidationError as ve:
             bad += 1
-            if first_valerr is None:
-                first_valerr = (
-                    str(ve)
-                    .encode("ascii", "backslashreplace")
-                    .decode("ascii")
-                    .replace("\n", " ")
-                    .replace("\r", " ")
-                )[:180]
+            if not first_valerr:
+                first_valerr = _ascii_180(ve)
             continue
 
+    # 3) Headers observabilité
     if response is not None:
-        response.headers["X-Honoua-Active-Query"] = "min"
+        response.headers["X-Honoua-Active-Query"] = query_used
         response.headers["X-Honoua-Active-Rows"] = str(len(results))
+        response.headers["X-Honoua-Active-Resources"] = f"sql={query_used};rows={len(results)};bad={bad};limit={LIMIT}"
         if bad:
             response.headers["X-Honoua-Active-Bad"] = str(bad)
             response.headers["X-Honoua-Active-ValErr1"] = first_valerr or "validation_error"
-
+        if err1:
+            response.headers["X-Honoua-Active-Err1"] = err1
 
 
 
