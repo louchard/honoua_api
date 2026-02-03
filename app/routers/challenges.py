@@ -153,7 +153,7 @@ def activate_challenge(
     """
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-    params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
+    params = {"user_id_int": user_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
 
     challenge_id = int(payload.challenge_id)
     now = datetime.utcnow()
@@ -200,7 +200,7 @@ def activate_challenge(
             """
             SELECT ci.id
             FROM public.challenge_instances ci
-            WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
+            WHERE (ci.user_id = :user_id_int OR ci.user_id::text IN (:user_id_str, :user_id_uuid))
               AND ci.challenge_id = :challenge_id
               AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
             ORDER BY ci.id DESC
@@ -343,6 +343,19 @@ def get_active_challenges(
     response.headers["X-Honoua-Active-Version"] = VERSION
     response.headers["Cache-Control"] = "no-store"
 
+    from datetime import datetime, date, time
+    from pydantic import ValidationError
+    from sqlalchemy.exc import ProgrammingError, OperationalError
+
+    def _as_dt(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, date):
+            return datetime.combine(v, time.min)
+        return v
+
     user_id_str = str(user_id)
     user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
     params = {"user_id_str": user_id_str, "user_id_uuid": user_id_uuid}
@@ -393,13 +406,15 @@ def get_active_challenges(
             COALESCE(ci.period_end,   ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS end_date,
             NULL::numeric   AS reference_value,
             NULL::numeric   AS current_value,
-            NULL::numeric   AS target_value,
+            COALESCE(c.default_target_value, c.target_reduction_pct, 0)::numeric AS target_value,
             NULL::numeric   AS progress_percent,
             NULL::timestamp AS last_evaluated_at,
             NULL::text      AS message,
             COALESCE(ci.created_at, (NOW() AT TIME ZONE 'UTC')) AS created_at
         FROM public.challenge_instances ci
         JOIN public.challenges c ON c.id = ci.challenge_id
+
+        -- On compare TOUJOURS en texte pour éviter text=int
         WHERE ci.user_id::text IN (:user_id_str, :user_id_uuid)
           AND TRIM(UPPER(ci.status)) NOT IN ('SUCCESS','FAILED')
         ORDER BY ci.id DESC
