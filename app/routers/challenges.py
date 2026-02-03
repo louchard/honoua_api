@@ -232,10 +232,14 @@ def activate_challenge(
 
             db.commit()
 
+            user_id_str = str(user_id)
+            user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
+
             row = db.execute(
-                select_instance_sql,
-                {"instance_id": keep_id, "user_id": user_id_str},
+                select_sql,
+                {"instance_id": instance_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid},
             ).mappings().first()
+
 
             if row is None:
                 raise HTTPException(status_code=404, detail="Instance introuvable aprés nettoyage.")
@@ -539,7 +543,7 @@ def evaluate_challenge(
             COALESCE(ci.period_start, ci.created_at, NOW()) AS start_date,
             COALESCE(ci.period_end,   ci.created_at, NOW()) AS end_date,
             ci.status,
-            COALESCE(ci.created_at, NOW()) AS created_at
+            COALESCE(ci.created_at, NOW()) AS created_at,
             ci.updated_at,
             c.code,
             COALESCE(c.name, c.code) AS name,
