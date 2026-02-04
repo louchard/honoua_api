@@ -736,6 +736,13 @@ def evaluate_challenge(
         start_date = row.get("start_date") or now
         end_date = row.get("end_date") or (now + timedelta(days=30))
 
+        # Prod: la DB peut renvoyer des datetimes tz-aware ; on normalise en UTC naive
+        if getattr(start_date, "tzinfo", None) is not None:
+            start_date = start_date.astimezone(datetime.UTC).replace(tzinfo=None)
+        if getattr(end_date, "tzinfo", None) is not None:
+            end_date = end_date.astimezone(datetime.UTC).replace(tzinfo=None)
+
+
         # 2) Périodes
         ref_end = start_date
         ref_start = start_date - timedelta(days=30)
