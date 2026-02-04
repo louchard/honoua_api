@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import calendar
 import os
 import sys
@@ -738,10 +738,9 @@ def evaluate_challenge(
 
         # Prod: la DB peut renvoyer des datetimes tz-aware ; on normalise en UTC naive
         if getattr(start_date, "tzinfo", None) is not None:
-            start_date = start_date.astimezone(datetime.UTC).replace(tzinfo=None)
+            start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
         if getattr(end_date, "tzinfo", None) is not None:
-            end_date = end_date.astimezone(datetime.UTC).replace(tzinfo=None)
-
+            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
 
         # 2) Périodes
         ref_end = start_date
