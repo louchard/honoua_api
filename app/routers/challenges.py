@@ -610,7 +610,7 @@ def evaluate_challenge(
             # 0) FAST PATH (crucial pour les tests): une seule requête, sans to_regclass / information_schema
             # - si la prod n'a pas total_co2_g, ça lèvera une erreur SQL et on bascule sur le fallback schema
             try:
-                table_ref = table_name if IS_PYTEST else f"public.{table_name}"
+                table_ref = table_name  # prod: suivre le search_path (comme /api/cart/history)
                 q0 = text(f"""
                     SELECT
                         SUM(total_co2_g) AS total_co2_g,
