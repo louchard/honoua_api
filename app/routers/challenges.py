@@ -683,7 +683,7 @@ def evaluate_challenge(
                 SELECT
                     SUM({co2_expr}) AS total_co2_g,
                     COUNT(DISTINCT DATE(created_at)) AS days_count
-                FROM public.{table_name}
+                FROM {table_name}
                 WHERE user_id::text IN (:user_id_str, :user_id_uuid)
                   AND created_at >= :start
                   AND created_at {op} :end
