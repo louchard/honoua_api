@@ -554,7 +554,7 @@ def evaluate_challenge(
     def _table_exists(table_name: str) -> bool:
         res = db.execute(
             text("SELECT to_regclass(:fqtn) IS NOT NULL AS ok"),
-            {"fqtn": f"public.{table_name}"},
+            {"fqtn": table_name},
         )
         # SQLAlchemy Result
         try:
@@ -574,7 +574,7 @@ def evaluate_challenge(
             text("""
                 SELECT column_name
                 FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = :t
+                WHERE table_schema = ANY (current_schemas(true)) AND table_name = :t
             """),
             {"t": table_name},
         ).scalars().all()
