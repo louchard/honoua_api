@@ -532,7 +532,7 @@ def evaluate_challenge(
     - rollback sur erreur SQL
     - si erreur interne: 500 + header X-Honoua-Evaluate-Err1
     """
-    VERSION = "E54.03"
+    VERSION = "E54.04"
 
     if response is None:
         response = Response()
