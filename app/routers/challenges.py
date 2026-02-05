@@ -641,7 +641,7 @@ def evaluate_challenge(
 
         # 1) FAST PATH: total_co2_g (rapide)
         try:
-            table_ref = table_name if IS_PYTEST else f"honou.{table_name}"
+            table_ref = table_name if IS_PYTEST else co2_table_ref
             q0 = text(f"""
                     SELECT
                         SUM(total_co2_g) AS total_co2_g,
@@ -775,7 +775,7 @@ def evaluate_challenge(
                 SELECT
                     SUM({co2_expr}) AS total_co2_g,
                     COUNT(DISTINCT DATE(created_at)) AS days_count
-                FROM {table_name}
+                FROM {co2_table_ref}
                 WHERE user_id::text IN (:user_id_str, :user_id_uuid)
                   AND created_at >= :start
                   AND created_at {op} :end
@@ -978,7 +978,11 @@ def evaluate_challenge(
                 except Exception:
                     db.rollback()
 
-        response.headers["X-Honoua-Evaluate-Resources"] = f"table={table_name};ref_days={ref_days};cur_days={cur_days}"
+        response.headers["X-Honoua-Evaluate-Resources"] = (
+            f"table={table_name};schema={co2_table_schema};ref={co2_table_ref};"
+            f"ref_days={ref_days};cur_days={cur_days}"
+            )
+
 
         return ChallengeEvaluateResponse(
             instance_id=row["instance_id"],
