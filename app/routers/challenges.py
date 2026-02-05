@@ -825,8 +825,9 @@ def evaluate_challenge(
         if code != "CO2_30D_MINUS_10":
             raise HTTPException(status_code=400, detail="Ce type de défi n'est pas pris en charge.")
 
-        start_date = row.get("start_date") or now
-        end_date = row.get("end_date") or (now + timedelta(days=30))
+        start_date = row.get("start_date") or row.get("created_at") or now
+        end_date = row.get("end_date") or (start_date + timedelta(days=30))
+
 
         # Prod: la DB peut renvoyer des datetimes tz-aware ; on normalise en UTC naive
         if getattr(start_date, "tzinfo", None) is not None:
