@@ -218,35 +218,35 @@ def activate_challenge(
 
         # 1bis) Si existe : garder la plus récente + supprimer les doublons
         if existing_rows:
-            keep_id = existing_rows[0]["id"]
-            old_ids = [r["id"] for r in existing_rows[1:]]
-
-            if old_ids:
-                cleanup_sql = (
-                    text(
-                        """
-                        DELETE FROM public.challenge_instances
-                        WHERE id IN :old_ids
-                        """
-                    ).bindparams(bindparam("old_ids", expanding=True))
-                )
-                db.execute(cleanup_sql, {"old_ids": old_ids})
-
-            db.commit()
+            keep_id = existing_rows[0].get("id")
 
             user_id_str = str(user_id)
             user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
 
             row = db.execute(
-                select_sql,
-                {"instance_id": instance_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid},
-            ).mappings().first()
+                select_instance_sql,
+                {"instance_id": keep_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid},
+            ).mappings().first() or {}
 
+            # Désactiver les autres instances ACTIVE (si doublons)
+            if len(existing_rows) > 1:
+                ids_to_deactivate = [r.get("id") for r in existing_rows[1:] if r.get("id") is not None]
+                if ids_to_deactivate:
+                    db.execute(update_deactivate_sql, {"ids": ids_to_deactivate, "now": now})
+                    db.commit()
 
-            if row is None:
-                raise HTTPException(status_code=404, detail="Instance introuvable aprés nettoyage.")
+            return ChallengeInstanceRead(
+                instance_id=row.get("instance_id") or keep_id,
+                challenge_id=row["challenge_id"],
+                code=row.get("code") or "",
+                name=row.get("name") or "",
+                metric=row.get("metric") or "",
+                logic_type=row.get("logic_type") or "",
+                start_date=row.get("start_date"),
+                end_date=row.get("end_date"),
+                status=to_api_status(row.get("status") or DB_STATUS_ACTIVE),
+            )
 
-            return ChallengeInstanceRead(**row)
 
         # 2) Sinon : créer une nouvelle instance
         start_date = today0
@@ -569,16 +569,33 @@ def evaluate_challenge(
         except Exception:
             return False
 
-    def _table_columns(table_name: str) -> set[str]:
-        rows = db.execute(
-            text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema = ANY (current_schemas(true)) AND table_name = :t
-            """),
-            {"t": table_name},
-        ).scalars().all()
-        return set(rows or [])
+    def _table_columns(schema: str, table: str) -> set[str]:
+        try:
+            rows = db.execute(
+                text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = :schema
+                      AND table_name = :table
+                """),
+                {"schema": schema, "table": table},
+            ).scalars().all()
+            return set(rows or [])
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return set()
+
+
+    def _pick_ts_col(cols: set[str]) -> str | None:
+        # ordre volontaire : on privilégie created_at si présent, sinon validated_at, etc.
+        for c in ("created_at", "validated_at", "timestamp", "ts"):
+            if c in cols:
+                return c
+        return None
+
 
     def _pick_co2_expr(cols: set[str]) -> tuple[str | None, str]:
         # Retourne (expr_sql, unit) où expr_sql est en grammes
@@ -593,198 +610,97 @@ def evaluate_challenge(
         return None, "na"
 
     # --- CO2 helpers (schema-aware) ---
+        
     co2_table_schema = ""
     co2_table_ref = ""
 
+    co2_ts_col = "created_at"
+    co2_co2_expr = "total_co2_g"
+
     def _co2_sum_and_days(
         table_name: str,
-        start_dt: datetime,
-        end_dt: datetime,
+        start: datetime,
+        end: datetime,
         end_inclusive: bool,
     ) -> tuple[float | None, int]:
-        nonlocal co2_table_schema, co2_table_ref
+        nonlocal co2_table_schema, co2_table_ref, co2_ts_col, co2_co2_expr
 
+        # borne haute inclusive/exclusive
         op = "<=" if end_inclusive else "<"
 
-        params = {
-            "user_id_str": str(user_id),
-            "user_id_uuid": f"00000000-0000-0000-0000-{user_id:012d}",
-            "start": start_dt,
-            "end": end_dt,
-        }
+        # Normaliser les datetimes (évite offset-naive vs offset-aware)
+        from datetime import timezone
 
-        # 0) Choisir la bonne table en prod (priorité: honou, fallback: public)
+        def _naive_utc(dt: datetime) -> datetime:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+        start = _naive_utc(start)
+        end = _naive_utc(end)
+
+        # Résolution schéma/table
         if IS_PYTEST:
-            schema = ""
-            table_ref = table_name if IS_PYTEST else f"honou.{table_name}"
+            schema = "public"
+            table_ref = table_name
+            cols = {"total_co2_g", "created_at"}
         else:
-            schema = "honou"
-            table_ref = f"{schema}.{table_name}"
-            try:
-                r = db.execute(
-                    text("SELECT to_regclass(:fqtn) IS NOT NULL AS ok"),
-                    {"fqtn": table_ref},
-                ).mappings().first() or {}
-                if not r.get("ok"):
-                    schema = "public"
-                    table_ref = f"{schema}.{table_name}"
-            except Exception:
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
+            if _table_exists(f"honou.{table_name}"):
+                schema = "honou"
+            elif _table_exists(f"public.{table_name}"):
                 schema = "public"
-                table_ref = f"{schema}.{table_name}"
+            else:
+                co2_table_schema = ""
+                co2_table_ref = ""
+                return None, 0
+
+            table_ref = f"{schema}.{table_name}"
+            cols = _table_columns(schema, table_name)
 
         co2_table_schema = schema
         co2_table_ref = table_ref
 
-        # 1) FAST PATH: total_co2_g (rapide)
-        try:
-            table_ref = table_name if IS_PYTEST else co2_table_ref
-            q0 = text(f"""
-                    SELECT
-                        SUM(total_co2_g) AS total_co2_g,
-                        COUNT(DISTINCT DATE(created_at)) AS days_count
-                    FROM {table_ref}
-                    WHERE user_id::text IN (:user_id_str, :user_id_uuid)
-                      AND created_at >= :start
-                      AND created_at {op} :end
-                """)
-            res0 = db.execute(q0, params)
-
-
-            # Compat FakeSession / retours simplifiés : dict direct ou liste/tuple de dict
-            if isinstance(res0, dict):
-                r0 = res0
-            elif isinstance(res0, (list, tuple)) and res0 and isinstance(res0[0], dict):
-                r0 = res0[0]
-            else:
-                try:
-                    r0 = res0.mappings().first() or {}
-                except Exception:
-                    try:
-                        r0 = res0.first() or {}
-                    except Exception:
-                        r0 = {}
-
-            # Normaliser r0 en dict (Row/tuple)
-            if hasattr(r0, "_mapping"):
-                r0 = dict(r0._mapping)
-            elif not isinstance(r0, dict):
-                if isinstance(r0, (list, tuple)) and len(r0) >= 2:
-                    r0 = {"total_co2_g": r0[0], "days_count": r0[1]}
-                else:
-                    try:
-                        r0 = dict(r0)
-                    except Exception:
-                        r0 = {}
-
-            total0 = r0.get("total_co2_g")
-            days0 = int(r0.get("days_count") or 0)
-            return (float(total0) if total0 is not None else None), days0
-
-        except (ProgrammingError, OperationalError):
-            try:
-                db.rollback()
-            except Exception:
-                pass
-        except Exception:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-
-        # 2) FALLBACK: détecter colonne CO2 dans le BON schema
-        if IS_PYTEST:
-            return None, 0
-
-        try:
-            cols = set(
-                db.execute(
-                    text("""
-                        SELECT column_name
-                        FROM information_schema.columns
-                        WHERE table_schema = :schema AND table_name = :t
-                    """),
-                    {"schema": co2_table_schema, "t": table_name},
-                ).scalars().all() or []
-            )
-        except Exception:
-            cols = set()
-
-        # expr en grammes
-        co2_expr = None
-        if "total_co2_g" in cols:
-            co2_expr = "total_co2_g"
-        elif "co2_g" in cols:
-            co2_expr = "co2_g"
-        elif "total_co2_kg" in cols:
-            co2_expr = "(total_co2_kg * 1000)"
-        elif "co2_kg" in cols:
-            co2_expr = "(co2_kg * 1000)"
-
-        if (co2_expr is None) or ("created_at" not in cols):
-            return None, 0
-
-        try:
-            q = text(f"""
-                SELECT
-                    SUM({co2_expr}) AS total_co2_g,
-                    COUNT(DISTINCT DATE(created_at)) AS days_count
-                FROM {table_ref}
-                WHERE user_id::text IN (:user_id_str, :user_id_uuid)
-                  AND created_at >= :start
-                  AND created_at {op} :end
-            """)
-            r = db.execute(q, params).mappings().first() or {}
-            total_g = r.get("total_co2_g")
-            days = int(r.get("days_count") or 0)
-            return (float(total_g) if total_g is not None else None), days
-        except Exception:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            return None, 0
-
-        except (ProgrammingError, OperationalError):
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-        except Exception:
-                # on laisse aussi une chance au fallback (prod-safe)
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-
-            # 1) FALLBACK PROD-SAFE : détection schema (seulement si la requête rapide a échoué)
-        if not _table_exists(table_name):
-                return None, 0
-
-        cols = _table_columns(table_name)
+        # Colonnes
+        ts_col = _pick_ts_col(cols)
         co2_expr, _unit = _pick_co2_expr(cols)
-        if co2_expr is None:
-                return None, 0
-        if "created_at" not in cols:
-                return None, 0
+        if not ts_col or not co2_expr:
+            return None, 0
+
+        co2_ts_col = ts_col
+        co2_co2_expr = co2_expr
+
+        # user_id en text + "uuid-like" (pour matcher les deux formats)
+        user_id_str = str(user_id)
+        user_id_uuid = f"00000000-0000-0000-0000-{int(user_id):012d}"
 
         q = text(f"""
-                SELECT
-                    SUM({co2_expr}) AS total_co2_g,
-                    COUNT(DISTINCT DATE(created_at)) AS days_count
-                FROM {co2_table_ref}
-                WHERE user_id::text IN (:user_id_str, :user_id_uuid)
-                  AND created_at >= :start
-                  AND created_at {op} :end
-            """)
-        r = db.execute(q, params).mappings().first() or {}
+            SELECT
+                SUM({co2_expr}) AS total_co2_g,
+                COUNT(DISTINCT DATE({ts_col})) AS days_count
+            FROM {table_ref}
+            WHERE user_id::text IN (:user_id_str, :user_id_uuid)
+              AND {ts_col} >= :start
+              AND {ts_col} {op} :end
+        """)
+
+        params = {
+            "user_id_str": user_id_str,
+            "user_id_uuid": user_id_uuid,
+            "start": start,
+            "end": end,
+        }
+
+        try:
+            r = db.execute(q, params).mappings().first() or {}
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return None, 0
 
         total_g = r.get("total_co2_g")
         days = int(r.get("days_count") or 0)
         return (float(total_g) if total_g is not None else None), days
+
 
     # --- Core ---
     try:
@@ -824,7 +740,9 @@ def evaluate_challenge(
         code = (row.get("code") or "").upper()
         if code != "CO2_30D_MINUS_10":
             raise HTTPException(status_code=400, detail="Ce type de défi n'est pas pris en charge.")
-
+        
+        # start_date / end_date peuvent ne pas exister selon le schéma DB.
+        # Fallback robuste : created_at (activation) puis now.
         start_date = row.get("start_date") or row.get("created_at") or now
         end_date = row.get("end_date") or (start_date + timedelta(days=30))
 
@@ -898,7 +816,7 @@ def evaluate_challenge(
             # En tests (FakeSession), on ne fait pas d'UPDATE DB : le test attend uniquement
             # select_row -> ref_row -> cur_row. Les UPDATE/commit/rollback cassent l'ordre.
         response.headers["X-Honoua-Evaluate-Resources"] = (
-            f"table={table_name};schema={co2_table_schema};ref={co2_table_ref};ref_days={ref_days};cur_days={cur_days};pytest={int(IS_PYTEST)}"
+            f"table={table_name};schema={co2_table_schema};ref={co2_table_ref};ts={co2_ts_col};expr={co2_co2_expr};ref_days={ref_days};cur_days={cur_days};pytest={int(IS_PYTEST)}"
             )
 
         if IS_PYTEST:
