@@ -220,6 +220,9 @@ def activate_challenge(
         if existing_rows:
             keep_id = existing_rows[0].get("id")
 
+            user_id_str = str(user_id)
+            user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
+
             row = db.execute(
                 select_instance_sql,
                 {"instance_id": keep_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid},
