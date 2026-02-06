@@ -220,9 +220,6 @@ def activate_challenge(
         if existing_rows:
             keep_id = existing_rows[0].get("id")
 
-            user_id_str = str(user_id)
-            user_id_uuid = f"00000000-0000-0000-0000-{user_id:012d}"
-
             row = db.execute(
                 select_instance_sql,
                 {"instance_id": keep_id, "user_id_str": user_id_str, "user_id_uuid": user_id_uuid},
@@ -616,90 +613,156 @@ def evaluate_challenge(
 
     co2_ts_col = "created_at"
     co2_co2_expr = "total_co2_g"
-
     def _co2_sum_and_days(
-        table_name: str,
-        start: datetime,
-        end: datetime,
-        end_inclusive: bool,
-    ) -> tuple[float | None, int]:
-        nonlocal co2_table_schema, co2_table_ref, co2_ts_col, co2_co2_expr
+            table_name: str,
+            start: datetime,
+            end: datetime,
+            end_inclusive: bool,
+        ) -> tuple[float | None, int]:
+            nonlocal co2_table_schema, co2_table_ref, co2_ts_col, co2_co2_expr
 
-        # borne haute inclusive/exclusive
-        op = "<=" if end_inclusive else "<"
+            op = "<=" if end_inclusive else "<"
 
-        # Normaliser les datetimes (évite offset-naive vs offset-aware)
-        from datetime import timezone
-
-        def _naive_utc(dt: datetime) -> datetime:
-            return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
-
-        start = _naive_utc(start)
-        end = _naive_utc(end)
-
-        # Résolution schéma/table
-        if IS_PYTEST:
-            schema = "public"
-            table_ref = table_name
-            cols = {"total_co2_g", "created_at"}
-        else:
-            if _table_exists(f"honou.{table_name}"):
-                schema = "honou"
-            elif _table_exists(f"public.{table_name}"):
+            # 0) Résolution schéma/table_ref (prod: honou -> public ; tests: table brute)
+            if IS_PYTEST:
                 schema = "public"
+                table_ref = table_name
             else:
-                co2_table_schema = ""
-                co2_table_ref = ""
-                return None, 0
+                if _table_exists(f"honou.{table_name}"):
+                    schema = "honou"
+                    table_ref = f"honou.{table_name}"
+                elif _table_exists(f"public.{table_name}"):
+                    schema = "public"
+                    table_ref = f"public.{table_name}"
+                else:
+                    co2_table_schema = ""
+                    co2_table_ref = ""
+                    return None, 0
 
-            table_ref = f"{schema}.{table_name}"
+            co2_table_schema = schema
+            co2_table_ref = table_ref
+
+            params = {
+                "user_id_str": str(user_id),
+                "user_id_uuid": str(user_id),
+                "start": start,
+                "end": end,
+            }
+
+            # 1) FAST PATH: total_co2_g + created_at (rapide)
+            try:
+                q0 = text(f"""
+                    SELECT
+                        SUM(total_co2_g) AS total_co2_g,
+                        COUNT(DISTINCT DATE(created_at)) AS days_count
+                    FROM {table_ref}
+                    WHERE user_id::text IN (:user_id_str, :user_id_uuid)
+                      AND created_at >= :start
+                      AND created_at {op} :end
+                """)
+                res0 = db.execute(q0, params)
+
+                # Normaliser res0 (FakeSession / SQLAlchemy)
+                if isinstance(res0, dict):
+                    r0 = res0
+                elif isinstance(res0, (list, tuple)) and res0 and isinstance(res0[0], dict):
+                    r0 = res0[0]
+                else:
+                    try:
+                        r0 = res0.mappings().first() or {}
+                    except Exception:
+                        try:
+                            r0 = res0.first() or {}
+                        except Exception:
+                            r0 = {}
+
+                if hasattr(r0, "_mapping"):
+                    r0 = dict(r0._mapping)
+                elif not isinstance(r0, dict):
+                    if isinstance(r0, (list, tuple)) and len(r0) >= 2:
+                        r0 = {"total_co2_g": r0[0], "days_count": r0[1]}
+                    else:
+                        try:
+                            r0 = dict(r0)
+                        except Exception:
+                            r0 = {}
+
+                total0 = r0.get("total_co2_g")
+                days0 = int(r0.get("days_count") or 0)
+
+                # 🔥 CHANGEMENT PERCUTANT :
+                # Si le fast path renvoie 0 jours en prod, on tente le fallback (validated_at, co2_kg, etc.)
+                if (not IS_PYTEST) and days0 == 0:
+                    raise ValueError("FAST_PATH_ZERO_DAYS")
+
+                co2_ts_col = "created_at"
+                co2_co2_expr = "total_co2_g"
+                return (float(total0) if total0 is not None else None), days0
+
+            except (ProgrammingError, OperationalError, ValueError):
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+            # 2) FALLBACK: détection colonnes (prod-safe)
             cols = _table_columns(schema, table_name)
 
-        co2_table_schema = schema
-        co2_table_ref = table_ref
+            ts_col = _pick_ts_col(cols) or "created_at"
+            co2_expr, _unit = _pick_co2_expr(cols)
 
-        # Colonnes
-        ts_col = _pick_ts_col(cols)
-        co2_expr, _unit = _pick_co2_expr(cols)
-        if not ts_col or not co2_expr:
-            return None, 0
+            if not co2_expr:
+                return None, 0
 
-        co2_ts_col = ts_col
-        co2_co2_expr = co2_expr
+            # Si created_at existe mais est "vide", et validated_at existe, on bascule sur validated_at
+            if ts_col == "created_at" and "validated_at" in cols:
+                try:
+                    q_chk = text(f"SELECT 1 FROM {table_ref} WHERE created_at IS NOT NULL LIMIT 1")
+                    if db.execute(q_chk).first() is None:
+                        ts_col = "validated_at"
+                except Exception:
+                    pass
 
-        # user_id en text + "uuid-like" (pour matcher les deux formats)
-        user_id_str = str(user_id)
-        user_id_uuid = f"00000000-0000-0000-0000-{int(user_id):012d}"
+            co2_ts_col = ts_col
+            co2_co2_expr = co2_expr
 
-        q = text(f"""
-            SELECT
-                SUM({co2_expr}) AS total_co2_g,
-                COUNT(DISTINCT DATE({ts_col})) AS days_count
-            FROM {table_ref}
-            WHERE user_id::text IN (:user_id_str, :user_id_uuid)
-              AND {ts_col} >= :start
-              AND {ts_col} {op} :end
-        """)
+            q = text(f"""
+                SELECT
+                    SUM({co2_expr}) AS total_co2_g,
+                    COUNT(DISTINCT DATE({ts_col})) AS days_count
+                FROM {table_ref}
+                WHERE user_id::text IN (:user_id_str, :user_id_uuid)
+                  AND {ts_col} >= :start
+                  AND {ts_col} {op} :end
+            """)
+            res = db.execute(q, params)
 
-        params = {
-            "user_id_str": user_id_str,
-            "user_id_uuid": user_id_uuid,
-            "start": start,
-            "end": end,
-        }
-
-        try:
-            r = db.execute(q, params).mappings().first() or {}
-        except Exception:
             try:
-                db.rollback()
+                r = res.mappings().first() or {}
             except Exception:
-                pass
-            return None, 0
+                try:
+                    r = res.first() or {}
+                except Exception:
+                    r = {}
 
-        total_g = r.get("total_co2_g")
-        days = int(r.get("days_count") or 0)
-        return (float(total_g) if total_g is not None else None), days
+            if hasattr(r, "_mapping"):
+                r = dict(r._mapping)
+            elif not isinstance(r, dict):
+                try:
+                    r = dict(r)
+                except Exception:
+                    r = {}
+
+            total_g = r.get("total_co2_g")
+            days = int(r.get("days_count") or 0)
+            return (float(total_g) if total_g is not None else None), days
+
+    
 
 
     # --- Core ---
