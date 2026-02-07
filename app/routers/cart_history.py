@@ -92,6 +92,11 @@ async def create_cart_history(
     if not x_honoua_user_id:
         raise HTTPException(status_code=400, detail="Missing X-Honoua-User-Id")
 
+    try:
+        user_id = int(x_honoua_user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid X-Honoua-User-Id (integer expected)")
+
 
     # 1) Date / heure actuelle (UTC)
     now = datetime.now(timezone.utc)
@@ -106,7 +111,7 @@ async def create_cart_history(
     #   - period_type  = "month"
     #   - period_label = "YYYY-MM" (ex : "2025-11")
     params = {
-        "user_id": x_honoua_user_id,  # pas de multi-profil pour le moment
+        "user_id": user_id,  # pas de multi-profil pour le moment
         "period_type": "month",
         "period_label": period_month,
         "total_co2_g": payload.total_co2_g,
