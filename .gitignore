@@ -22,3 +22,8 @@ _wip/
 payload_cart.json
 payload_cart_history.json
 
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
