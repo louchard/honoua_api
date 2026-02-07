@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -76,7 +76,9 @@ router = APIRouter(prefix="/api/cart", tags=["cart"])
 async def create_cart_history(
     payload: CartHistoryCreate,
     db: Session = Depends(get_db),
+    x_honoua_user_id: Optional[str] = Header(None, alias="X-Honoua-User-Id"),
 ):
+
     """
     Endpoint appelé quand l’utilisateur valide son Panier CO₂.
 
@@ -85,6 +87,12 @@ async def create_cart_history(
     - Insère une ligne dans honou.co2_cart_history
     - Renvoie un objet de confirmation
     """
+
+    # ✅ INSÉRER ICI (juste avant "# 1) Date / heure actuelle (UTC)")
+    if not x_honoua_user_id:
+        raise HTTPException(status_code=400, detail="Missing X-Honoua-User-Id")
+
+
     # 1) Date / heure actuelle (UTC)
     now = datetime.now(timezone.utc)
 
@@ -98,7 +106,7 @@ async def create_cart_history(
     #   - period_type  = "month"
     #   - period_label = "YYYY-MM" (ex : "2025-11")
     params = {
-        "user_id": None,  # pas de multi-profil pour le moment
+        "user_id": x_honoua_user_id,  # pas de multi-profil pour le moment
         "period_type": "month",
         "period_label": period_month,
         "total_co2_g": payload.total_co2_g,
@@ -112,7 +120,7 @@ async def create_cart_history(
 
     # 4) INSERT adapté à la structure réelle de la table SQLite
     stmt = text("""
-        INSERT INTO co2_cart_history (
+        INSERT INTO honou.co2_cart_history (
             user_id,
             period_type,
             period_label,
@@ -162,10 +170,20 @@ async def create_cart_history(
 
 
 @router.get("/history", response_model=List[CartHistoryItem])
-def list_cart_history(limit: int = 50):
+def list_cart_history(
+    limit: int = 50,
+    x_honoua_user_id: Optional[str] = Header(None, alias="X-Honoua-User-Id"),
+):
+
     """
     Retourne les `limit` derniers paniers CO2, du plus récent au plus ancien.
     """
+
+    # ✅ INSÉRER ICI (juste avant "db = SessionLocal()")
+    if not x_honoua_user_id:
+        raise HTTPException(status_code=400, detail="Missing X-Honoua-User-Id")
+
+
     db = SessionLocal()
     try:
         stmt = text("""
@@ -181,12 +199,14 @@ def list_cart_history(limit: int = 50):
                 days_captured_by_tree,
                 tree_equivalent,
                 created_at
-            FROM co2_cart_history
+            FROM honou.co2_cart_history
+            WHERE user_id = :user_id
             ORDER BY id DESC
             LIMIT :limit;
         """)
 
-        result = db.execute(stmt, {"limit": limit})
+
+        result = db.execute(stmt, {"limit": limit, "user_id": x_honoua_user_id})
         rows = result.fetchall()
 
         items = [
