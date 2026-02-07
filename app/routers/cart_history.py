@@ -216,7 +216,7 @@ def list_cart_history(
         items = [
             CartHistoryItem(
                 id=row[0],
-                user_id=row[1],
+                user_id=str(row[1]),
                 period_type=row[2],
                 period_label=row[3],
                 total_co2_g=row[4],
