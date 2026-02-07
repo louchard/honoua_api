@@ -17,3 +17,8 @@ openapi_prod.json
 
 _wip/
 
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
