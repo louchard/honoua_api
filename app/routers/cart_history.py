@@ -182,7 +182,11 @@ def list_cart_history(
     # ✅ INSÉRER ICI (juste avant "db = SessionLocal()")
     if not x_honoua_user_id:
         raise HTTPException(status_code=400, detail="Missing X-Honoua-User-Id")
-
+    
+    try:
+        user_id = int(x_honoua_user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid X-Honoua-User-Id (integer expected)")
 
     db = SessionLocal()
     try:
@@ -206,7 +210,7 @@ def list_cart_history(
         """)
 
 
-        result = db.execute(stmt, {"limit": limit, "user_id": x_honoua_user_id})
+        result = db.execute(stmt, {"limit": limit, "user_id": user_id})
         rows = result.fetchall()
 
         items = [
