@@ -17,7 +17,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
 
 
     // === Config API Honoua ===
-  // PrioritÃ© des sources (de la plus forte Ã  la plus faible) :
+  // Priorité des sources (de la plus forte à  la plus faible) :
   // 1) window.HONOUA_API_BASE_OVERRIDE (utile en debug)
   // 2) <meta name="honoua-api-base" content="https://api.honoua.com">
   // 3) localStorage('honoua_api_base')
@@ -118,7 +118,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
     }
 
     // IMPORTANT : éviter conflits caméra → stoppe ton stream avant Quagga
-    await stopStream(); // stopStream appelle dÃ©jÃ  stopZXing; on va y ajouter stopQuagga plus bas
+    await stopStream(); // stopStream appelle déjà  stopZXing; on va y ajouter stopQuagga plus bas
 
     // Quagga va créer son propre flux ; on masque la vidéo native
     try { if ($video) $video.style.display = 'none'; } catch(_) {}
@@ -171,7 +171,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
               window.handleEanDetected(code);
             }
 
-            // Stoppe aprÃ¨s dÃ©tection (optionnel, mais utile pour Ã©viter â€œrafalesâ€)
+            // Stoppe aprés détection (optionnel, mais utile pour éviter les erreurs)
             stopQuagga();
           } catch(_) {}
         });
@@ -216,7 +216,7 @@ console.log("[Honoua] build: 2026-01-09-H002");
   let lastChallengeAutoEval = 0;
 
   // --- ZXing (EAN/Code-barres) : iPhone stable ---
-  // Important : on Ã©vite decodeFromVideoDevice (double ouverture camÃ©ra). On scanne depuis le stream dÃ©jÃ  ouvert.
+  // Important : on acvite decodeFromVideoDevice (double ouverture caméra). On scanne depuis le stream dèjà  ouvert.
   let __zxingReader = null;
   let __zxingControls = null;
   let __lastZxingText = '';
@@ -392,7 +392,7 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
 
   // Fonction unique pour initialiser la localisation
   function initUserLocation() {
-    // 1) Essayer d'abord de relire une localisation dÃ©jÃ  stockÃ©e
+    // 1) Essayer d'abord de relire une localisation déjà  stockés
     try {
       const raw = localStorage.getItem('honoua_user_location');
       if (raw) {
@@ -464,41 +464,42 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
   // On lance la tentative de récupération des coordonnées dès le chargement du scanner
   initUserLocation();
   
-    // === Identifiant utilisateur anonyme (GLOBAL, robuste) ===
     // === Identifiant utilisateur (GLOBAL) — entier PostgreSQL (int4) ===
   (function ensureHonouaUserIdGlobal() {
-    const KEY = 'honoua_user_id';
-    const KEY_LEGACY = 'honoua_user_id_legacy';
+  const KEY = 'honoua_user_id';
+  const KEY_LEGACY = 'honoua_user_id_legacy';
 
-    const isIntString = (v) => typeof v === 'string' && /^[0-9]+$/.test(v);
+  const isIntString = (v) => typeof v === 'string' && /^[0-9]+$/.test(v);
 
-    let id = '';
-    try { id = localStorage.getItem(KEY) || ''; } catch (e) { id = ''; }
+  let id = '';
+  try { id = localStorage.getItem(KEY) || ''; } catch (e) { id = ''; }
 
-    // Migration : si ancien UUID / "uid_xxx", on sauvegarde et on régénère un entier
-    if (!isIntString(id)) {
-      if (id) {
-        try { localStorage.setItem(KEY_LEGACY, id); } catch (e) {}
-      }
-
-      // Génère un entier dans [100000000, 2000000000] (<= 2 147 483 647)
-      const min = 100000000;
-      const max = 2000000000;
-      const n = Math.floor(Math.random() * (max - min + 1)) + min;
-      id = String(n);
-
-      try { localStorage.setItem(KEY, id); } catch (e) {}
-      console.log('[Honoua] user_id (int) créé/migré :', id);
-    } else {
-      console.log('[Honoua] user_id existant (int) :', id);
+  // Migration : si ancien UUID / "uid_xxx", on sauvegarde et on régénère un entier
+  if (!isIntString(id)) {
+    if (id) {
+      try { localStorage.setItem(KEY_LEGACY, id); } catch (e) {}
     }
 
-    window.HONOUA_USER_ID = id;
-    window.getHonouaUserId = function () {
-      try { return localStorage.getItem(KEY) || window.HONOUA_USER_ID || ''; }
-      catch (e) { return window.HONOUA_USER_ID || ''; }
-    };
-  })();
+    // Génère un entier dans [100000000, 2000000000] (<= 2 147 483 647)
+    const min = 100000000;
+    const max = 2000000000;
+    const n = Math.floor(Math.random() * (max - min + 1)) + min;
+    id = String(n);
+
+    try { localStorage.setItem(KEY, id); } catch (e) {}
+    console.log('[Honoua] user_id (int) créé/migré :', id);
+  } else {
+    console.log('[Honoua] user_id existant (int) :', id);
+  }
+
+  window.HONOUA_USER_ID = id;
+  window.getHonouaUserId = function () {
+    try { return localStorage.getItem(KEY) || window.HONOUA_USER_ID || ''; }
+    catch (e) { return window.HONOUA_USER_ID || ''; }
+  };
+})();
+
+
 
 
 
@@ -640,10 +641,6 @@ function showScannerError(text, persistent = false) {
   }
 
 
-
-
-
-
   function setCo2Waiting(){
     if(!$co2Card) return;
     $co2Badge.textContent = 'En attente de scan';
@@ -781,7 +778,7 @@ function showScannerError(text, persistent = false) {
       $co2ReliabilityLabel.textContent = text;
     }
 
-    // Etiquette Ã  droite du total
+    // Etiquette à  droite du total
     if ($co2PackageLabel) {
       $co2PackageLabel.textContent = 'Type d’emballage';
     }
@@ -884,7 +881,7 @@ function showScannerError(text, persistent = false) {
 
     const data = await resp.json();
 
-    // 1ï¸âƒ£ Mise Ã  jour de la carte COâ‚‚ (comportement existant)
+    // 1)¸après la Mise à  jour de la carte CO2‚ (comportement existant)
     renderCo2Result(data);
 
     // A55.10 — Message succès
@@ -894,7 +891,7 @@ if (typeof data.co2_kg_total === "number") {
   showScannerInfo("Scan réussi.");
 }
 
-    // 2ï¸âƒ£ Construction de l’objet ecoProduct pour EcoSELECT
+    // 2)¸après la Construction de l’objet ecoProduct pour EcoSELECT
     try {
       // On récupère le total CO₂ en kg depuis les bons champs de l’API
       let co2TotalKg = null;
@@ -908,7 +905,7 @@ if (typeof data.co2_kg_total === "number") {
 
       const hasCo2Data = co2TotalKg !== null;
 
-      // Distance : prioritÃ© Ã  distance_km
+      // Distance : priorité à  distance_km
       let distanceKm = null;
       if (typeof data.distance_km === 'number' && !isNaN(data.distance_km)) {
         distanceKm = data.distance_km;
@@ -939,7 +936,7 @@ if (typeof data.co2_kg_total === "number") {
         reliabilityLevel
       };
 
-      // 3ï¸âƒ£ Envoi Ã  EcoSELECT (si dispo)
+      // 3)¸après Envoi à  EcoSELECT (si dispo)
       if (typeof window.ecoSelectAddProduct === 'function') {
         window.ecoSelectAddProduct(ecoProduct);
       } else {
@@ -957,7 +954,7 @@ if (typeof data.co2_kg_total === "number") {
     try {
       addToCartFromApiResponse(data, ean);
 
-      // Mise Ã  jour de l'UI du panier
+      // Mise à  jour de l'UI du panier
       if (typeof renderCo2Cart === 'function') {
         renderCo2Cart();
       }
@@ -1136,7 +1133,7 @@ if (typeof data.co2_kg_total === "number") {
   async function waitForVideoReady(video, timeoutMs = 2500) {
     if (!video) return false;
 
-    // Si dÃ©jÃ  prÃªt
+    // Si déjà  prêt
     if (video.videoWidth > 0 && video.videoHeight > 0) return true;
 
     return await new Promise((resolve) => {
@@ -1360,7 +1357,7 @@ async function startWith(deviceId){
   window.handleEanDetected = function(ean){
     if (!ean) return;
 
-    // Marque une dÃ©tection (empÃªche le watchdog de conclure Ã  une absence de scan)
+    // Marque une détection (empêche le watchdog de conclure à  une absence de scan)
     markEanDetected();
 
     console.log('handleEanDetected (fallback) appelé avec :', ean);
@@ -1591,7 +1588,7 @@ window.co2Cart = co2Cart;
 
 
 /**
- * Trouve l'index d'un produit dans le panier Ã  partir de son EAN.
+ * Trouve l'index d'un produit dans le panier à  partir de son EAN.
  * @param {string|number} ean
  * @returns {number} index ou -1 si non trouvé
  */
@@ -1601,7 +1598,7 @@ function findCartItemIndex(ean) {
 }
 
 /**
- * Ajoute / met Ã  jour un produit dans le panier Ã  partir de la rÃ©ponse API.
+ * Ajoute / met à  jour un produit dans le panier à  partir de la réponse API.
  * NE GÈRE PAS LE DOM.
  * @param {object} apiData - données renvoyées par /api/v1/co2/product/{ean}
  * @param {string|number} ean - code-barres scanné
@@ -1611,7 +1608,7 @@ function findCartItemIndex(ean) {
   const eanStr = String(ean);
 
   // ==== 1. Normalisation des champs depuis l'API ====
-  // âš ï¸ Adapte ici les noms exacts de champs de ton API si besoin.
+  // Après Adapte ici les noms exacts de champs de ton API si besoin.
  
   const productName =
     apiData.product_name ||      // cas 1 : nom "standard"
@@ -1625,12 +1622,12 @@ function findCartItemIndex(ean) {
   // CO2 par unité (en g CO2e)
   let co2UnitG = null;
 
-  // 1) Ancien format : dÃ©jÃ  en grammes
+  // 1) Ancien format : déjà  en grammes
   if (typeof apiData.co2_total_g === "number") {
     co2UnitG = apiData.co2_total_g;
 
   } else if (typeof apiData.co2_total === "number") {
-    // Peut dÃ©jÃ  Ãªtre en g dans certains anciens endpoints
+    // Peut déjà  être en g dans certains anciens endpoints
     co2UnitG = apiData.co2_total;
 
   // 2) Nouveau format : en kilogrammes → on convertit en g
@@ -1687,7 +1684,7 @@ function findCartItemIndex(ean) {
 
   const hasCo2Data = Number.isFinite(co2UnitG) && co2UnitG > 0;
 
-  // ==== 2. Mise Ã  jour du panier ====
+  // ==== 2. Mise à  jour du panier ====
   const idx = findCartItemIndex(eanStr);
   const now = Date.now();
 
@@ -1739,10 +1736,10 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
     co2Cart.push(newItem);
   } else {
-    // â™»ï¸ Produit dÃ©jÃ  prÃ©sent â†’ demander confirmation avant d'augmenter la quantitÃ©
+    // Après Produit déjà  présent peut demander confirmation avant d'augmenter la quantité
     const item = co2Cart[idx];
 
-    // On met Ã  jour les infos les plus rÃ©centes (mÃªme si l'utilisateur refuse)
+    // On met à  jour les infos les plus récentes (même si l'utilisateur refuse)
     if (distanceKm != null) item.distance_km = distanceKm;
     if (co2PackagingG != null) item.co2_packaging_g = co2PackagingG;
     if (origin != null) item.origin = origin;
@@ -1750,14 +1747,14 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
 
     const currentQty = item.quantity || 1;
         const confirmMsg =
-          `Produit dÃ©jÃ  scannÃ© (quantitÃ© actuelle : x${currentQty}).\n\n` +
-          `Ajouter Ã  nouveau ?`;
+          `Produit déjà  scanné (quantité actuelle : x${currentQty}).\n\n` +
+          `Ajouter à  nouveau ?`;
 
         const ok = window.confirm(confirmMsg);
 
 
     if (!ok) {
-      // âŒ L'utilisateur refuse : on ne change pas la quantitÃ© ni le total COâ‚‚
+      // à L'utilisateur refuse : on ne change pas la quantité ni le total CO2‚
       item.last_scan_at = now;
       return;
     }
@@ -1770,9 +1767,9 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
       item.co2_unit_g = co2UnitG;
     }
 
-    // Mise Ã  jour du total CO2 (0 si pas de donnÃ©es CO2)
+    // Mise Ã  jour du total CO2 (0 si pas de données CO2)
     if (item.has_co2_data || hasCo2Data) {
-      // Si l'item avait dÃ©jÃ  des donnÃ©es CO2 ou en a maintenant
+      // Si l'item avait déjà  des données CO2 ou en a maintenant
       item.has_co2_data = item.has_co2_data || hasCo2Data;
       const unit = item.co2_unit_g;
       item.co2_total_g = Number.isFinite(unit) ? unit * item.quantity : 0;
@@ -1936,7 +1933,7 @@ function mapCategoryForGraph(rawCategoryText) {
   return "Autres";
 }
 /**
- * Couleur associÃ©e Ã  chaque catÃ©gorie pour le graphique.
+ * Couleur associée  chaque catégorie pour le graphique.
  * (Version globale, utilisable partout)
  */
 function getCategoryColor(cat) {
@@ -1955,7 +1952,7 @@ window.getCategoryColor = getCategoryColor;
 
 
 /**
- * Dessine un camembert simple Ã  partir des totaux COâ‚‚ par catÃ©gorie.
+ * Dessine un camembert simple à  partir des totaux CO2‚ par catégorie.
  *
  * @param {Object} totals - ex : { 'Viande': 1234, 'Végétaux': 567, ... } en g
  * @param {number} totalAll - somme de toutes les catégories en g
@@ -2026,7 +2023,7 @@ if (cart.length === 0) {
 
           const history = honouaGetCartHistory().slice(0, 2);
 
-          // Supprime l'ancien bloc si dÃ©jÃ  rendu
+          // Supprime l'ancien bloc si déjà  rendu
           ul.querySelectorAll('li[data-lastcarts="1"]').forEach(n => n.remove());
 
           const li = document.createElement('li');
@@ -2054,7 +2051,7 @@ if (cart.length === 0) {
 
       // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
         try {
-          // Totaux : on prend ce que tu affiches dÃ©jÃ  dans le DOM (robuste)
+          // Totaux : on prend ce que tu affiches déjà  dans le DOM (robuste)
           const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
           const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
 
@@ -2228,7 +2225,7 @@ function renderCo2Cart() {
   }
 
   // =========================
-  // 2) Mise Ã  jour des 4 cercles
+  // 2) Mise à  jour des 4 cercles
   // =========================
   if ($circleTotalCo2 && $circleTotalDist && $circleAvgCo2 && $circleAvgDist) {
     let totalCo2G        = 0;
@@ -2557,10 +2554,10 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
     const totalItems = totals.total_items || 0;
 
     const totalCo2Kg = totalCo2G / 1000;
-    // =========================
-      // Suivi CO2 — sauvegarde du panier (MVP)
-      // =========================
-    // Distance totale (pondérée par quantité) — pour historique localStorage
+  // =========================
+  // Suivi CO2 — sauvegarde du panier (MVP)
+  // =========================
+  // Distance totale (pondérée par quantité) — pour historique localStorage
   // Parse robuste: accepte number, string, "12,3", " 12.3 "
         const toNum = (v) => {
           if (v == null) return 0;
@@ -2666,7 +2663,7 @@ const $catBox               = document.getElementById('co2-cart-report-categorie
         // Règle : 1 arbre = 30 jours de captation
         const treeEquivalent = daysCaptured / 30;
 
-        // Mise Ã  jour du petit bloc numÃ©rique
+        // Mise à  jour du petit bloc numérique
         if ($treeNumber) {
           if (treeEquivalent < 1) {
             $treeNumber.textContent = '< 1';
@@ -2716,7 +2713,7 @@ if ($treeIcons && $treeBadge) {
 
     $treeIcons.textContent = icons;
 
-    // Mise Ã  jour du nombre rÃ©el
+    // Mise à  jour du nombre réél
     if (treeEquivalent < 1) {
       $treeBadge.textContent = "(< 1)";
     } else {
@@ -3337,131 +3334,106 @@ function honouaRenderLastTwoCartsInReco() {
 // A53 – Chargement de l'historique CO₂ (fiabilisé)
 // ==============================
 // Endpoint /api/cart/history absent en prod (404) : on désactive côté front pour éviter le spam réseau/console.
-// Le jour oÃ¹ l’endpoint est disponible, repasser Ã  false.
-let __CO2_CART_HISTORY_DISABLED = true;
-
+// Le jour CO2 l’endpoint est disponible, repasser Ã  false.
+// ==============================
+// A53 — Chargement historique panier (API)
+// ==============================
+// Endpoint actif en PROD : on ne désactive plus par défaut.
+let __CO2_CART_HISTORY_DISABLED = false;
 
 async function loadCo2CartHistory(limit = 5) {
-  const $list = document.getElementById("co2-cart-history-list");
-  const $reportList = document.getElementById("co2-report-history-list"); // ✅ historique dans le rapport
+  const $legacyList = document.getElementById('co2-cart-history-list');   // ex: page suivi-co2
+  const $reportList = document.getElementById('co2-report-history-list'); // scan-impact (rapport)
 
-  if (!$list) {
-    console.warn("[Historique CO2] Élément #co2-cart-history-list introuvable.");
+  // Aucun conteneur sur cette page → rien à faire
+  if (!$legacyList && !$reportList) {
+    console.warn('[Historique CO2] Aucun conteneur trouvé (#co2-cart-history-list / #co2-report-history-list).');
     return;
   }
 
-  // Si l’endpoint n’existe pas en API (404), on stoppe les refetch suivants.
+  const renderHtml = (html) => {
+    if ($legacyList) $legacyList.innerHTML = html;
+    if ($reportList) $reportList.innerHTML = html;
+  };
+
+  const clearLists = () => {
+    if ($legacyList) $legacyList.innerHTML = '';
+    if ($reportList) $reportList.innerHTML = '';
+  };
+
   if (__CO2_CART_HISTORY_DISABLED) {
-    $list.innerHTML = `
-      <p class="co2-cart-history-empty">
-        Historique indisponible pour le moment.
-      </p>`;
-    if ($reportList) $reportList.innerHTML = "";
+    renderHtml(`<p class="co2-cart-history-empty">Historique indisponible (API).</p>`);
     return;
   }
 
   try {
-    const res = await fetch(`${CART_HISTORY_ENDPOINT}?limit=${limit}`, {
+    const userId =
+      (window.getHonouaUserId && typeof window.getHonouaUserId === 'function')
+        ? window.getHonouaUserId()
+        : (localStorage.getItem('honoua_user_id') || '');
 
-      credentials: 'same-origin',
+    const resp = await fetch(`${CART_HISTORY_ENDPOINT}?limit=${limit}`, {
       headers: {
         'Accept': 'application/json',
-        'X-Honoua-User-Id': (window.getHonouaUserId ? window.getHonouaUserId() : '')
+        'X-Honoua-User-Id': userId
       }
     });
 
-
-      if (!res.ok) {
+    if (!resp.ok) {
       // 404 = endpoint non disponible : on désactive définitivement côté front
-      if (res.status === 404) {
+      if (resp.status === 404) {
         __CO2_CART_HISTORY_DISABLED = true;
-        console.info("[Historique CO2] /api/cart/history indisponible (404) -> historique désactivé côté front.");
-        $list.innerHTML = `
-          <p class="co2-cart-history-empty">
-            Historique indisponible pour le moment.
-          </p>`;
-        if ($reportList) $reportList.innerHTML = "";
+        renderHtml(`<p class="co2-cart-history-empty">Historique indisponible (API non activée).</p>`);
         return;
       }
+      throw new Error(`HTTP ${resp.status}`);
+    }
 
-      // Autres erreurs : on garde un message, mais sans spam agressif
-      console.warn("[Historique CO2] Erreur HTTP /api/cart/history :", res.status);
-      $list.innerHTML = `
-        <p class="co2-cart-history-empty">
-          Historique indisponible (erreur de chargement).
-        </p>`;
-      if ($reportList) $reportList.innerHTML = "";
+    const items = await resp.json();
+
+    if (!Array.isArray(items) || items.length === 0) {
+      renderHtml(`<p class="co2-cart-history-empty">Aucun historique disponible.</p>`);
       return;
     }
 
+    clearLists();
 
-    const raw = await res.json();
-    // On réutilise normalizeHistoryResponse défini plus haut
-    const history = normalizeHistoryResponse(raw);
+    items.forEach((it) => {
+      const dt = it && it.created_at ? new Date(it.created_at) : null;
+      const dateTxt = dt ? dt.toLocaleDateString('fr-FR') : '';
 
-    // Vider la liste
-      $list.innerHTML = "";
-      if ($reportList) $reportList.innerHTML = "";
+      const co2Kg = (Number(it.total_co2_g) || 0) / 1000;
+      const dist = Number(it.total_distance_km) || 0;
+      const nb = Number(it.nb_articles) || 0;
+      const avgDist = nb > 0 ? (dist / nb) : 0;
 
-
-    if (!history || history.length === 0) {
-      $list.innerHTML = `
-        <p class="co2-cart-history-empty">
-          Aucun panier validé pour le moment. Validez un panier pour voir son historique ici.
-        </p>`;
-      return;
-    }
-
-    history.forEach((item) => {
-      if (!item) return;
-
-      const co2Kg        = (Number(item.total_co2_g) || 0) / 1000;
-      const createdAt    = item.created_at
-        ? new Date(item.created_at).toLocaleDateString("fr-FR")
-        : (item.period_label || "Période inconnue");
-
-      const nbArticles   = Number(item.nb_articles) || 0;
-      const nbDistinct   = Number(item.nb_distinct_products) || 0;
-      const distanceKm   = Number(item.total_distance_km) || 0;
-      const treeEq       = Number(item.tree_equivalent) || 0;
-      const daysCaptured = Number(item.days_captured_by_tree) || 0;
-
-      const format = (val, dec = 0) =>
-        typeof formatNumberFr === "function"
-          ? formatNumberFr(val, dec)
-          : (val || 0).toFixed(dec);
-
-      const card = document.createElement("div");
-      card.className = "co2-history-card";
-
+      const card = document.createElement('div');
+      card.className = 'co2-cart-history-item';
       card.innerHTML = `
-        <div class="co2-history-card-header">
-          <h3>Panier #${item.id ?? "N/A"}</h3>
-          <span class="co2-history-date">${createdAt}</span>
-        </div>
-
-        <div class="co2-history-card-content">
-          <p><strong>CO₂ total :</strong> ${format(co2Kg, 2)} kg CO₂</p>
-          <p><strong>Articles :</strong> ${nbArticles} articles (${nbDistinct} distincts)</p>
-          <p><strong>Distance :</strong> ${format(distanceKm, 1)} km parcourus</p>
-          <p><strong>Équivalent arbres :</strong> ${format(treeEq, 2)} arbre(s) (théorique)</p>
-          <p><strong>Jours de captation :</strong> ${format(daysCaptured, 1)} jours</p>
+        <div class="co2-cart-history-date">${dateTxt}</div>
+        <div class="co2-cart-history-metrics">
+          🌿 ${co2Kg.toFixed(0).replace('.', ',')} kg
+          🚚 ${dist.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} km
+          📍 ${avgDist.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} km moy.
         </div>
       `;
 
-      $list.appendChild(card);
-      if ($reportList) $reportList.appendChild(card.cloneNode(true));
-
+      // Rend dans 1 ou 2 conteneurs selon la page
+      if ($legacyList && $reportList) {
+        $legacyList.appendChild(card);
+        $reportList.appendChild(card.cloneNode(true));
+      } else if ($legacyList) {
+        $legacyList.appendChild(card);
+      } else if ($reportList) {
+        $reportList.appendChild(card);
+      }
     });
-
-  } catch (err) {
-    console.error("[Historique CO2] Erreur réseau :", err);
-    $list.innerHTML = `
-      <p class="co2-cart-history-empty">
-        Historique indisponible (problème de connexion).
-      </p>`;
+  } catch (e) {
+    console.warn('[Historique CO2] load error:', e);
+    renderHtml(`<p class="co2-cart-history-empty">Impossible de charger l’historique.</p>`);
   }
 }
+
 
 
 // Charger automatiquement l'historique au démarrage
@@ -3525,7 +3497,7 @@ if (typeof refreshBudgetFromApi === 'function') {
   }
 
   /**
-   * Calcule l'Ã©tat du budget annuel Ã  partir de l'historique.
+   * Calcule l'état du budget annuel à  partir de l'historique.
    * @param {Array} items - historique des paniers
    * @returns {Object} budgetState
    */
@@ -3621,7 +3593,7 @@ if (typeof refreshBudgetFromApi === 'function') {
   }
 
   /**
-   * Met Ã  jour le DOM du Bloc Budget Ã  partir de budgetState.
+   * Met à  jour le DOM du Bloc Budget à  partir de budgetState.
    * @param {Object} state
    */
   function renderBudgetFromState(state) {
@@ -3807,7 +3779,7 @@ function aggregateHistoryByPeriod(items) {
 
 
   /**
-   * RÃ©cupÃ¨re l'historique et met Ã  jour le bloc Budget.
+   * Récupére l'historique et met à  jour le bloc Budget.
    */
   async function refreshBudgetFromApi() {
     const $budgetStatus = document.getElementById('budget-status');
@@ -3836,7 +3808,7 @@ function aggregateHistoryByPeriod(items) {
   
         });
 
-    // âœ… DÃ©fis : auto-refresh aprÃ¨s mise Ã  jour des donnÃ©es (guard anti-rÃ©gression)
+    // Un Défis : auto-refresh aprés mise à  jour des données (guard anti-régression)
     if (typeof buildChallengesFromAgg === "function" && typeof renderCo2ChallengesList === "function") {
       renderCo2ChallengesList(buildChallengesFromAgg(window.__honouaSuiviAgg, window.__honouaSuiviTrend));
     }
@@ -4339,13 +4311,13 @@ function buildChallengesFromAgg(agg, trend) {
   }
 
   // --- Défi 2 : Une semaine 100% locale (donnée indisponible pour l’instant) ---
-  // Respect contrainte : pas de spÃ©culation, donc on affiche "Ã  venir".
+  // Respect contrainte : pas de spéculation, donc on affiche à  venir".
   const localStatus = "non_atteint";
   const localProgress = 0;
-  const localMsg = "Ã€ venir : l’origine/label â€œlocalâ€ n’est pas encore enregistrÃ© dans les donnÃ©es.";
+  const localMsg = "à venir : l’origine/label et localé n’est pas encore enregistré dans les données.";
 
   // --- Défi 3 : Réduire la distance totale (dernier mois vs précédent) ---
-  // BasÃ© sur total_distance_km agrÃ©gÃ© (dÃ©jÃ  calculÃ© dans agg).
+  // Basé sur total_distance_km agréable  (déjà  calculé dans agg).
   let distStatus = "en_cours";
   let distProgress = 0;
   let distMsg = "Historique insuffisant : il faut au moins 2 mois de données.";
