@@ -465,33 +465,41 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
   initUserLocation();
   
     // === Identifiant utilisateur anonyme (GLOBAL, robuste) ===
+    // === Identifiant utilisateur (GLOBAL) — entier PostgreSQL (int4) ===
   (function ensureHonouaUserIdGlobal() {
     const KEY = 'honoua_user_id';
+    const KEY_LEGACY = 'honoua_user_id_legacy';
 
-    // 1) Crée si absent
-    let id = null;
-    try { id = localStorage.getItem(KEY); } catch(e) {}
+    const isIntString = (v) => typeof v === 'string' && /^[0-9]+$/.test(v);
 
-    if (!id) {
-      id = (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : ('uid_' + Math.random().toString(16).slice(2) + Date.now().toString(16));
-      try { localStorage.setItem(KEY, id); } catch(e) {}
-      console.log('[Honoua] user_id créé :', id);
+    let id = '';
+    try { id = localStorage.getItem(KEY) || ''; } catch (e) { id = ''; }
+
+    // Migration : si ancien UUID / "uid_xxx", on sauvegarde et on régénère un entier
+    if (!isIntString(id)) {
+      if (id) {
+        try { localStorage.setItem(KEY_LEGACY, id); } catch (e) {}
+      }
+
+      // Génère un entier dans [100000000, 2000000000] (<= 2 147 483 647)
+      const min = 100000000;
+      const max = 2000000000;
+      const n = Math.floor(Math.random() * (max - min + 1)) + min;
+      id = String(n);
+
+      try { localStorage.setItem(KEY, id); } catch (e) {}
+      console.log('[Honoua] user_id (int) créé/migré :', id);
     } else {
-      console.log('[Honoua] user_id existant :', id);
+      console.log('[Honoua] user_id existant (int) :', id);
     }
 
-    // 2) Expose un getter global (utilisable par tous les scripts)
     window.HONOUA_USER_ID = id;
     window.getHonouaUserId = function () {
-      try {
-        return localStorage.getItem(KEY) || window.HONOUA_USER_ID || '';
-      } catch (e) {
-        return window.HONOUA_USER_ID || '';
-      }
+      try { return localStorage.getItem(KEY) || window.HONOUA_USER_ID || ''; }
+      catch (e) { return window.HONOUA_USER_ID || ''; }
     };
   })();
+
 
 
           // ✅ Alias global sûr (optionnel mais pratique)
