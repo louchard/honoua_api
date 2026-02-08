@@ -502,6 +502,7 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
 
 
 
+
           // ✅ Alias global sûr (optionnel mais pratique)
           // Permet d'appeler getHonouaUserId() sans risquer un ReferenceError
           function getHonouaUserId() {
