@@ -2153,14 +2153,16 @@ if (cart.length === 0) {
         console.warn('[History] save failed', e);
       }
 
-
+      // ✅ Recos : rendu des 2 derniers paniers (lecture seule)
+      try {
         if (typeof honouaRenderLastTwoCartsInReco === 'function') {
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
         }
       } catch (e) {
-        console.warn('[History] save/render failed', e);
+        console.warn('[History] render failed', e);
       }
+
 
     } else {
       console.warn('[Panier CO2] generateCo2CartReport non défini (onclick)');
