@@ -5,7 +5,8 @@ reports/
 tests/**/reports/
 api.log
 .env
-* . d b  # Front statique Honoua (Render)
+* . d b 
+ # Front statique Honoua (Render)
 !app/static/index.html
 
  # local artifacts
@@ -16,4 +17,84 @@ eval_payload.json
 openapi_prod.json
 
 _wip/
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
+
+
+# local test payloads
+payload_cart.json
+payload_cart_history.json
 
