@@ -2122,9 +2122,10 @@ if (cart.length === 0) {
 
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
-        } catch (e) {
-          console.warn('[History] save/render failed', e);
         }
+      } catch (e) {
+        console.warn('[History] render failed', e);
+      }
 
     } else {
       console.warn('[Panier CO2] generateCo2CartReport non défini (onclick)');
