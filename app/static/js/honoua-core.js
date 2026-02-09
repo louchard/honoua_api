@@ -2108,18 +2108,51 @@ if (cart.length === 0) {
 
     // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
       try {
-        // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
-        const totalCo2Text =
-          document.getElementById('co2-cart-total-co2')?.textContent || '';
-        const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
-
-        const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+        // 1) Cart "réel" : on préfère co2Cart interne si dispo/non vide, sinon window.co2Cart
+        const cartNow =
+          (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) && co2Cart.length)
+            ? co2Cart
+            : (Array.isArray(window.co2Cart) ? window.co2Cart : []);
 
         // Snapshot (évite d’enregistrer une référence mutable)
         const cartSnapshot = cartNow.map(it => ({ ...it }));
 
-        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+        // 2) Calcul robuste du total CO2 (g)
+        const totalCo2G = cartSnapshot.reduce((sum, it) => {
+          const q = Number(it?.qty ?? it?.quantity ?? 1);
+          const unitG = Number(it?.co2_unit_g ?? it?.co2_g ?? 0);
+          if (!Number.isFinite(q) || !Number.isFinite(unitG)) return sum;
+          return sum + (q * unitG);
+        }, 0);
+
+        const totalCo2TextDom =
+          document.getElementById('co2-cart-total-co2')?.textContent || '';
+
+        const totalCo2Text =
+          totalCo2TextDom ||
+          (totalCo2G > 0
+            ? `Total : ${Math.round(totalCo2G).toLocaleString('fr-FR')} g CO₂e`
+            : '');
+
+        const totalsSummary = {
+          total_co2_text: totalCo2Text,
+          total_co2_g: totalCo2G
+        };
+
+        // 3) Évite d’écrire un “panier fantôme”
+        if (!cartSnapshot.length || totalCo2G <= 0) {
+          console.info('[History] skip save (empty or total=0)', {
+            len: cartSnapshot.length,
+            totalCo2G
+          });
+        } else {
+          honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+        }
+
+      } catch (e) {
+        console.warn('[History] save failed', e);
+      }
+
 
         if (typeof honouaRenderLastTwoCartsInReco === 'function') {
           honouaRenderLastTwoCartsInReco();
