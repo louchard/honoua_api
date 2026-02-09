@@ -508,6 +508,46 @@ try { await video.play(); } catch (_) { /* iOS peut "jouer" malgré l’exceptio
             return (window.getHonouaUserId ? window.getHonouaUserId() : '');
           }
 
+// === Axx — Migration: sépare l'historique FULL (recos) du METRICS (suivi) ===
+(function migrateHonouaCartHistoryKeys() {
+  const LEGACY = 'honoua_cart_history_v1';        // METRICS (suivi)
+  const FULL   = 'honoua_cart_history_full_v1';   // FULL (recos)
+  const FLAG   = 'honoua_cart_history_migrated_full_v1';
+
+  try {
+    if (localStorage.getItem(FLAG) === '1') return;
+
+    const raw = localStorage.getItem(LEGACY);
+    if (!raw) { localStorage.setItem(FLAG, '1'); return; }
+
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr) || arr.length === 0) { localStorage.setItem(FLAG, '1'); return; }
+
+    // FULL = objets {ts/items/totals...}
+    const full = arr.filter(o => o && (o.ts != null || o.items != null || o.totals != null));
+    // METRICS = objets {timestamp/co2_kg/distance_km...}
+    const metrics = arr.filter(o => o && (o.timestamp != null || o.co2_kg != null || o.distance_km != null));
+
+    if (full.length) {
+      let existing = [];
+      try {
+        existing = JSON.parse(localStorage.getItem(FULL) || '[]');
+        if (!Array.isArray(existing)) existing = [];
+      } catch (_) { existing = []; }
+
+      const seen = new Set(existing.map(x => x && x.ts).filter(Boolean));
+      const merged = [...full.filter(x => x && !seen.has(x.ts)), ...existing];
+      localStorage.setItem(FULL, JSON.stringify(merged.slice(0, 30)));
+    }
+
+    // On garde uniquement METRICS dans l'ancienne clé (suivi)
+    localStorage.setItem(LEGACY, JSON.stringify(metrics.slice(0, 30)));
+
+    localStorage.setItem(FLAG, '1');
+  } catch (e) {
+    console.warn('[History] migration keys failed', e);
+  }
+})();
 
 
   // Messages UX harmonisés pour le Panier CO₂ et l'historique
@@ -1991,7 +2031,7 @@ if (cart.length === 0) {
       generateCo2CartReport();
       console.log('[Panier CO2] generateCo2CartReport OK (onclick)');
 
-      const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_v1';
+      const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_full_v1';
 
         function honouaGetCartHistory() {
           try {
@@ -2007,13 +2047,31 @@ if (cart.length === 0) {
         function honouaSaveCartToHistory(cartItems, totalsSummary) {
           const history = honouaGetCartHistory();
 
-          history.unshift({
-            ts: Date.now(),
-            items: Array.isArray(cartItems) ? cartItems : [],
-            totals: totalsSummary || null
-          });
+      // Anti-doublon : si dernier panier très récent et mêmes totaux => on remplace
+      const nowTs = Date.now();
+      const last = history[0] || null;
 
-          localStorage.setItem(HONOUA_CART_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+      const lastTs = Number(last?.timestamp || 0);
+      const recent = lastTs && (nowTs - lastTs) < 60 * 1000; // 60s
+
+      const sameCo2 = recent && (Number(last?.co2_kg || 0) === (totalCo2G / 1000));
+      const sameItems = recent && (Number(last?.items_count || 0) === nbArticles);
+
+      const row = {
+        timestamp: nowTs,
+        co2_kg: totalCo2G / 1000,
+        distance_km: totalDistanceKm,
+        items_count: nbArticles
+      };
+
+      if (sameCo2 && sameItems) {
+        history[0] = row;         // remplace
+      } else {
+        history.unshift(row);      // ajoute
+      }
+
+      localStorage.setItem(HONOUA_CART_HISTORY_KEY, JSON.stringify(history.slice(0, 30)));
+
         }
 
         function honouaRenderLastTwoCartsInReco() {
@@ -2057,16 +2115,15 @@ if (cart.length === 0) {
           const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
           : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
 
-        // Snapshot (évite d’enregistrer une référence mutable)
-        const cartSnapshot = cartNow.map(it => ({ ...it }));
-
-        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
-
+      // ✅ Recommandations : afficher les 2 derniers paniers (sans double-enregistrement)
+      try {
+        if (typeof honouaRenderLastTwoCartsInReco === 'function') {
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
-        } catch (e) {
-          console.warn('[History] save/render failed', e);
         }
+      } catch (e) {
+        console.warn('[History] render failed', e);
+      }
 
     } else {
       console.warn('[Panier CO2] generateCo2CartReport non défini (onclick)');
@@ -2451,7 +2508,7 @@ function saveCartHistoryFromCart() {
 }
 
   
-  // =========================
+// =========================
 // Honoua — Historique paniers (storage)
 // =========================
 if (!window.honouaAppendCartToHistory) {
@@ -3258,7 +3315,7 @@ window.HonouaReportPie = window.HonouaReportPie || (function () {
 // ================================
 // Historique : stocker + afficher 2 derniers paniers
 // ================================
-const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_v1';
+const HONOUA_CART_HISTORY_KEY = 'honoua_cart_history_full_v1';
 
 function honouaGetCartHistory() {
   try {
