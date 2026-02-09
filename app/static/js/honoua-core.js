@@ -2106,25 +2106,27 @@ if (cart.length === 0) {
           ul.insertAdjacentElement('afterbegin', li);
         }
 
-      // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
-        try {
-          // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
-          const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
-          const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
+    // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
+      try {
+        // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
+        const totalCo2Text =
+          document.getElementById('co2-cart-total-co2')?.textContent || '';
+        const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
 
-          const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-            : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+        const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
 
-          // Snapshot (évite d’enregistrer une référence mutable)
-          const cartSnapshot = cartNow.map(it => ({ ...it }));
+        // Snapshot (évite d’enregistrer une référence mutable)
+        const cartSnapshot = cartNow.map(it => ({ ...it }));
 
-          honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
 
+        if (typeof honouaRenderLastTwoCartsInReco === 'function') {
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
         }
       } catch (e) {
-        console.warn('[History] render failed', e);
+        console.warn('[History] save/render failed', e);
       }
 
     } else {
