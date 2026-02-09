@@ -2108,16 +2108,18 @@ if (cart.length === 0) {
 
       // 4) Sauvegarde + affichage des 2 derniers paniers (dans Recommandations)
         try {
-          // Totaux : on prend ce que tu affiches déjà  dans le DOM (robuste)
+          // Totaux : on prend ce que tu affiches déjà dans le DOM (robuste)
           const totalCo2Text = document.getElementById('co2-cart-total-co2')?.textContent || '';
           const totalsSummary = { total_co2_text: totalCo2Text, total_co2_g: null };
 
           const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+            : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
 
-      // ✅ Recommandations : afficher les 2 derniers paniers (sans double-enregistrement)
-      try {
-        if (typeof honouaRenderLastTwoCartsInReco === 'function') {
+          // Snapshot (évite d’enregistrer une référence mutable)
+          const cartSnapshot = cartNow.map(it => ({ ...it }));
+
+          honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+
           honouaRenderLastTwoCartsInReco();
           console.log('[History] 2 derniers paniers rendus dans Recos');
         }
@@ -2132,10 +2134,6 @@ if (cart.length === 0) {
     console.error('[Panier CO2] generateCo2CartReport ERROR (onclick)', e);
   }
 };
-
-
-
-
       
     // === A51.7 – Rendu du Panier CO₂ dans l’UI ===
 
@@ -2153,7 +2151,7 @@ function formatNumberFr(value, decimals = 0) {
 }
 
 /**
- * Met Ã  jour l'affichage du panier COâ‚‚ dans la section HTML dÃ©diÃ©e
+ * Met à  jour l'affichage du panier CO2‚ dans la section HTML dédiée
  * + les 4 cercles + les 3 lignes de résumé sous les cercles.
  */
 function renderCo2Cart() {
@@ -2387,6 +2385,10 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if ($validateBtn) {
+    
+    // Anti-double-handler : on neutralise un onclick HTML/propriété s’il existe
+  try { validateBtn.onclick = null; validateBtn.removeAttribute('onclick'); } catch (_) {}
+
     $validateBtn.addEventListener('click', function () {
       if (!co2Cart || co2Cart.length === 0) {
         alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');

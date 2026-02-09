@@ -5,7 +5,7 @@
 // =========================
 (function () {
   const KEY = "honoua_cart_history_v1";
-  const ENABLE_DEMO = true; // <- mets false dès que l’intégration ScanImpact écrit de vraies données
+  const ENABLE_DEMO = false; // <- mets false dès que l’intégration ScanImpact écrit de vraies données
 
   if (!ENABLE_DEMO) return;
   if (localStorage.getItem(KEY)) return; // ne touche pas si déjà présent
