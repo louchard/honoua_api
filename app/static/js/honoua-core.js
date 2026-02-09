@@ -2427,10 +2427,19 @@ document.addEventListener('DOMContentLoaded', function () {
   try { validateBtn.onclick = null; validateBtn.removeAttribute('onclick'); } catch (_) {}
 
     $validateBtn.addEventListener('click', function () {
-      if (!co2Cart || co2Cart.length === 0) {
-        alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
-        return;
-      }
+
+      // CARTNOW_V1 — source unique + resync si window.co2Cart a été remplacé (ex: debug console)
+
+        if (Array.isArray(window.co2Cart) && window.co2Cart !== co2Cart) {
+          co2Cart = window.co2Cart;
+        }
+        
+
+        if (!cartNow.length) {
+          alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
+          return;
+        }
+
 
      const $reportSection = document.getElementById('co2-cart-report');
         if ($reportSection) $reportSection.classList.remove('hidden');
