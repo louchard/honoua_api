@@ -2028,6 +2028,30 @@ if (cart.length === 0) {
   // 3) Générer le rapport (recommandations)
   try {
     if (typeof generateCo2CartReport === 'function') {
+      // HYDRATE_CART_FOR_VALIDATE — si le panier est stocké par ScanImpact en localStorage
+        try {
+          const w = Array.isArray(window.co2Cart) ? window.co2Cart : null;
+
+          // Si window.co2Cart est vide, on tente de recharger depuis les clés connues
+          if (w && w.length === 0) {
+            const keys = ["honoua_co2_cart_v1", "honoua_co2_cart", "scanimpact_cart_v1", "co2_cart_v1"];
+            for (const k of keys) {
+              try {
+                const a = JSON.parse(localStorage.getItem(k) || "[]");
+                if (Array.isArray(a) && a.length) {
+                  // on remplit EN PLACE pour garder les références existantes
+                  w.length = 0;
+                  w.push(...a.map(it => ({ ...it })));
+                  console.log("[CartHydrate] loaded from", k, "len=", w.length);
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (e) {
+          console.warn("[CartHydrate] failed", e);
+        }
+
       generateCo2CartReport();
       console.log('[Panier CO2] generateCo2CartReport OK (onclick)');
 
@@ -2228,6 +2252,24 @@ function renderCo2Cart() {
 
     return;
   }
+
+  function honouaGetCartNow() {
+  // 1) co2Cart (si la page l’expose)
+  if (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) && co2Cart.length) return co2Cart;
+
+  // 2) window.co2Cart (si exposé)
+  if (Array.isArray(window.co2Cart) && window.co2Cart.length) return window.co2Cart;
+
+  // 3) localStorage (source observée chez toi)
+  try {
+    const raw = localStorage.getItem('honoua_co2_cart_v1');
+    const arr = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(arr) && arr.length) return arr;
+  } catch (e) {}
+
+  return [];
+}
+
 
   // =========================
   // 1) Cartes produits
@@ -2434,6 +2476,12 @@ document.addEventListener('DOMContentLoaded', function () {
           co2Cart = window.co2Cart;
         }
         
+        const cartNow = honouaGetCartNow(); // ✅ défini avant usage
+
+          if (!cartNow.length) {
+            alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
+            return;
+          }
 
         if (!cartNow.length) {
           alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
@@ -2455,8 +2503,10 @@ document.addEventListener('DOMContentLoaded', function () {
           ? window.getCo2CartTotals()
           : null;
 
-       const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-          : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+       // cartNow déjà calculé plus haut
+
+       //const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
+        //  : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
 
         // Snapshot (évite d’enregistrer une référence mutable)
         const cartSnapshot = cartNow.map(it => ({ ...it }));
