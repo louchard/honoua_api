@@ -2463,65 +2463,121 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  if ($validateBtn) {
-    
+    if ($validateBtn) {
+
     // Anti-double-handler : on neutralise un onclick HTML/propriété s’il existe
-  try { validateBtn.onclick = null; validateBtn.removeAttribute('onclick'); } catch (_) {}
+    try { $validateBtn.onclick = null; $validateBtn.removeAttribute('onclick'); } catch (_) {}
 
     $validateBtn.addEventListener('click', function () {
 
-      // CARTNOW_V1 — source unique + resync si window.co2Cart a été remplacé (ex: debug console)
+      // 1) Source de vérité du panier (ordre : co2Cart -> window.co2Cart -> localStorage)
+      let cartNow =
+        (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) && co2Cart.length)
+          ? co2Cart
+          : (Array.isArray(window.co2Cart) && window.co2Cart.length)
+            ? window.co2Cart
+            : (() => {
+                try {
+                  const raw = localStorage.getItem('honoua_co2_cart_v1');
+                  const arr = raw ? JSON.parse(raw) : [];
+                  return Array.isArray(arr) ? arr : [];
+                } catch (_) {
+                  return [];
+                }
+              })();
 
-        if (Array.isArray(window.co2Cart) && window.co2Cart !== co2Cart) {
-          co2Cart = window.co2Cart;
-        }
-        
-        const cartNow = honouaGetCartNow(); // ✅ défini avant usage
+      // Hydrate co2Cart + window.co2Cart si on vient du fallback localStorage
+      if (Array.isArray(cartNow) && cartNow.length && Array.isArray(co2Cart) && co2Cart.length === 0) {
+        co2Cart = cartNow.map(it => ({ ...it }));
+        window.co2Cart = co2Cart;
+        cartNow = co2Cart;
+      }
 
-          if (!cartNow.length) {
-            alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
-            return;
-          }
+      if (!Array.isArray(cartNow) || cartNow.length === 0) {
+        alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
+        return;
+      }
 
-        if (!cartNow.length) {
-          alert('Votre panier est vide. Scannez au moins un produit avant de le valider.');
-          return;
-        }
+      // 2) Affiche le rapport (UX)
+      const $reportSection = document.getElementById('co2-cart-report');
+      if ($reportSection) $reportSection.classList.remove('hidden');
 
-
-     const $reportSection = document.getElementById('co2-cart-report');
-        if ($reportSection) $reportSection.classList.remove('hidden');
-
-
-
-      // Génération du rapport local
-      generateCo2CartReport();
-
-      // Sauvegarde + affichage des 2 derniers paniers (dans Recos)
+      // 3) Génération du rapport local
       try {
-        const totalsSummary = (typeof window.getCo2CartTotals === 'function')
-          ? window.getCo2CartTotals()
-          : null;
+        if (typeof generateCo2CartReport === 'function') generateCo2CartReport();
+      } catch (e) {
+        console.warn('[Panier CO2] generateCo2CartReport failed', e);
+      }
 
-       // cartNow déjà calculé plus haut
+      // 4) Sauvegarde FULL + mise à jour Recos
+      try {
+        const cartSnapshot = cartNow.map(it => ({ ...it })); // snapshot (évite d’enregistrer une référence mutable)
 
-       //const cartNow = (Array.isArray(window.co2Cart) ? window.co2Cart
-        //  : (typeof co2Cart !== 'undefined' && Array.isArray(co2Cart) ? co2Cart : []));
+        // Total CO2 (g) robuste : co2_total_g -> qty*co2_unit_g -> fallback DOM
+        const totalCo2GFromItems = cartSnapshot.reduce((sum, it) => {
+          const itemTotal = Number(it?.co2_total_g ?? it?.co2TotalG ?? it?.total_co2_g);
+          if (Number.isFinite(itemTotal) && itemTotal > 0) return sum + itemTotal;
 
-        // Snapshot (évite d’enregistrer une référence mutable)
-        const cartSnapshot = cartNow.map(it => ({ ...it }));
+          const q = Number(it?.qty ?? it?.quantity ?? 1);
+          const unitG = Number(it?.co2_unit_g ?? it?.co2_g ?? 0);
+          if (!Number.isFinite(q) || !Number.isFinite(unitG)) return sum;
+          return sum + (q * unitG);
+        }, 0);
 
-        honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+        const totalCo2TextDom = document.getElementById('co2-cart-total-co2')?.textContent || '';
 
-        honouaRenderLastTwoCartsInReco();
+        const parseCo2GFromDom = (txt) => {
+          if (!txt) return 0;
+          const cleaned = String(txt).replace(/[\u202f\u00a0]/g, ' ');
+          const m = cleaned.match(/([\d\s.,]+)\s*g/i);
+          if (!m) return 0;
+          const num = m[1].replace(/\s+/g, '').replace(',', '.');
+          const v = Number(num);
+          return Number.isFinite(v) ? v : 0;
+        };
+
+        const totalCo2G = (totalCo2GFromItems > 0)
+          ? totalCo2GFromItems
+          : parseCo2GFromDom(totalCo2TextDom);
+
+        const totalCo2Text = totalCo2TextDom || (totalCo2G > 0
+          ? `Total : ${Math.round(totalCo2G).toLocaleString('fr-FR')} g CO₂e`
+          : '');
+
+        const totalsSummary = {
+          total_co2_g: totalCo2G,
+          total_co2_text: totalCo2Text
+        };
+
+        // Anti “paniers fantômes”
+        if (!cartSnapshot.length || totalCo2G <= 0) {
+          console.info('[History] skip save (empty or total=0)', { len: cartSnapshot.length, totalCo2G });
+        } else {
+          // Guard anti-doublon minimal : compare au dernier panier FULL
+          const last = (typeof honouaGetCartHistory === 'function') ? (honouaGetCartHistory()[0] || null) : null;
+          const recent = last && last.ts && (Date.now() - Number(last.ts)) < 30 * 1000; // 30s
+          const sameLen = recent && Array.isArray(last.items) && last.items.length === cartSnapshot.length;
+          const lastTotal = recent ? Number(last?.totals?.total_co2_g ?? 0) : 0;
+          const sameTotal = recent && lastTotal === Number(totalCo2G);
+
+          if (recent && sameLen && sameTotal) {
+            console.info('[History] skip duplicate (recent & same len/total)');
+          } else {
+            honouaSaveCartToHistory(cartSnapshot, totalsSummary);
+          }
+        }
+
+        if (typeof honouaRenderLastTwoCartsInReco === 'function') {
+          honouaRenderLastTwoCartsInReco();
+          console.log('[History] 2 derniers paniers rendus dans Recos');
+        }
       } catch (e) {
         console.warn('[History] save/render failed', e);
       }
 
-
-      // Enregistrement backend + rechargement de l’historique
-     if (typeof saveCartHistoryFromCart === 'function') saveCartHistoryFromCart();
-     if (typeof loadCo2CartHistory === 'function') loadCo2CartHistory();
+      // Backend + rechargement historique (si dispo)
+      if (typeof saveCartHistoryFromCart === 'function') saveCartHistoryFromCart();
+      if (typeof loadCo2CartHistory === 'function') loadCo2CartHistory();
 
     });
   }
