@@ -1844,13 +1844,25 @@ function getCartTotals() {
   let totalCo2G = 0;
   let totalItems = 0;
 
-  for (const item of co2Cart) {
-    totalItems += item.quantity;
+    for (const item of co2Cart) {
+    const qRaw = Number(item?.quantity ?? item?.qty ?? 0);
+    const q = (Number.isFinite(qRaw) && qRaw > 0) ? qRaw : 1;
+    totalItems += q;
 
-    if (item.has_co2_data && Number.isFinite(item.co2_total_g)) {
-      totalCo2G += item.co2_total_g;
+    // 1) Priorité : total déjà calculé
+    const totalG = Number(item?.co2_total_g ?? item?.co2TotalG ?? item?.total_co2_g);
+    if (Number.isFinite(totalG) && totalG > 0) {
+      totalCo2G += totalG;
+      continue;
+    }
+
+    // 2) Fallback : qty * co2_unit_g
+    const unitG = Number(item?.co2_unit_g ?? item?.co2_g ?? 0);
+    if (Number.isFinite(unitG) && unitG > 0) {
+      totalCo2G += unitG * q;
     }
   }
+
 
   return {
     total_co2_g: totalCo2G,
@@ -1891,12 +1903,13 @@ function getRecoFromCart(cart) {
   }
 
   // 1. On ne garde que les produits avec une donnée CO2 unitaire exploitable
-  const itemsWithCo2 = cart.filter(item =>
+    const itemsWithCo2 = cart.filter(item =>
     item &&
-    item.has_co2_data &&
     typeof item.co2_unit_g === 'number' &&
-    isFinite(item.co2_unit_g)
+    isFinite(item.co2_unit_g) &&
+    item.co2_unit_g > 0
   );
+
 
   if (itemsWithCo2.length === 0) {
     return { topLow: [], topHigh: [] };
@@ -3571,10 +3584,19 @@ async function loadCo2CartHistory(limit = 5) {
     if ($reportList) $reportList.innerHTML = '';
   };
 
-  if (__CO2_CART_HISTORY_DISABLED) {
-    renderHtml(`<p class="co2-cart-history-empty">Historique indisponible (API).</p>`);
-    return;
-  }
+    // Guard local : évite les erreurs CORS si l’API n’autorise pas http://localhost
+  try {
+    const isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    if (isLocal) {
+      const ep = new URL(CART_HISTORY_ENDPOINT, location.origin);
+      if (ep.origin !== location.origin) {
+        __CO2_CART_HISTORY_DISABLED = true;
+        renderHtml(`<p class="co2-cart-history-empty">Historique indisponible en local (CORS API).</p>`);
+        return;
+      }
+    }
+  } catch (_) {}
+
 
   try {
     const userId =
