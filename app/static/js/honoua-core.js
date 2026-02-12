@@ -1660,6 +1660,29 @@ function findCartItemIndex(ean) {
  * @param {object} apiData - données renvoyées par /api/v1/co2/product/{ean}
  * @param {string|number} ean - code-barres scanné
  */
+   
+
+   // === Distance FR (règle métier) ===
+const HONOUA_FR_CENTER = { lat: 46.603354, lon: 1.888334 };
+const HONOUA_FR_DEFAULT_DISTANCE_KM = 1083;
+
+// France métropolitaine : détection simple via bounding box
+function honouaIsUserInFranceByCoords(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return (lat >= 41.0 && lat <= 51.6 && lon >= -5.6 && lon <= 10.0);
+}
+
+function honouaHaversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 
    function addToCartFromApiResponse(apiData, ean) {
   const eanStr = String(ean);
@@ -1725,6 +1748,55 @@ function findCartItemIndex(ean) {
     apiData.origin ||
     apiData.origine ||
     null;
+
+  // === Règle distance FR (centre base: 46.603354 / 1.888334) ===
+  // - si user scanne en France => distance d'office = 1083
+  // - si user scanne à l'étranger => distance réelle user -> centre FR
+  // NB: on applique cette règle uniquement si le produit est "France" via origin/origine (simple)
+  const isFrenchProduct = (() => {
+    const txt = String(origin || '').toLowerCase();
+    return (
+      txt.includes('france') ||
+      txt.includes('made in france') ||
+      txt.includes('fabriqué en france') ||
+      txt.includes('fabrique en france') ||
+      txt.includes('origine france')
+    );
+  })();
+
+  if (isFrenchProduct) {
+    const FR_CENTER_LAT = 46.603354;
+    const FR_CENTER_LON = 1.888334;
+    const FR_DEFAULT_KM = 1083;
+
+    const loc = window.HonouaUserLocation || {};
+    const userLat = Number(loc.lat);
+    const userLon = Number(loc.lon);
+    const hasUserCoords = Number.isFinite(userLat) && Number.isFinite(userLon);
+
+    // Détection "user en France" (France métropolitaine approx)
+    const userInFrance = hasUserCoords
+      ? (userLat >= 41.0 && userLat <= 51.6 && userLon >= -5.6 && userLon <= 10.0)
+      : null;
+
+    if (userInFrance === true) {
+      distanceKm = FR_DEFAULT_KM; // d'office
+    } else if (userInFrance === false) {
+      // Haversine user -> centre FR
+      const R = 6371;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(FR_CENTER_LAT - userLat);
+      const dLon = toRad(FR_CENTER_LON - userLon);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(userLat)) * Math.cos(toRad(FR_CENTER_LAT)) * Math.sin(dLon / 2) ** 2;
+      distanceKm = Math.round(2 * R * Math.asin(Math.sqrt(a)));
+    } else {
+      // pas de coords user : on garde la distance API si valide, sinon fallback 1083
+      if (!(Number.isFinite(distanceKm) && distanceKm > 0)) distanceKm = FR_DEFAULT_KM;
+    }
+  }
+
 
   // Poids utilisé pour le calcul (en g)
   let weightG = null;
@@ -1844,6 +1916,13 @@ const categoryRaw = Array.isArray(categoryRawCandidate)
  * Supprime complètement un produit du panier (tous les exemplaires d'un EAN).
  * @param {string|number} ean
  */
+
+// Debug/test: expose la fonction dans la console (utile hors-ligne)
+if (!window.addToCartFromApiResponse) {
+  window.addToCartFromApiResponse = addToCartFromApiResponse;
+}
+
+
 function removeProductFromCart(ean) {
   const eanStr = String(ean);
   const idx = co2Cart.findIndex(it => it.ean === eanStr);
