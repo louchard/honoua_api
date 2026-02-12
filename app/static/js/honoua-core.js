@@ -737,11 +737,36 @@ function showScannerError(text, persistent = false) {
     $co2Trans.textContent = formatKg(carbon_transport_kg);
 
     // ====== 2. Origine + distance (résumé + fiche détaillée) ======
-    // Distance arrondie si présente
-    const distanceKm =
-      typeof distance_km === 'number' && isFinite(distance_km)
-        ? Math.round(distance_km)
-        : null;
+// Distance arrondie si présente
+let distanceKm =
+  typeof distance_km === 'number' && isFinite(distance_km)
+    ? Math.round(distance_km)
+    : null;
+
+// Règle FR (base: origine = "FR") :
+// - user en France => 1083 km
+// - user à l'étranger => distance réelle user -> centre FR (46.603354, 1.888334)
+const frCode = String((origin_country ?? origin_label) || '').trim().toUpperCase();
+if (frCode === 'FR') {
+  const loc = window.HonouaUserLocation || {};
+  const userLat = Number(loc.lat);
+  const userLon = Number(loc.lon);
+  const hasUserCoords = Number.isFinite(userLat) && Number.isFinite(userLon);
+
+  const userInFrance = hasUserCoords
+    ? (userLat >= 41.0 && userLat <= 51.6 && userLon >= -5.6 && userLon <= 10.0)
+    : null;
+
+  if (userInFrance === true) {
+    distanceKm = 1083;
+  } else if (userInFrance === false) {
+    // utilise ton helper déjà présent dans le fichier
+    distanceKm = Math.round(honouaHaversineKm(userLat, userLon, 46.603354, 1.888334));
+  } else if (distanceKm === null) {
+    // si pas de coords user + pas de distance => fallback 1083
+    distanceKm = 1083;
+  }
+}
 
     // Texte d’origine : label prioritaire, sinon code pays, sinon générique
     const originText =
