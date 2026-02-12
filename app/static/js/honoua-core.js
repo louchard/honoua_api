@@ -869,10 +869,21 @@ function showScannerError(text, persistent = false) {
       url += `?${params.toString()}`;
     }
 
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept':'application/json' }
-    });
+    // Timeout réseau (évite de rester bloqué sur "Recherche…" si l’API ne répond pas)
+    const __ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const __tid = __ctl ? setTimeout(() => __ctl.abort(), 15000) : null; // 15s
+    let resp;
+
+    try {
+      resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: __ctl ? __ctl.signal : undefined
+      });
+    } finally {
+      if (__tid) clearTimeout(__tid);
+    }
+
 
 
       // 404 : produit non trouvé → cas métier attendu en MVP (ne doit pas casser l’UX)
@@ -1023,11 +1034,18 @@ if (typeof data.co2_kg_total === "number") {
       console.warn('[Défis CO2] evaluateAllCo2Challenges n’est pas disponible.');
     }
 
-  }catch(e){
+  } catch (e) {
+  const isAbort = e && (e.name === 'AbortError' || String(e).includes('AbortError'));
+  if (isAbort) {
+    setCo2Error("Le service CO₂ met trop de temps à répondre (timeout). Réessaie dans quelques secondes.");
+    try { showScannerError("Service CO₂ trop lent (timeout)."); } catch (_) {}
+    return;
+  }
+
   setCo2Error("Impossible de joindre le service CO₂.");
-  // A55.10 — message erreur réseau
-  showScannerError("Impossible de joindre le service CO₂.");
+  try { showScannerError("Impossible de joindre le service CO₂."); } catch (_) {}
 }
+
 
 }
 
@@ -2693,27 +2711,6 @@ if (!window.honouaAppendCartToHistory) {
     localStorage.setItem(key, JSON.stringify(arr));
   };
 }
-
-  // =========================
-// Honoua — Historique paniers (localStorage)
-// =========================
-        if (!window.honouaAppendCartToHistory) {
-          window.honouaAppendCartToHistory = function ({ co2Kg, distanceKm, itemsCount }) {
-            const key = "honoua_cart_history_v1";
-            const arr = JSON.parse(localStorage.getItem(key) || "[]");
-
-            arr.push({
-              timestamp: Date.now(),
-              co2_kg: Number(co2Kg) || 0,
-              distance_km: Number(distanceKm) || 0,
-              items_count: Number(itemsCount) || 0
-            });
-
-            localStorage.setItem(key, JSON.stringify(arr));
-          };
-        }
-
-
 
     /**
    * Génère et affiche le rapport CO₂ du panier
