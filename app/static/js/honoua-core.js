@@ -1754,15 +1754,15 @@ function honouaHaversineKm(lat1, lon1, lat2, lon2) {
   // - si user scanne à l'étranger => distance réelle user -> centre FR
   // NB: on applique cette règle uniquement si le produit est "France" via origin/origine (simple)
   const isFrenchProduct = (() => {
-    const txt = String(origin || '').toLowerCase();
-    return (
-      txt.includes('france') ||
-      txt.includes('made in france') ||
-      txt.includes('fabriqué en france') ||
-      txt.includes('fabrique en france') ||
-      txt.includes('origine france')
-    );
-  })();
+  // Base: origine stockée en code pays "FR"
+  const ocRaw = apiData?.origin_country ?? apiData?.originCountry ?? apiData?.country_of_origin ?? '';
+  const oc = String(ocRaw).trim().toUpperCase();
+  if (oc === 'FR') return true;
+
+  const raw = String(origin || '').trim().toUpperCase();
+  return (raw === 'FR');
+})();
+
 
   if (isFrenchProduct) {
     const FR_CENTER_LAT = 46.603354;
