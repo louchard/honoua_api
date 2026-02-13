@@ -819,6 +819,12 @@ function showScannerError(text, persistent = false) {
     // Libellé produit
     $co2ProductLabel.textContent = product_name || 'Produit alimentaire';
 
+    // Total CO₂ (résumé)
+    const $co2TotalEl = document.getElementById('co2Total');
+    if ($co2TotalEl) {
+      $co2TotalEl.textContent = `${formatKg(carbon_total_kg)} kg CO₂`;
+    }
+
     // Valeurs CO₂ (total + détail prod/pack/transport)
     // Fiche détaillée : nom + total
     const $co2DetailsProductName = document.getElementById('co2DetailsProductName');
