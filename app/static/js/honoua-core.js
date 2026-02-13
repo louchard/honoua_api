@@ -2,6 +2,41 @@
 console.log("[Honoua] build: 2026-01-09-H002");
 
 (async () => {
+  // ---- UI: reserve space for bottom footer nav (mobile safe area) ----
+(function () {
+  function applyFooterBottomSpacing() {
+    try {
+      const footer = document.querySelector('.honoua-footer-nav');
+      if (!footer) return;
+
+      const footerH = footer.getBoundingClientRect().height || 0;
+      const base = 16; // espace visuel au-dessus du footer
+      const padPx = Math.ceil(footerH + base);
+
+      const root =
+        document.querySelector('main') ||
+        document.querySelector('.wrap') ||
+        document.querySelector('.page-core') ||
+        document.body;
+
+      if (!root) return;
+
+      root.style.paddingBottom = `calc(${padPx}px + env(safe-area-inset-bottom))`;
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyFooterBottomSpacing);
+  } else {
+    applyFooterBottomSpacing();
+  }
+
+  window.addEventListener('resize', applyFooterBottomSpacing);
+})();
+
+
   const $video = document.getElementById('preview');
   const $cams  = document.getElementById('cameras');
   const $start = document.getElementById('btnStart');
@@ -708,7 +743,9 @@ function showScannerError(text, persistent = false) {
     function renderCo2Result(payload){
     if (!$co2Card) return;
 
-    const {
+        const p = payload || {};
+
+    let {
       product_name,
       carbon_total_kg,
       carbon_product_kg,
@@ -720,7 +757,59 @@ function showScannerError(text, persistent = false) {
       distance_km,
       reliability_score,
       reliability_level
-    } = payload || {};
+    } = p;
+
+    // --- Fallbacks (variantes API / anciens champs) ---
+    if (!product_name) {
+      product_name =
+        p.product_label ||
+        p.productLabel ||
+        p.name ||
+        (p.product && (p.product.product_name || p.product.name)) ||
+        null;
+    }
+
+    // Total CO2 (kg)
+    if (carbon_total_kg == null || isNaN(carbon_total_kg)) {
+      if (typeof p.co2_total_kg === 'number' && !isNaN(p.co2_total_kg)) carbon_total_kg = p.co2_total_kg;
+      else if (typeof p.co2_kg_total === 'number' && !isNaN(p.co2_kg_total)) carbon_total_kg = p.co2_kg_total;
+      else if (typeof p.co2_kg === 'number' && !isNaN(p.co2_kg)) carbon_total_kg = p.co2_kg;
+      else if (typeof p.co2_total_g === 'number' && !isNaN(p.co2_total_g)) carbon_total_kg = p.co2_total_g / 1000;
+      else if (typeof p.carbon_total_g === 'number' && !isNaN(p.carbon_total_g)) carbon_total_kg = p.carbon_total_g / 1000;
+    }
+
+    // Détail CO2 (kg)
+    if (carbon_product_kg == null || isNaN(carbon_product_kg)) {
+      if (typeof p.co2_product_kg === 'number' && !isNaN(p.co2_product_kg)) carbon_product_kg = p.co2_product_kg;
+      else if (typeof p.co2_prod_kg === 'number' && !isNaN(p.co2_prod_kg)) carbon_product_kg = p.co2_prod_kg;
+      else if (typeof p.co2_product_g === 'number' && !isNaN(p.co2_product_g)) carbon_product_kg = p.co2_product_g / 1000;
+      else if (typeof p.carbon_product_g === 'number' && !isNaN(p.carbon_product_g)) carbon_product_kg = p.carbon_product_g / 1000;
+    }
+
+    if (carbon_pack_kg == null || isNaN(carbon_pack_kg)) {
+      if (typeof p.co2_pack_kg === 'number' && !isNaN(p.co2_pack_kg)) carbon_pack_kg = p.co2_pack_kg;
+      else if (typeof p.co2_packaging_kg === 'number' && !isNaN(p.co2_packaging_kg)) carbon_pack_kg = p.co2_packaging_kg;
+      else if (typeof p.co2_pack_g === 'number' && !isNaN(p.co2_pack_g)) carbon_pack_kg = p.co2_pack_g / 1000;
+      else if (typeof p.carbon_pack_g === 'number' && !isNaN(p.carbon_pack_g)) carbon_pack_kg = p.carbon_pack_g / 1000;
+    }
+
+    if (carbon_transport_kg == null || isNaN(carbon_transport_kg)) {
+      if (typeof p.co2_transport_kg === 'number' && !isNaN(p.co2_transport_kg)) carbon_transport_kg = p.co2_transport_kg;
+      else if (typeof p.co2_trans_kg === 'number' && !isNaN(p.co2_trans_kg)) carbon_transport_kg = p.co2_trans_kg;
+      else if (typeof p.co2_transport_g === 'number' && !isNaN(p.co2_transport_g)) carbon_transport_kg = p.co2_transport_g / 1000;
+      else if (typeof p.carbon_transport_g === 'number' && !isNaN(p.carbon_transport_g)) carbon_transport_kg = p.carbon_transport_g / 1000;
+    }
+
+    // Origine / distance variants
+    if (origin_country == null && p.origin) origin_country = p.origin;
+    if (origin_label == null && p.origin_name) origin_label = p.origin_name;
+
+    if (distance_km == null && typeof p.transport_km === 'number' && !isNaN(p.transport_km)) distance_km = p.transport_km;
+    if (distance_km == null && typeof p.distanceKm === 'number' && !isNaN(p.distanceKm)) distance_km = p.distanceKm;
+
+    // Fiabilité variants
+    if (reliability_score == null && typeof p.reliabilityScore === 'number' && !isNaN(p.reliabilityScore)) reliability_score = p.reliabilityScore;
+    if (!reliability_level && p.reliabilityLevel) reliability_level = p.reliabilityLevel;
 
     // ====== 1. Affichage CO₂ (comportement actuel) ======
     $co2Badge.textContent = 'Données CO₂ trouvées';
@@ -731,7 +820,16 @@ function showScannerError(text, persistent = false) {
     $co2ProductLabel.textContent = product_name || 'Produit alimentaire';
 
     // Valeurs CO₂ (total + détail prod/pack/transport)
-    $co2Total.textContent = formatKg(carbon_total_kg);
+    // Fiche détaillée : nom + total
+    const $co2DetailsProductName = document.getElementById('co2DetailsProductName');
+    if ($co2DetailsProductName) {
+      $co2DetailsProductName.textContent = product_name || 'Produit alimentaire';
+    }
+
+    const $co2DetailsTotal = document.getElementById('co2DetailsTotal');
+    if ($co2DetailsTotal) {
+      $co2DetailsTotal.textContent = `${formatKg(carbon_total_kg)} kg CO₂`;
+    }
     $co2Prod.textContent  = formatKg(carbon_product_kg);
     $co2Pack.textContent  = formatKg(carbon_pack_kg);
     $co2Trans.textContent = formatKg(carbon_transport_kg);
@@ -993,6 +1091,27 @@ if (typeof data.co2_kg_total === "number") {
         (data.origin_label && String(data.origin_label).trim()) ||
         (data.origin_country && String(data.origin_country).trim()) ||
         null;
+
+      // --- Règle FR (EcoSELECT / comparateur) ---
+      // Si origine = FR :
+      // - user en France => 1083 km
+      // - user à l'étranger => distance réelle user -> centre FR (46.603354, 1.888334)
+      const originCountryCode = String(data.origin_country || '').trim().toUpperCase();
+      if (originCountryCode === 'FR') {
+        const loc = window.HonouaUserLocation || {};
+        const userLat = Number(loc.lat);
+        const userLon = Number(loc.lon);
+
+        const userInFrance = honouaIsUserInFranceByCoords(userLat, userLon);
+
+        if (userInFrance === true) {
+          distanceKm = 1083;
+        } else if (userInFrance === false) {
+          distanceKm = Math.round(honouaHaversineKm(userLat, userLon, 46.603354, 1.888334));
+        } else if (distanceKm === null) {
+          distanceKm = 1083;
+        }
+      }
 
       // Niveau de fiabilité (si tu veux l’exploiter dans EcoSELECT plus tard)
       const reliabilityScore = typeof data.reliability_score === 'number'
