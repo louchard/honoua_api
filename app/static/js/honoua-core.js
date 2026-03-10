@@ -1589,6 +1589,7 @@ async function startWith(deviceId){
   const msgEl  = document.getElementById('eco-select-message');
   const btnCo2 = document.getElementById('sort-by-co2');
   const btnDist = document.getElementById('sort-by-distance');
+  const btnClear = document.getElementById('eco-select-clear');
 
   if (!listEl) {
     console.warn('[EcoSELECT][inline] #eco-select-list introuvable. Comparateur non initialisé.');
@@ -1677,14 +1678,16 @@ async function startWith(deviceId){
     const arr = sortItems();
     listEl.innerHTML = '';
 
-    if (!arr.length) {
+       if (!arr.length) {
       setMessage('Scannez un produit pour l’ajouter au comparateur.');
       setActiveButtons();
+      if (btnClear) btnClear.disabled = true;
       return;
-    }
+        }
 
-    setMessage('');
-    setActiveButtons();
+      setMessage('');
+      setActiveButtons();
+      if (btnClear) btnClear.disabled = false;
 
     arr.forEach((p, idx) => {
       const row = document.createElement('div');
@@ -1763,6 +1766,15 @@ async function startWith(deviceId){
     });
   }
  
+   if (btnClear) {
+    btnClear.addEventListener('click', (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      items.length = 0;  // vide la liste du comparateur
+      render();
+      setMessage('Comparateur vidé. Scannez un produit pour l’ajouter au comparateur.');
+      console.log('[EcoSELECT][inline] Comparateur vidé');
+      });
+    }
 
   // API globale appelée par fetchCo2ForEan()
   window.ecoSelectAddProduct = function(product){
