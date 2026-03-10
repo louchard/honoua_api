@@ -911,13 +911,18 @@ if (frCode === 'FR') {
 
     // ====== 3. Fiabilité de la donnée CO₂ ======
     if ($co2ReliabilityIcon && $co2ReliabilityLabel) {
-      const score = (typeof reliability_score === 'number' && isFinite(reliability_score))
-        ? Math.round(reliability_score)
+        const scoreRaw = (typeof reliability_score === 'number' && isFinite(reliability_score))
+        ? reliability_score
+        : null;
+
+      // Ajustement UX : note affichée plus stricte (ex: 60 -> 40)
+      const score = (scoreRaw !== null)
+        ? Math.max(0, Math.min(100, Math.round(scoreRaw - 20)))
         : null;
 
       let level = (reliability_level || '').toLowerCase();
 
-      // Si le backend n’envoie pas de level mais envoie un score, on déduit le niveau
+      // Si le backend n’envoie pas de level mais envoie un score, on déduit le niveau (sur la note ajustée)
       if (!level && score !== null) {
         if (score >= 80)      level = 'élevée';
         else if (score >= 50) level = 'moyenne';
