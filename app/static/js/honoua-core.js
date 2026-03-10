@@ -1,6 +1,95 @@
 ﻿
 console.log("[Honoua] build: 2026-01-09-H002");
 
+// ---- Telemetry (front) : buffer local + capture erreurs (safe, sans endpoint) ----
+(function () {
+  const KEY = 'honoua_telemetry_v1';
+  const MAX = 120;
+
+  function safeNowISO() {
+    try { return new Date().toISOString(); } catch (_) { return null; }
+  }
+
+  function safeGetStore() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function safeSetStore(arr) {
+    try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch (_) {}
+  }
+
+  function sendIfConfigured(evt) {
+    // Optionnel (désactivé tant que HONOUA_TELEMETRY_URL n'existe pas)
+    const url = (window.HONOUA_TELEMETRY_URL && String(window.HONOUA_TELEMETRY_URL).trim()) || '';
+    if (!url) return;
+
+    try {
+      const payload = JSON.stringify(evt);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, payload);
+      } else {
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true })
+          .catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  function track(event, data) {
+    const evt = {
+      t: safeNowISO(),
+      event: String(event || 'event'),
+      path: (typeof location !== 'undefined' ? location.pathname : null),
+      data: data || null
+    };
+
+    const arr = safeGetStore();
+    arr.push(evt);
+    if (arr.length > MAX) arr.splice(0, arr.length - MAX);
+    safeSetStore(arr);
+
+    // envoi optionnel
+    sendIfConfigured(evt);
+  }
+
+  function dump() { return safeGetStore(); }
+  function clear() { safeSetStore([]); }
+
+  // Expose API (debug)
+  window.HonouaTelemetry = { track, dump, clear };
+
+  // Page view (1 event)
+  track('page_view', { ua: (navigator && navigator.userAgent) ? navigator.userAgent : null });
+
+  // Erreurs JS
+  window.addEventListener('error', function (e) {
+    try {
+      track('js_error', {
+        message: e && e.message ? String(e.message) : 'error',
+        filename: e && e.filename ? String(e.filename) : null,
+        lineno: e && typeof e.lineno === 'number' ? e.lineno : null,
+        colno: e && typeof e.colno === 'number' ? e.colno : null
+      });
+    } catch (_) {}
+  });
+
+  // Promises rejetées
+  window.addEventListener('unhandledrejection', function (e) {
+    try {
+      const reason = e && e.reason ? e.reason : null;
+      track('unhandled_rejection', {
+        reason: reason ? String(reason) : null
+      });
+    } catch (_) {}
+  });
+})();
+
+
 (async () => {
   // ---- UI: reserve space for bottom footer nav (mobile safe area) ----
 (function () {
@@ -2987,7 +3076,70 @@ const $recoList             = document.getElementById('co2-report-reco-list');
 // Catégories
 const $catBox               = document.getElementById('co2-cart-report-categories');
 
+  // ---- UI ScanImpact : placer Recommandations à côté du graphique catégories ----
+  (function ensureRecoNextToGraph() {
+    try {
+      if (!$reportSection) return;
+      if ($reportSection.dataset.recoGraphLayout === '1') return;
 
+      const canvas   = document.getElementById('co2-category-pie');
+      const dominant = document.getElementById('co2-category-dominant');
+      const legend   = document.getElementById('co2-category-legend');
+
+      // Recos (déjà récupérés au-dessus)
+      const recoIntroEl = $recoIntro;
+      const recoListEl  = $recoList;
+
+      if (!canvas || !recoIntroEl || !recoListEl) return;
+      if (!canvas.parentNode) return;
+
+      // CSS injecté une seule fois
+      if (!document.getElementById('honoua-report-grid-style')) {
+        const style = document.createElement('style');
+        style.id = 'honoua-report-grid-style';
+        style.textContent = `
+          .honoua-report-grid{ display:flex; gap:12px; align-items:flex-start; }
+          .honoua-report-col{ flex:1; min-width:0; }
+          .honoua-report-col--graph canvas{ display:block; margin:0 auto; }
+          .honoua-report-col--reco ul{ margin:8px 0 0 18px; }
+          @media (max-width:520px){
+            .honoua-report-grid{ flex-direction:column; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // Insert la grille à la place du canvas (ancrage stable)
+      const anchorParent = canvas.parentNode;
+      const anchor = canvas;
+
+      const grid = document.createElement('div');
+      grid.className = 'honoua-report-grid';
+
+      const colGraph = document.createElement('div');
+      colGraph.className = 'honoua-report-col honoua-report-col--graph';
+
+      const colReco = document.createElement('div');
+      colReco.className = 'honoua-report-col honoua-report-col--reco';
+
+      // Place la grille avant le canvas, puis on déplace les éléments dedans
+      anchorParent.insertBefore(grid, anchor);
+
+      if (dominant) colGraph.appendChild(dominant);
+      colGraph.appendChild(canvas);
+      if (legend) colGraph.appendChild(legend);
+
+      colReco.appendChild(recoIntroEl);
+      colReco.appendChild(recoListEl);
+
+      grid.appendChild(colGraph);
+      grid.appendChild(colReco);
+
+      $reportSection.dataset.recoGraphLayout = '1';
+    } catch (e) {
+      console.warn('[ScanImpact UI] layout reco/graph skipped:', e);
+    }
+  })();
 
     if (!$reportSection) {
       console.warn('[Panier CO2] Section de rapport non trouvée.');
